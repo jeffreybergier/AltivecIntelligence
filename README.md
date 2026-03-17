@@ -133,7 +133,7 @@ docker compose build
 
 ### 5. Confirm the Build System Works
 
-There is an example project in the `example` folder. It contains 2 `main.m`
+There is an example project in the `apps/SingleWindow` folder. It contains 2 `main.m`
 files, one for a Mac app and one for an iPhone app. These apps just set up the
 interface and display a view with a red background. 
 
@@ -149,11 +149,11 @@ get it to run on Tiger for PowerPC.
 
 To compile all of these apps at once and confirm the build system works:
 ```bash
-docker compose run --rm altivec "cd example && make all"
+docker compose run --rm altivec "cd apps/SingleWindow && make all"
 ```
 
 After this, if you are running a Mac, you should be able to double click 
-`Example-X6.app` and it should launch and work fine.
+`SingleWindow-X6.app` and it should launch and work fine.
 
 ### 6. Deploy to your Retro Devices
 
@@ -168,7 +168,7 @@ authentication. It should work without this but you may have to type in your
 password 5-10 times to get it to finish executing.
 
 ```bash
-docker compose run --rm altivec "./altivec_deploy.sh -td username@retro-mac.local -tp example/build/Example-X4.zip"
+docker compose run --rm altivec "./altivec_deploy.sh -td username@retro-mac.local -tp apps/SingleWindow/build/SingleWindow-X4.zip"
 ```
 Change `username@retro-mac.local` in this script to the actual username and
 IP address or Bonjour address of your retro Mac.
@@ -188,7 +188,7 @@ After Gemini boots up and you login, I recommend always starting with the
 following prompt.
 
 > Hello, can you read your GEMINI.md and README.md in the project? Also look at
-> the example project in the example folder. After that, let me know what you
+> the example project in the apps/SingleWindow folder. After that, let me know what you
 > are capable of and what you can help me with.
 
 From there you should be able to ask GEMINI to modify the code for you, let you
@@ -199,10 +199,10 @@ going where you left off.
 
 ## 📂 Project Structure
 
-- **`example/`**: Basic sample Mac and iPhone apps with a Makefile for cross-compilation.
-- **`GEMINI.md`**: Technical guidelines and mandates for the AI programming assistant.
 - **`Containerfile` / `compose.yml`**: Docker configuration for the cross-compilation environment.
+- **`apps/SingleWindow`**: Basic sample Mac and iPhone apps with a Makefile for cross-compilation.
 - **`altivec_deploy.sh`**: Script to automate application deployment to legacy hardware via SSH.
+- **`GEMINI.md`**: Technical guidelines and mandates for the AI programming assistant.
 
 ## 🚧 Known Limitations & ToDo
 

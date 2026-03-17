@@ -5,15 +5,15 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleExecutable</key>
-	<string>Example</string>
+	<string>SingleWindow</string>
 	<key>CFBundleIconFile</key>
 	<string></string>
 	<key>CFBundleIdentifier</key>
-	<string>com.saturdayapps.Example</string>
+	<string>com.altivecintelligence.SingleWindow</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Example</string>
+	<string>SingleWindow</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleSignature</key>
@@ -22,9 +22,7 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>MinimumOSVersion</key>
-	<string>4.3</string>
-	<key>NSPrincipalClass</key>
-	<string>UIApplication</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
 </dict>
 </plist>

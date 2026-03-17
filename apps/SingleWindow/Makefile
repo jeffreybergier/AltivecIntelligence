@@ -20,7 +20,7 @@ MAC_IPHONE_FLAGS=$(OPT_FLAGS) $(COMMON_WARN_FLAGS) $(CLANG_WARN_FLAGS)
 TIGER_FLAGS=$(OPT_FLAGS) $(COMMON_WARN_FLAGS)
 
 # App Identity
-APP_NAME=Example
+APP_NAME=SingleWindow
 BUILD_DIR=build
 MAC_FRAMEWORKS=-framework AppKit
 IOS_FRAMEWORKS=-framework UIKit -framework Foundation -framework CoreGraphics

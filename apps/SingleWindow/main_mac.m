@@ -1,6 +1,6 @@
 //
 //  main.m
-//  Example
+//  SingleWindow
 //
 //  Created by Me on 3/12/26.
 //  Copyright __MyCompanyName__ 2026. All rights reserved.
