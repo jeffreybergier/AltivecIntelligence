@@ -1,4 +1,4 @@
-[![AltiveIntelligence Fun 90's Header Image](altivec_build/AltivecIntelligence-Header-Color-Quarter.png)](altivec_build/AltivecIntelligence-Header-Color-Half.png)
+[![AltiveIntelligence Fun 90's Header Image](README.png)](README.thumb.png)
 
 # 🤖 Altivec Intelligence
 
