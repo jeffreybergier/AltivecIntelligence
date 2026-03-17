@@ -73,8 +73,10 @@ COPY . .
 
 # 4. Build OSXCross and Compilers
 
+RUN chmod +x altivec_build/*.sh
+
 RUN echo "Pre-build: Altivec Intelligence" \
-      && ./altivec_prebuild.sh
+      && ./altivec_build/altivec_prebuild.sh
 
 RUN echo "Build: osxcross" \
       && ./build.sh
