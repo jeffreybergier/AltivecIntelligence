@@ -1,5 +1,5 @@
---- temp_osxcross/build_gcc.sh	2026-03-17 06:23:45.093987918 +0000
-+++ build_gcc.sh	2026-03-16 01:41:36.966262542 +0000
+--- a/build_gcc.sh	2026-03-17 06:23:45.093987918 +0000
++++ b/build_gcc.sh	2026-03-16 01:41:36.966262542 +0000
 @@ -53,10 +53,21 @@
      echo "The SDK you are using does not support PowerPC" 1>&2
      exit 1

@@ -1,4 +1,4 @@
-[![AltiveIntelligence Fun 90's Header Image](images/altivec/AltivecIntelligence-Header-Color-Quarter.png)](images/altivec/AltivecIntelligence-Header-Color-Half.png)
+[![AltiveIntelligence Fun 90's Header Image](altivec_build/AltivecIntelligence-Header-Color-Quarter.png)](altivec_build/AltivecIntelligence-Header-Color-Half.png)
 
 # 🤖 Altivec Intelligence
 
@@ -92,7 +92,7 @@ and once in there, it has the same permissions as you to read and write pretty m
 any file. So **USE WITH CAUTION**
 
 To enable SSH in the Docker Container and thus in the AI, uncomment this line in
-the [`compose.yml`](compose.yml#L22) and then rerun `docker compose run --rm
+the [`compose.yml`](compose.yml#L20) and then rerun `docker compose run --rm
 altivec-intelligence`
 
 ## 🛠 Requirements
@@ -121,7 +121,7 @@ how powerful your computer is.
 - Docker Resources: Settings→Resources in the Docker Desktop App
   - Confirm that Docker is allowed to use 6-8GB of RAM
   - Confirm that Docker is allowed to use all of your CPU cores (or as many as you like)
-- [Job Count in ContainerFile](Containerfile#L52)
+- [Job Count in ContainerFile](Containerfile#L53)
   - Confirm this is the same or less than the number of cores that Docker is allowed to use above
 
 ### 4. Build the Environment
