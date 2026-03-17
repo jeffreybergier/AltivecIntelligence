@@ -69,13 +69,13 @@ ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib:${LD_LIBRARY_PATH}"
 
 # 3. Copy OSXCross and build base toolchain
 WORKDIR /osxcross
-COPY . .
+COPY altivec_build/ ./altivec_build/
 
 # 4. Build OSXCross and Compilers
 
 RUN chmod +x altivec_build/*.sh
 
-RUN echo "Pre-build: Altivec Intelligence" \
+RUN echo "Pre-Build: Altivec Intelligence" \
       && ./altivec_build/altivec_prebuild.sh
 
 RUN echo "Build: osxcross" \
@@ -94,7 +94,7 @@ RUN echo "Build: Clang 3.8" \
 #       && ./build_llvm_dsymutil.sh \
 #       && rm -rf build
 
-RUN echo "Post-build: Altivec Intelligence" \
+RUN echo "Post-Build: Altivec Intelligence" \
       && ./altivec_postbuild.sh \
       && rm -rf tarballs
 

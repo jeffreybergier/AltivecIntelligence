@@ -42,8 +42,8 @@
  if [ -n "$APPLE_GCC" ]; then
    wget -c "$GCC_MIRROR/tarballs/gcc/gcc-$APPLE_GCC_VERSION.tar.gz"
 +  # Download latest config scripts for aarch64 support if missing
-+  [ -f "$OSXCROSS_TARBALL_DIR/config.guess" ] || wget -O "$OSXCROSS_TARBALL_DIR/config.guess" 'https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD'
-+  [ -f "$OSXCROSS_TARBALL_DIR/config.sub" ] || wget -O "$OSXCROSS_TARBALL_DIR/config.sub" 'https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD'
++  [ -f "$OSXCROSS_TARBALL_DIR/config.guess" ] || wget -O "$OSXCROSS_TARBALL_DIR/config.guess" 'https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess'
++  [ -f "$OSXCROSS_TARBALL_DIR/config.sub" ] || wget -O "$OSXCROSS_TARBALL_DIR/config.sub" 'https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub'
  else
    if [[ $GCC_VERSION != *-* ]]; then
      wget -c "$GCC_MIRROR/releases/gcc-$GCC_VERSION/gcc-$GCC_VERSION.tar.gz"
