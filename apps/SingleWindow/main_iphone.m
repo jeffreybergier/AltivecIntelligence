@@ -9,7 +9,7 @@
   self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
   UIViewController *vc = [[UIViewController alloc] init];
   vc.view.backgroundColor = [UIColor redColor];
-  vc.title = @"Example-iOS";
+  vc.title = @"SingleWindow-iOS";
   
   UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
   nav.toolbarHidden = NO;

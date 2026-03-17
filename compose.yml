@@ -5,7 +5,7 @@
 # Build Images:      docker compose build
 # Use With AI:       docker compose run --rm altivec-intelligence
 # Use W/out AI:      docker compose run --rm altivec
-# Build Example App: docker compose run --rm altivec "cd example && make all"
+# Build Example App: docker compose run --rm altivec "cd apps/SingleWindow && make all"
 
 services:
   altivec-intelligence:

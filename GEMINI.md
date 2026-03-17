@@ -37,20 +37,20 @@ Located in `/osxcross/target/SDK/`:
 | **Tiger** | `GCC4` (oppc32-gcc) | 10.4u | ppc (32-bit) | `-mmacosx-version-min=10.4`, `-fno-stack-protector`, `-fno-zero-initialized-in-bss` | Vintage Tiger PPC apps |
 | **iPhone** | `CLANG14` (/usr/bin/clang) | 8.2 | arm64, armv7s, armv7 | `-target arm64-apple-ios4.3`, `-B/osxcross/target/bin` | Legacy iOS devices |
 
-## 🚀 How to Build (example/)
+## 🚀 How to Build (apps/SingleWindow/)
 
-The `example/` directory contains a template configured for all three platforms.
+The `apps/SingleWindow/` directory contains a template configured for all three platforms.
 
 ```bash
-cd example
+cd apps/SingleWindow
 
 # Build everything
 make all
 
 # Build specific platforms
-make mac      # Outputs build/Example-X6.zip
-make tiger    # Outputs build/Example-X4.zip
-make iphone   # Outputs build/Example-i8.ipa
+make mac      # Outputs build/SingleWindow-X6.zip
+make tiger    # Outputs build/SingleWindow-X4.zip
+make iphone   # Outputs build/SingleWindow-i8.ipa
 
 # Clean build artifacts
 make clean
