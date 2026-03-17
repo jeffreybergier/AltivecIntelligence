@@ -20,7 +20,7 @@ services:
       # Uncomment the following line to allow the AI to use your local SSH keys 
       # for deploying applications to your vintage Macs and iPhones.
       # The :ro flag ensures the container cannot modify your host keys.
-      # - ~/.ssh:/root/.ssh
+      # - ~/.ssh:/root/.ssh:ro
     stdin_open: true
     tty: true
 
