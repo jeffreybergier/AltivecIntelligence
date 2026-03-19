@@ -70,8 +70,7 @@ cp "$TEMP_DIR/retro_repo/MacOSX10.6.sdk.tar.gz" "$TEMP_DIR/downloads/retro106.ta
 
 # 6. Generate the Hybrid SDK
 echo "Generating Perfect Hybrid SDK..."
-chmod +x altivec_build/create_super_sdk.sh
-./altivec_build/create_super_sdk.sh "$TEMP_DIR/downloads" "$TARBALLS_DIR/MacOSX10.6.sdk.tar.xz"
+./altivec_build/altivec_sdk_mac.sh "$TEMP_DIR/downloads" "$TARBALLS_DIR/MacOSX10.6.sdk.tar.xz"
 
 # 7. Handle iPhone SDK
 cp "$TEMP_DIR/retro_repo/"iPhoneOS*.tar.* "$TARBALLS_DIR/"
