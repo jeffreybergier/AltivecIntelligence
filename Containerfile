@@ -60,8 +60,8 @@ ENV DISABLE_BOOTSTRAP=1
 
 ENV GCC_VERSION=4.2.1
 ENV APPLE_GCC=1
-ENV POWERPC=1
 ENV SDK_VERSION=10.6
+ENV OSX_VERSION_MIN=10.5
 ENV UNATTENDED=1
 ENV INSTALLPREFIX=/osxcross/target
 ENV OSXCROSS_FORCE_POWERPC_DSYMUTIL_INVOCATION=1
@@ -73,21 +73,24 @@ COPY altivec_build/ ./altivec_build/
 
 # 4. Build OSXCross and Compilers
 
-RUN chmod +x altivec_build/*.sh
-
 RUN echo "Pre-Build: Altivec Intelligence" \
       && ./altivec_build/altivec_prebuild.sh
 
 RUN echo "Build: osxcross" \
       && ./build.sh
 
-RUN echo "Build: Apple GCC 4.2" \
+RUN echo "Build: Apple GCC 4.2 (PPC)" \
+      && POWERPC=1 ./build_gcc_ppc.sh \
+      && rm -rf build
+
+RUN echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
       && ./build_gcc.sh \
       && rm -rf build
 
-RUN echo "Build: Clang 3.8" \
-      && ./build_clang.sh \
-      && rm -rf build
+
+# RUN echo "Build: Clang 3.8" \
+#       && ./build_clang.sh \
+#       && rm -rf build
 
 # TODO: Not Working Yet
 # RUN echo "Build: LLVM dsymutil" \
