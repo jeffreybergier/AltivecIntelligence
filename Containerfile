@@ -43,6 +43,7 @@ RUN apt-get update && apt-get install -y \
     tree \
     iputils-ping \
     lldb \
+    lld \
     && rm -rf /var/lib/apt/lists/*
 
 
