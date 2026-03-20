@@ -96,6 +96,10 @@ pushd $TARGET_DIR/bin &>/dev/null
 ln -sf x86_64-apple-darwin10-ld ld
 ln -sf x86_64-apple-darwin10-lipo lipo
 
+# Link the system dsymutil-14 for modern targets (x86_64)
+ln -sf /usr/bin/dsymutil-14 llvm-dsymutil
+ln -sf /usr/bin/dsymutil-14 osxcross-llvm-dsymutil
+
 # Ensure arm wrappers are correctly linked to the universal wrapper
 WRAPPER="powerpc64-apple-darwin10-wrapper"
 if [ -f "$WRAPPER" ]; then

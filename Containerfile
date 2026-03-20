@@ -63,8 +63,8 @@ ENV APPLE_GCC=1
 ENV SDK_VERSION=10.6
 ENV OSX_VERSION_MIN=10.5
 ENV UNATTENDED=1
+ENV OSXCROSS_NO_DSYMUTIL=1
 ENV INSTALLPREFIX=/osxcross/target
-ENV OSXCROSS_FORCE_POWERPC_DSYMUTIL_INVOCATION=1
 ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib:${LD_LIBRARY_PATH}"
 
 # 3. Copy OSXCross and build base toolchain
@@ -86,16 +86,6 @@ RUN echo "Build: Apple GCC 4.2 (PPC)" \
 RUN echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
       && ./build_gcc.sh \
       && rm -rf build
-
-
-# RUN echo "Build: Clang 3.8" \
-#       && ./build_clang.sh \
-#       && rm -rf build
-
-# TODO: Not Working Yet
-# RUN echo "Build: LLVM dsymutil" \
-#       && ./build_llvm_dsymutil.sh \
-#       && rm -rf build
 
 RUN echo "Post-Build: Altivec Intelligence" \
       && ./altivec_postbuild.sh \

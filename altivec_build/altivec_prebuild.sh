@@ -47,7 +47,6 @@ sed -i '/extract "$OSXCROSS_TARBALL_DIR\/gcc-$APPLE_GCC_VERSION.tar.gz" 1/a \  f
 echo "Applying global patches..."
 patch -p1 < altivec_build/osxcross-build.patch
 patch -p1 < altivec_build/osxcross-tools.patch
-patch -p1 < altivec_build/osxcross-build-clang.patch
 
 # 4. Prepare Architecture-Specific GCC scripts
 echo "Preparing architecture-specific GCC scripts..."
