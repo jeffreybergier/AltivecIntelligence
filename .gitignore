@@ -1,4 +1,4 @@
 .DS_Store
-apps/*/build
-libs/*/build*
+libs/*/build-*
 libs/*/tarballs
+apps/*/build-*
