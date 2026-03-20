@@ -16,23 +16,29 @@ BUILD_DIR=build
 INT_DIR=$(BUILD_DIR)/Intermediates
 MAC_BUNDLE=$(BUILD_DIR)/$(APP_NAME).app
 MAC_ZIP=$(BUILD_DIR)/$(APP_NAME).zip
+RES_DIR=Resources
 
 # Common Mac Flags
 MAC_CFLAGS=-O2 -Wall -isysroot $(MAC_SDK_PATH)
 MAC_LDFLAGS=-framework AppKit -lobjc
 
-all: mac
+release: mac
 
 # --- MAC UNIVERSAL BUILD ---
 mac: $(MAC_ZIP)
 
 $(MAC_ZIP): $(MAC_BUNDLE)
-	cd $(BUILD_DIR) && zip -r $(APP_NAME).zip $(APP_NAME).app
+	cd $(BUILD_DIR) && zip -rq $(APP_NAME).zip $(APP_NAME).app
 
 $(MAC_BUNDLE): $(INT_DIR)/$(APP_NAME)-universal
-	mkdir -p $@/Contents/MacOS
+	mkdir -p $@/Contents/MacOS $@/Contents/Resources
+	# Copy the binary
 	cp $< $@/Contents/MacOS/$(APP_NAME)
-	cp Info_mac.plist $@/Contents/Info.plist
+	# Copy the Info.plist specifically to Contents/
+	cp $(RES_DIR)/Info.plist $@/Contents/Info.plist
+	# Blindly copy ALL other files from Resources/ into Contents/Resources/
+	# We use find to skip the Info.plist itself
+	find $(RES_DIR) -type f ! -name "Info.plist" -exec cp {} $@/Contents/Resources/ \;
 	echo -n "APPL????" > $@/Contents/PkgInfo
 
 $(INT_DIR)/$(APP_NAME)-universal: $(INT_DIR)/ppc.bin $(INT_DIR)/i386.bin $(INT_DIR)/x86_64.bin
@@ -58,4 +64,4 @@ $(INT_DIR)/x86_64.bin: main_mac.m
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all mac clean
+.PHONY: release mac clean
