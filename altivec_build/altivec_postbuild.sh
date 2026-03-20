@@ -100,6 +100,9 @@ ln -sf x86_64-apple-darwin10-lipo lipo
 ln -sf /usr/bin/dsymutil-14 llvm-dsymutil
 ln -sf /usr/bin/dsymutil-14 osxcross-llvm-dsymutil
 
+# Link the system lld for Apple Silicon targets (arm64)
+ln -sf /usr/bin/ld64.lld-14 ld64.lld
+
 # Ensure arm wrappers are correctly linked to the universal wrapper
 WRAPPER="powerpc64-apple-darwin10-wrapper"
 if [ -f "$WRAPPER" ]; then

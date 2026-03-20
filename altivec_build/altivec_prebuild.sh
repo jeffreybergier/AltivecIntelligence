@@ -64,6 +64,7 @@ ln -sf /usr/bin/python3 /usr/local/bin/python
 # 5. Download base SDKs
 echo "Downloading base SDKs..."
 wget -q https://github.com/phracker/MacOSX-SDKs/releases/download/11.0-11.1/MacOSX10.6.sdk.tar.xz -O "$TEMP_DIR/downloads/phreak106.tar.xz"
+wget -q https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz -P "$TARBALLS_DIR/"
 git clone https://bitbucket.org/retromacdev/sdk.git "$TEMP_DIR/retro_repo" --depth 1
 cp "$TEMP_DIR/retro_repo/MacOSX10.6.sdk.tar.gz" "$TEMP_DIR/downloads/retro106.tar.gz"
 

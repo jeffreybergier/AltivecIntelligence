@@ -8,6 +8,19 @@
 
 #import <AppKit/AppKit.h>
 
+/* Cross-Version Window Mask Macros */
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
+  #define XPWindowStyleMaskTitled         NSWindowStyleMaskTitled
+  #define XPWindowStyleMaskClosable       NSWindowStyleMaskClosable
+  #define XPWindowStyleMaskResizable      NSWindowStyleMaskResizable
+  #define XPWindowStyleMaskMiniaturizable NSWindowStyleMaskMiniaturizable
+#else
+  #define XPWindowStyleMaskTitled         NSTitledWindowMask
+  #define XPWindowStyleMaskClosable       NSClosableWindowMask
+  #define XPWindowStyleMaskResizable      NSResizableWindowMask
+  #define XPWindowStyleMaskMiniaturizable NSMiniaturizableWindowMask
+#endif
+
 @interface RedView: NSView
 @end
 
@@ -45,10 +58,12 @@
 {
   [_window release];
   _window = nil;
-  int mask = NSTitledWindowMask
-    | NSClosableWindowMask
-    | NSResizableWindowMask
-    | NSMiniaturizableWindowMask;
+  
+  unsigned int mask = XPWindowStyleMaskTitled
+    | XPWindowStyleMaskClosable
+    | XPWindowStyleMaskResizable
+    | XPWindowStyleMaskMiniaturizable;
+    
   NSRect contentRect = NSMakeRect(0,0,512,512);
   NSWindow *window = [[NSWindow alloc] initWithContentRect:contentRect
                                                  styleMask:mask
