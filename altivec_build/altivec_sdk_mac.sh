@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# create_super_sdk.sh - Recreates RetroMacDev 10.6 SDK
+# altivec_sdk_mac.sh - Recreates functional 10.6 SDK using Phracker sources
 
 set -e
 INPUT_DIR=$1
@@ -16,38 +16,49 @@ WORK_DIR="$BASE_DIR/super_sdk_work"
 # Ensure cleanup on exit
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-echo "--- CREATING PERFECT HYBRID SDK ---"
-mkdir -p "$WORK_DIR/phreak106" "$WORK_DIR/retro106"
+echo "--- CREATING HYBRID SDK ---"
+mkdir -p "$WORK_DIR/donor_libs"
 
-echo "[1/4] Extracting Source SDKs..."
-# Base: Phracker 10.6 (Modern headers)
-tar -xJf "$INPUT_DIR/phreak106.tar.xz" -C "$WORK_DIR/phreak106"
-# Donor: RetroMacDev 10.6 (Proven libraries/stubs)
-tar -xzf "$INPUT_DIR/retro106.tar.gz" -C "$WORK_DIR/retro106"
+# 1. SURGICAL EXTRACTION of 10.5 (Donor for legacy stubs)
+echo "[1/4] Extracting legacy stubs from 10.5..."
+tar -xJf "$INPUT_DIR/phreak105.tar.xz" --wildcards -C "$WORK_DIR/donor_libs" \
+    "MacOSX10.5.sdk/usr/lib/*.o" \
+    "MacOSX10.5.sdk/usr/lib/libgcc_s.10.4.dylib" \
+    "MacOSX10.5.sdk/usr/lib/libgcc_s.10.5.dylib" \
+    "MacOSX10.5.sdk/usr/lib/libgcc_s.1.dylib"
 
-# Handle Phracker's nesting
-SRC106="$WORK_DIR/phreak106/MacOSX10.6.sdk"
-RETRO106="$WORK_DIR/retro106/MacOSX10.6.sdk"
+# 2. Extract 10.6 (Base - Brain and primary Muscle)
+echo "[2/4] Extracting 10.6 header/library base..."
+mkdir -p "$WORK_DIR/base"
+tar -xJf "$INPUT_DIR/phreak106.tar.xz" -C "$WORK_DIR/base"
 
-# 1. Base is 10.6 (Headers, etc.)
-# 2. OVERWRITE libraries with RetroMacDev versions
-echo "[2/4] Injecting RetroMacDev library structure into 10.6 base..."
-rm -rf "$SRC106/usr/lib"
-cp -R "$RETRO106/usr/lib" "$SRC106/usr/"
+SRC106="$WORK_DIR/base/MacOSX10.6.sdk"
+SRC105="$WORK_DIR/donor_libs/MacOSX10.5.sdk"
 
-# 3. Ensure all versioned stubs are present (matching Retro exactly)
-echo "[3/4] Synchronizing linker stubs..."
-cp -n "$RETRO106/usr/lib/"*.o "$SRC106/usr/lib/"
+# 3. SELECTIVE INJECTION
+echo "[3/4] Grafting legacy components into 10.6 base..."
+cp -n "$SRC105/usr/lib/"*.o "$SRC106/usr/lib/"
+cp -n "$SRC105/usr/lib/libgcc_s"* "$SRC106/usr/lib/"
+
+# Create versioned linker stubs for the Apple Linker
+for f in "$SRC105/usr/lib/"*.o; do
+    if [ -f "$f" ]; then
+        filename=$(basename "$f")
+        cp "$f" "$SRC106/usr/lib/${filename%.o}.10.5.o"
+    fi
+done
 
 # 4. Packaging
 echo "[4/4] Finalizing and Packaging..."
-sed -i 's/Mac OS X 10.6/Mac OS X 10.6 Hybrid (RetroMatch)/g' "$SRC106/SDKSettings.plist"
+# Ensure linker compatibility by linking /lib -> /usr/lib
+ln -sf usr/lib "$SRC106/lib"
+sed -i 's/Mac OS X 10.6/Mac OS X 10.6 Hybrid/g' "$SRC106/SDKSettings.plist"
 
-cd "$WORK_DIR/phreak106"
+cd "$WORK_DIR/base"
 tar -cJf "$BASE_DIR/super_temp.tar.xz" "MacOSX10.6.sdk"
 cd "$BASE_DIR"
 
 mv "super_temp.tar.xz" "$OUTPUT_PATH"
 
 echo "--- SUCCESS ---"
-echo "Perfect Hybrid SDK created at: $OUTPUT_PATH"
+echo "Hybrid SDK created at: $OUTPUT_PATH"
