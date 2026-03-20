@@ -20,7 +20,7 @@ mkdir -p "$TEMP_DIR/downloads"
 
 # 1. Clone osxcross
 echo "--- Initializing Toolchain Source ---"
-echo "      > Cloning osxcross ($OSXCROSS_BRANCH)"
+echo "  > Cloning osxcross ($OSXCROSS_BRANCH)"
 git clone --branch $OSXCROSS_BRANCH $OSXCROSS_GIT "$TEMP_DIR/osxcross" --depth 1 --quiet
 cp -r "$TEMP_DIR/osxcross"/* ./
 
@@ -45,18 +45,21 @@ ln -sf /usr/bin/python3 /usr/local/bin/python
 
 # 5. Download base SDKs
 echo "--- Downloading SDKs ---"
-echo "      > Mac OS X 10.5 SDK"
+echo "  > Mac OS X 10.5 SDK"
 wget -q https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.5.sdk.tar.xz -O "$TEMP_DIR/downloads/phreak105.tar.xz"
 
-echo "      > Mac OS X 10.6 SDK"
+echo "  > Mac OS X 10.6 SDK"
 wget -q https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.6.sdk.tar.xz -O "$TEMP_DIR/downloads/phreak106.tar.xz"
 
-echo "      > macOS 11.3 SDK"
+echo "  > macOS 11.3 SDK"
 wget -q https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz -P "$TARBALLS_DIR/"
+
+echo "  > iPhoneOS 8.4 SDK"
+wget -q https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS8.4.sdk.tar.gz -P "$TARBALLS_DIR/"
 
 # 6. Generate the Hybrid SDK
 echo "--- Building Hybrid SDK ---"
-echo "      > Combining 10.5 and 10.6 assets"
+echo "  > Combining 10.5 and 10.6 assets"
 ./altivec_build/altivec_sdk_mac.sh "$TEMP_DIR/downloads" "$TARBALLS_DIR/MacOSX10.6.sdk.tar.xz"
 
 # Finalize
