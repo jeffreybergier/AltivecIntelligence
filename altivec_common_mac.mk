@@ -79,7 +79,7 @@ $(INT_DIR)/ppc.bin: $(INT_DIR)/ppc.o
 
 $(INT_DIR)/ppc.o: $(SOURCES)
 	@echo "[1/4] Compiling slices..."
-	@echo "      > ppc (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_PPC))"
+	@echo " > ppc (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_PPC))"
 	@mkdir -p $(INT_DIR)
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(GCC_PPC) $(COMMON_CFLAGS) -isysroot $(SDK_MAC_MID_PATH) -arch ppc \
 	    -fno-stack-protector -fno-common -fno-zero-initialized-in-bss \
@@ -90,7 +90,7 @@ $(INT_DIR)/x86.bin: $(INT_DIR)/x86.o
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(GCC_X86) -arch i386 -isysroot $(SDK_MAC_MID_PATH) $< $(MAC_LDFLAGS) -o $@
 
 $(INT_DIR)/x86.o: $(SOURCES)
-	@echo "      > x86 (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_X86))"
+	@echo " > x86 (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_X86))"
 	@mkdir -p $(INT_DIR)
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(GCC_X86) $(COMMON_CFLAGS) -isysroot $(SDK_MAC_MID_PATH) -arch i386 -c $< -o $@
 
@@ -99,7 +99,7 @@ $(INT_DIR)/x86_64.bin: $(INT_DIR)/x86_64.o
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) -arch x86_64 -isysroot $(SDK_MAC_MID_PATH) $< $(MAC_LDFLAGS) -o $@
 
 $(INT_DIR)/x86_64.o: $(SOURCES)
-	@echo "      > x64 (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_X64))"
+	@echo " > x64 (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_X64))"
 	@mkdir -p $(INT_DIR)
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) $(COMMON_CFLAGS) -isysroot $(SDK_MAC_MID_PATH) -arch x86_64 -c $< -o $@
 
@@ -109,7 +109,7 @@ $(INT_DIR)/arm64.bin: $(INT_DIR)/arm64.o
 	    -fuse-ld=lld -B/usr/bin/ $< $(MAC_LDFLAGS) -o $@
 
 $(INT_DIR)/arm64.o: $(SOURCES)
-	@echo "      > arm (sdk:$(SDK_MAC_NEW), min:$(MAC_MIN_ARM))"
+	@echo " > arm64 (sdk:$(SDK_MAC_NEW), min:$(MAC_MIN_ARM))"
 	@mkdir -p $(INT_DIR)
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_ARM) $(CLANG14) -target arm64-apple-macos11 -isysroot $(SDK_MAC_NEW_PATH) \
 	    $(COMMON_CFLAGS) -arch arm64 -c $< -o $@
