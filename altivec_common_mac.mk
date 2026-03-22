@@ -56,71 +56,77 @@ debug:
 mac: $(ZIP_FILE)
 
 $(ZIP_FILE): $(BUNDLE)
-	@echo "[4/4] Zipping package..."
+	@echo " [4/4] Zipping package..."
 	@cd $(BUILD_DIR) && zip -rq $(APP_NAME).zip $(APP_NAME).app
 
 $(BUNDLE): $(INT_DIR)/$(APP_NAME)-universal
-	@echo "[3/4] Building app package..."
+	@echo " [3/4] Building app package..."
 	@mkdir -p $@/Contents/MacOS $@/Contents/Resources
-	# Copy binary
+	@echo "  > copying binary"
 	@cp $< $@/Contents/MacOS/$(APP_NAME)
-	# Copy Info.plist (Special handling)
+	@echo "  > copying Info.plist"
 	@cp $(INFO_PLIST) $@/Contents/Info.plist
-	# Blind Copy all other resources into Contents/Resources/
 	@if [ -d "$(RES_DIR)" ] && [ "$$(ls -A $(RES_DIR) 2>/dev/null)" ]; then \
+		echo "  > copying resources" ; \
 		cp -R $(RES_DIR)/* $@/Contents/Resources/ ; \
 	fi
-	# Extract symbols for modern targets (X64 and ARM)
-	@echo "Extracting symbols..."
+	@echo "  > extracting symbols"
 	@$(DSYMUTIL) $(INT_DIR)/x64.bin -o $(BUILD_DIR)/$(APP_NAME).X64.dSYM
-	@$(DSYMUTIL) $(INT_DIR)/arm64.bin -o $(BUILD_DIR)/$(APP_NAME).ARM.dSYM
+	@$(DSYMUTIL) $(INT_DIR)/arm.bin -o $(BUILD_DIR)/$(APP_NAME).ARM.dSYM
 	@echo -n "APPL????" > $@/Contents/PkgInfo
 
-$(INT_DIR)/$(APP_NAME)-universal: $(INT_DIR)/ppc.bin $(INT_DIR)/x86.bin $(INT_DIR)/x64.bin $(INT_DIR)/arm64.bin
-	@echo "[2/4] Merging Quad-Fat binary (PPC, X86, X64, ARM)..."
+$(INT_DIR)/$(APP_NAME)-universal: $(INT_DIR)/ppc.bin $(INT_DIR)/x86.bin $(INT_DIR)/x64.bin $(INT_DIR)/arm.bin
+	@echo " [2/4] Merging Quad-Fat binary (PPC, X86, X64, ARM)..."
 	@lipo -create $^ -output $@
 
 # --- PowerPC Slice ---
 $(INT_DIR)/ppc.bin: $(PPC_OBJS)
-	@echo " > ppc (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_PPC))"
+	@echo "  > linking ppc binary"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(GCC_PPC) -arch ppc -isysroot $(SDK_MAC_MID_PATH) \
 	    $(MAC_LDFLAGS) -lgcc_s.10.4 $^ -o $@
 
 $(INT_DIR)/ppc/%.o: %.m
 	@mkdir -p $(dir $@)
+	@if [ "$(notdir $<)" = "$(firstword $(notdir $(SOURCES)))" ]; then \
+		echo " [1/4] Compiling Files..."; \
+	fi
+	@echo "  > ppc: $(notdir $<)"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(GCC_PPC) $(COMMON_CFLAGS) -arch ppc -isysroot $(SDK_MAC_MID_PATH) \
 	    -fno-stack-protector -fno-common -fno-zero-initialized-in-bss -c $< -o $@
 
 # --- Intel X86 Slice ---
 $(INT_DIR)/x86.bin: $(X86_OBJS)
-	@echo " > x86 (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_X86))"
+	@echo "  > linking x86 binary"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(GCC_X86) -arch i386 -isysroot $(SDK_MAC_MID_PATH) \
 	    $(MAC_LDFLAGS) $^ -o $@
 
 $(INT_DIR)/x86/%.o: %.m
 	@mkdir -p $(dir $@)
+	@echo "  > x86: $(notdir $<)"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(GCC_X86) $(COMMON_CFLAGS) -arch i386 -isysroot $(SDK_MAC_MID_PATH) \
 	    -c $< -o $@
 
 # --- Intel X64 Slice ---
 $(INT_DIR)/x64.bin: $(X64_OBJS)
-	@echo " > x64 (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_X64))"
+	@echo "  > linking x64 binary"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) -arch x86_64 -isysroot $(SDK_MAC_MID_PATH) \
 	    $(MAC_LDFLAGS) $^ -o $@
 
 $(INT_DIR)/x64/%.o: %.m
 	@mkdir -p $(dir $@)
+	@echo "  > x64: $(notdir $<)"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) $(COMMON_CFLAGS) -arch x86_64 -isysroot $(SDK_MAC_MID_PATH) \
 	    -c $< -o $@
 
 # --- Apple Silicon ARM Slice ---
-$(INT_DIR)/arm64.bin: $(ARM_OBJS)
-	@echo " > arm64 (sdk:$(SDK_MAC_NEW), min:$(MAC_MIN_ARM))"
+$(INT_DIR)/arm.bin: $(ARM_OBJS)
+	@echo "  > linking arm64 binary"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_ARM) $(CLANG14) -target arm64-apple-macos11 -isysroot $(SDK_MAC_NEW_PATH) \
 	    $(MAC_LDFLAGS) -fuse-ld=lld -B/usr/bin/ $^ -o $@
 
 $(INT_DIR)/arm/%.o: %.m
 	@mkdir -p $(dir $@)
+	@echo "  > arm64: $(notdir $<)"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_ARM) $(CLANG14) -target arm64-apple-macos11 -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
 	    $(COMMON_CFLAGS) -c $< -o $@
 
