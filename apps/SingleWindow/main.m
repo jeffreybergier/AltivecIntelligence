@@ -2,86 +2,9 @@
 //  main.m
 //  SingleWindow
 //
-//  Created by Me on 3/12/26.
-//  Copyright __MyCompanyName__ 2026. All rights reserved.
-//
 
 #import <AppKit/AppKit.h>
-
-/* Cross-Version Window Mask Macros */
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
-  #define XPWindowStyleMaskTitled         NSWindowStyleMaskTitled
-  #define XPWindowStyleMaskClosable       NSWindowStyleMaskClosable
-  #define XPWindowStyleMaskResizable      NSWindowStyleMaskResizable
-  #define XPWindowStyleMaskMiniaturizable NSWindowStyleMaskMiniaturizable
-#else
-  #define XPWindowStyleMaskTitled         NSTitledWindowMask
-  #define XPWindowStyleMaskClosable       NSClosableWindowMask
-  #define XPWindowStyleMaskResizable      NSResizableWindowMask
-  #define XPWindowStyleMaskMiniaturizable NSMiniaturizableWindowMask
-#endif
-
-@interface RedView: NSView
-@end
-
-@implementation RedView
--(void)drawRect:(NSRect)dirtyRect;
-{
-  [[NSColor redColor] set];
-  NSRectFill(dirtyRect);
-  [super drawRect:dirtyRect];
-}
-@end
-
-@interface AppDelegate: NSObject <NSApplicationDelegate>
-{
-  NSWindow *_window;
-}
--(void)replaceWindow;
-@end
-
-@implementation AppDelegate
-
--(void)applicationDidFinishLaunching:(NSNotification*)aNotification;
-{
-  NSLog(@"applicationDidFinishLaunching:");
-}
-
--(BOOL)applicationOpenUntitledFile:(NSApplication*)sender;
-{
-  NSLog(@"applicationOpenUntitledFile:");
-  [self replaceWindow];
-  return YES;
-}
-
--(void)replaceWindow;
-{
-  [_window release];
-  _window = nil;
-  
-  unsigned int mask = XPWindowStyleMaskTitled
-    | XPWindowStyleMaskClosable
-    | XPWindowStyleMaskResizable
-    | XPWindowStyleMaskMiniaturizable;
-    
-  NSRect contentRect = NSMakeRect(0,0,512,512);
-  NSWindow *window = [[NSWindow alloc] initWithContentRect:contentRect
-                                                 styleMask:mask
-                                                   backing:NSBackingStoreBuffered
-                                                     defer:YES];
-  [window setReleasedWhenClosed:NO];
-  [window setContentView:[[[RedView alloc] initWithFrame:contentRect] autorelease]];
-  [window center];
-  [window makeKeyAndOrderFront:self];
-  _window = window;
-}
-
--(void)dealloc;
-{
-  [_window release];
-  [super dealloc];
-}
-@end
+#import "AppDelegate.h"
 
 int main(int argc, char *argv[])
 {

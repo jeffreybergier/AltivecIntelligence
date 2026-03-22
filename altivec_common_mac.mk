@@ -37,6 +37,12 @@ ZIP_FILE = $(BUILD_DIR)/$(APP_NAME).zip
 RES_DIR ?= Resources
 INFO_PLIST ?= Info.plist
 
+# --- Object File Mapping ---
+PPC_OBJS = $(addprefix $(INT_DIR)/ppc/, $(SOURCES:.m=.o))
+X86_OBJS = $(addprefix $(INT_DIR)/x86/, $(SOURCES:.m=.o))
+X64_OBJS = $(addprefix $(INT_DIR)/x64/, $(SOURCES:.m=.o))
+ARM_OBJS = $(addprefix $(INT_DIR)/arm/, $(SOURCES:.m=.o))
+
 # --- Top Level Targets ---
 
 release:
@@ -65,54 +71,58 @@ $(BUNDLE): $(INT_DIR)/$(APP_NAME)-universal
 		cp -R $(RES_DIR)/* $@/Contents/Resources/ ; \
 	fi
 	# Extract symbols for modern targets (X64 and ARM)
-	@$(DSYMUTIL) $(INT_DIR)/x86_64.bin -o $(BUILD_DIR)/$(APP_NAME).X64.dSYM
+	@echo "Extracting symbols..."
+	@$(DSYMUTIL) $(INT_DIR)/x64.bin -o $(BUILD_DIR)/$(APP_NAME).X64.dSYM
 	@$(DSYMUTIL) $(INT_DIR)/arm64.bin -o $(BUILD_DIR)/$(APP_NAME).ARM.dSYM
 	@echo -n "APPL????" > $@/Contents/PkgInfo
 
-$(INT_DIR)/$(APP_NAME)-universal: $(INT_DIR)/ppc.bin $(INT_DIR)/x86.bin $(INT_DIR)/x86_64.bin $(INT_DIR)/arm64.bin
+$(INT_DIR)/$(APP_NAME)-universal: $(INT_DIR)/ppc.bin $(INT_DIR)/x86.bin $(INT_DIR)/x64.bin $(INT_DIR)/arm64.bin
 	@echo "[2/4] Merging Quad-Fat binary (PPC, X86, X64, ARM)..."
 	@lipo -create $^ -output $@
 
-# PowerPC Slice
-$(INT_DIR)/ppc.bin: $(INT_DIR)/ppc.o
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(GCC_PPC) -arch ppc -isysroot $(SDK_MAC_MID_PATH) $< $(MAC_LDFLAGS) -lgcc_s.10.4 -o $@
-
-$(INT_DIR)/ppc.o: $(SOURCES)
-	@echo "[1/4] Compiling slices..."
+# --- PowerPC Slice ---
+$(INT_DIR)/ppc.bin: $(PPC_OBJS)
 	@echo " > ppc (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_PPC))"
-	@mkdir -p $(INT_DIR)
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(GCC_PPC) $(COMMON_CFLAGS) -isysroot $(SDK_MAC_MID_PATH) -arch ppc \
-	    -fno-stack-protector -fno-common -fno-zero-initialized-in-bss \
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(GCC_PPC) -arch ppc -isysroot $(SDK_MAC_MID_PATH) \
+	    $(MAC_LDFLAGS) -lgcc_s.10.4 $^ -o $@
+
+$(INT_DIR)/ppc/%.o: %.m
+	@mkdir -p $(dir $@)
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(GCC_PPC) $(COMMON_CFLAGS) -arch ppc -isysroot $(SDK_MAC_MID_PATH) \
+	    -fno-stack-protector -fno-common -fno-zero-initialized-in-bss -c $< -o $@
+
+# --- Intel X86 Slice ---
+$(INT_DIR)/x86.bin: $(X86_OBJS)
+	@echo " > x86 (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_X86))"
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(GCC_X86) -arch i386 -isysroot $(SDK_MAC_MID_PATH) \
+	    $(MAC_LDFLAGS) $^ -o $@
+
+$(INT_DIR)/x86/%.o: %.m
+	@mkdir -p $(dir $@)
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(GCC_X86) $(COMMON_CFLAGS) -arch i386 -isysroot $(SDK_MAC_MID_PATH) \
 	    -c $< -o $@
 
-# Intel X86 Slice
-$(INT_DIR)/x86.bin: $(INT_DIR)/x86.o
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(GCC_X86) -arch i386 -isysroot $(SDK_MAC_MID_PATH) $< $(MAC_LDFLAGS) -o $@
-
-$(INT_DIR)/x86.o: $(SOURCES)
-	@echo " > x86 (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_X86))"
-	@mkdir -p $(INT_DIR)
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(GCC_X86) $(COMMON_CFLAGS) -isysroot $(SDK_MAC_MID_PATH) -arch i386 -c $< -o $@
-
-# Intel X64 Slice
-$(INT_DIR)/x86_64.bin: $(INT_DIR)/x86_64.o
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) -arch x86_64 -isysroot $(SDK_MAC_MID_PATH) $< $(MAC_LDFLAGS) -o $@
-
-$(INT_DIR)/x86_64.o: $(SOURCES)
+# --- Intel X64 Slice ---
+$(INT_DIR)/x64.bin: $(X64_OBJS)
 	@echo " > x64 (sdk:$(SDK_MAC_MID), min:$(MAC_MIN_X64))"
-	@mkdir -p $(INT_DIR)
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) $(COMMON_CFLAGS) -isysroot $(SDK_MAC_MID_PATH) -arch x86_64 -c $< -o $@
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) -arch x86_64 -isysroot $(SDK_MAC_MID_PATH) \
+	    $(MAC_LDFLAGS) $^ -o $@
 
-# Apple Silicon ARM Slice
-$(INT_DIR)/arm64.bin: $(INT_DIR)/arm64.o
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_ARM) $(CLANG14) -target arm64-apple-macos11 -isysroot $(SDK_MAC_NEW_PATH) \
-	    -fuse-ld=lld -B/usr/bin/ $< $(MAC_LDFLAGS) -o $@
+$(INT_DIR)/x64/%.o: %.m
+	@mkdir -p $(dir $@)
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) $(COMMON_CFLAGS) -arch x86_64 -isysroot $(SDK_MAC_MID_PATH) \
+	    -c $< -o $@
 
-$(INT_DIR)/arm64.o: $(SOURCES)
+# --- Apple Silicon ARM Slice ---
+$(INT_DIR)/arm64.bin: $(ARM_OBJS)
 	@echo " > arm64 (sdk:$(SDK_MAC_NEW), min:$(MAC_MIN_ARM))"
-	@mkdir -p $(INT_DIR)
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_ARM) $(CLANG14) -target arm64-apple-macos11 -isysroot $(SDK_MAC_NEW_PATH) \
-	    $(COMMON_CFLAGS) -arch arm64 -c $< -o $@
+	    $(MAC_LDFLAGS) -fuse-ld=lld -B/usr/bin/ $^ -o $@
+
+$(INT_DIR)/arm/%.o: %.m
+	@mkdir -p $(dir $@)
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_ARM) $(CLANG14) -target arm64-apple-macos11 -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
+	    $(COMMON_CFLAGS) -c $< -o $@
 
 clean:
 	@echo "Cleaning build artifacts..."

@@ -1,11 +1,8 @@
-# SingleWindow Makefile
-# Powered by Altivec Intelligence Common Build System
-
-# 1. Project Identity
+# Altivec Intelligence - SingleWindow (Mac)
 APP_NAME = SingleWindow
-SOURCES = main.m
 RES_DIR = Resources
 INFO_PLIST = Info.plist
+SOURCES = main.m AppDelegate.m
 
-# 2. Import the Common Build Engine
+# Import common Mac build engine
 include ../../altivec_common_mac.mk
