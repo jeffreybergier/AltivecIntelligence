@@ -1,6 +1,6 @@
 # Altivec Intelligence - SingleScreen (iPhone)
 APP_NAME = SingleScreen
-SOURCES = main.m
+SOURCES = main.m AppDelegate.m
 INFO_PLIST = Info.plist
 
 # Import common iPhone build engine
