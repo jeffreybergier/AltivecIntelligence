@@ -11,6 +11,9 @@ Hi, you are an AI programming assistant helping the user develop and deploy apps
 - **MRC Mandatory:** For Mac apps targeting 10.4/10.5, always use `retain`, `release`, and `autorelease`. Use manual getters and setters.
 - **Legacy APIs:** Always verify API compatibility against the 10.4/10.6 headers. Warn the user if they attempt to use symbols that break Tiger/Leopard compatibility.
 - **Modern Features:** iPhone apps (iOS 4.3+) can use properties and modern features, but be cautious with code shared between Mac and iPhone targets.
+- **Warnings** Make sure you always tell the user when there are warnings as
+this likely indicates the app will crash on older systems. The exception is 
+deprecation warnings as those will be common when dealing with these old API's.
 - **Surgical Changes:** Focus on small, incremental improvements. Accomplish tasks in the fewest lines of code possible.
 - **SSH Safety:** When SSH'd into a Mac, stay within `~/Desktop`. When on an iPhone, stay within `~/tmp_altivec`.
 
