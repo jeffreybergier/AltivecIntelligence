@@ -1,0 +1,82 @@
+--- temp_osxcross/build_clang.sh	2026-03-17 06:23:45.073544405 +0000
++++ build_clang.sh	2026-03-17 01:09:59.265185491 +0000
+@@ -5,12 +5,29 @@
+ DESC=clang
+ USESYSTEMCOMPILER=1
+ 
++# Ensure python is available (required by LLVM configure)
++if ! which python &>/dev/null; then
++  if which python3 &>/dev/null; then
++    echo "Linking python3 to /usr/local/bin/python..."
++    ln -sf $(which python3) /usr/local/bin/python
++  elif which python2 &>/dev/null; then
++    echo "Linking python2 to /usr/local/bin/python..."
++    ln -sf $(which python2) /usr/local/bin/python
++  fi
++fi
++
+ source tools/tools.sh
+ 
+ mkdir -p $BUILD_DIR
+ 
+-if [[ $(uname -s) == CYGWIN* ]]; then
+-  DISABLE_BOOTSTRAP=1
++if [ -z "$DISABLE_BOOTSTRAP" ]; then
++  if [[ $(uname -s) == CYGWIN* ]]; then
++    DISABLE_BOOTSTRAP=1
++  elif [[ $(uname -s) == "Linux" && $(uname -m) == "aarch64" ]]; then
++    # Default to DISABLE_BOOTSTRAP=1 on AArch64/Linux to avoid
++    # stage1 compiler pathing issues with system headers.
++    DISABLE_BOOTSTRAP=1
++  fi
+ fi
+ 
+ if [ -z "$SKIP_GCC_CHECK" ]; then
+@@ -56,7 +73,7 @@
+ fi
+ 
+ if [ -z "$INSTALLPREFIX" ]; then
+-  INSTALLPREFIX="/usr/local"
++  INSTALLPREFIX=$TARGET_DIR
+ fi
+ 
+ require wget
+@@ -115,6 +132,11 @@
+ extract "$TARBALL_DIR/$(basename $LLVM_PKG)" 2 0
+ 
+ pushd llvm* &>/dev/null
++
++# Patch for modern libstdc++ compatibility (std::unique_ptr to bool conversion)
++echo "Patching llvm/include/llvm/IR/ValueMap.h for modern C++ compatibility..."
++sed -i 's/return MDMap;/return static_cast<bool>(MDMap);/' include/llvm/IR/ValueMap.h
++
+ pushd tools &>/dev/null
+ 
+ extract "$TARBALL_DIR/$(basename $CLANG_PKG)" 1
+@@ -123,13 +145,25 @@
+ 
+ popd &>/dev/null
+ 
++if [ -z "$SKIP_GCC_CHECK" ]; then
++  SKIP_GCC_CHECK=1
++fi
++
++if [ -z "$INSTALL_AFTER_BUILD" ]; then
++  INSTALL_AFTER_BUILD=1
++fi
++
+ function build()
+ {
+   stage=$1
+   mkdir -p $stage
+   pushd $stage &>/dev/null
+   ../configure --prefix=$INSTALLPREFIX --enable-optimized --disable-assertions
+-  $MAKE $2 -j $JOBS VERBOSE=1
++  $MAKE $2 -j $JOBS
++  if [ "$INSTALL_AFTER_BUILD" == "1" ]; then
++    echo "Installing..."
++    $MAKE install
++  fi
+   popd &>/dev/null
+ }
+ 

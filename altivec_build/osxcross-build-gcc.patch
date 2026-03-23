@@ -1,0 +1,59 @@
+--- temp_osxcross/build_gcc.sh	2026-03-17 06:23:45.093987918 +0000
++++ build_gcc.sh	2026-03-16 01:41:36.966262542 +0000
+@@ -53,10 +53,21 @@
+     echo "The SDK you are using does not support PowerPC" 1>&2
+     exit 1
+   fi
+-  GCC_ARCH=powerpc64
+-  GCC_ARCH_SHORT=oppc64
++
++  res=$(x86_64-apple-$OSXCROSS_TARGET-lipo -detailed_info \
++              "$OSXCROSS_SDK/usr/lib/crt1.o")
++
++  if [[ $res == *architecture\ ppc64* ]]; then
++    GCC_ARCH=powerpc64
++    GCC_ARCH_SHORT=oppc64
++  else
++    GCC_ARCH=powerpc
++    GCC_ARCH_SHORT=oppc32
++  fi
++
+   GCC_ARCH32=powerpc
+   GCC_ARCH_SHORT32=oppc32
++
+   TARGETARCHS=ppc
+   if [ -z "$APPLE_GCC" ]; then
+     export DISABLE_ANNOYING_LD64_ASSERTION=1
+@@ -76,7 +87,11 @@
+ 
+ if [ -n "$APPLE_GCC" ]; then
+   # work around broken multilib support
+-  ARCHS_TO_BUILD+=" $GCC_ARCH32"
++  if [ "$GCC_ARCH" != "$GCC_ARCH32" ]; then
++    ARCHS_TO_BUILD+=" $GCC_ARCH32"
++  else
++    EXTRA_CONFFLAGS+="--disable-multilib "
++  fi
+   EXTRA_CONFFLAGS+="--with-gxx-include-dir=/usr/include/c++/4.0.0 " ## TODO: version
+ 
+   # fix -lstdc++ link
+@@ -98,6 +113,9 @@
+ pushd $OSXCROSS_TARBALL_DIR &>/dev/null
+ if [ -n "$APPLE_GCC" ]; then
+   wget -c "$GCC_MIRROR/tarballs/gcc/gcc-$APPLE_GCC_VERSION.tar.gz"
++  # Download latest config scripts for aarch64 support if missing
++  [ -f "$OSXCROSS_TARBALL_DIR/config.guess" ] || wget -O "$OSXCROSS_TARBALL_DIR/config.guess" 'https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD'
++  [ -f "$OSXCROSS_TARBALL_DIR/config.sub" ] || wget -O "$OSXCROSS_TARBALL_DIR/config.sub" 'https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD'
+ else
+   if [[ $GCC_VERSION != *-* ]]; then
+     wget -c "$GCC_MIRROR/releases/gcc-$GCC_VERSION/gcc-$GCC_VERSION.tar.gz"
+@@ -112,6 +130,9 @@
+ 
+ if [ -n "$APPLE_GCC" ]; then
+   extract "$OSXCROSS_TARBALL_DIR/gcc-$APPLE_GCC_VERSION.tar.gz" 1
++  # Update config.guess and config.sub for aarch64
++  find . -name "config.guess" -exec cp $OSXCROSS_TARBALL_DIR/config.guess {} \;
++  find . -name "config.sub" -exec cp $OSXCROSS_TARBALL_DIR/config.sub {} \;
+ else
+   extract "$OSXCROSS_TARBALL_DIR/gcc-$GCC_VERSION.tar.gz" 1
+   ( cd ./gcc-$GCC_VERSION/ && ./contrib/download_prerequisites )

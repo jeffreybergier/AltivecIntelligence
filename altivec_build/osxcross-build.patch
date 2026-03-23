@@ -1,0 +1,21 @@
+--- temp_osxcross/build.sh	2026-03-17 06:23:45.053698687 +0000
++++ build.sh	2026-03-16 01:41:36.965120872 +0000
+@@ -51,7 +51,7 @@
+   done
+   if [ ! $sdk ] ; then
+     echo cant find SDK for OSX $sdkv in tarballs. exiting
+-    exit
++    exit 1
+   fi
+ }
+ 
+@@ -84,7 +84,8 @@
+ case $SDK_VERSION in
+   10.4*) TARGET=darwin8; APPLY_LD64_ADD_PPC_SUPPORT_PATCH=1; ;;
+   10.5*) TARGET=darwin9; APPLY_LD64_ADD_PPC_SUPPORT_PATCH=1; ;;
+-  10.6*) TARGET=darwin10 ;;
++  10.6*) TARGET=darwin10; APPLY_LD64_ADD_PPC_SUPPORT_PATCH=1; ;;
++
+   10.7*) TARGET=darwin11 ;;
+   10.8*) TARGET=darwin12; X86_64H_SUPPORTED=1; ;;
+   10.9*) TARGET=darwin13; X86_64H_SUPPORTED=1; ;;
