@@ -1,0 +1,36 @@
+## AltivecIntelligence: Cross-Compilation & AI Assistant
+# This compose file sets up the development environment.
+#
+# Usage:
+# Build Images:      docker compose build
+# Use With AI:       docker compose run --rm altivec-intelligence
+# Use W/out AI:      docker compose run --rm altivec
+# Build Example App: docker compose run --rm altivec "cd example && make all"
+
+services:
+  altivec-intelligence:
+    build:
+      context: .
+      dockerfile: Containerfile
+      target: altivec-gemini
+    image: altivec-intelligence-image
+    volumes:
+      - .:/opt/osxcross
+      - ~/.gemini:/root/.gemini
+      # Uncomment the following line to allow the AI to use your local SSH keys 
+      # for deploying applications to your vintage Macs and iPhones.
+      # The :ro flag ensures the container cannot modify your host keys.
+      # - ~/.ssh:/root/.ssh
+    stdin_open: true
+    tty: true
+
+  altivec:
+    build:
+      context: .
+      dockerfile: Containerfile
+      target: altivec-base
+    image: altivec-base-image
+    volumes:
+      - .:/opt/osxcross
+    stdin_open: true
+    tty: true

@@ -1,0 +1,9 @@
+*gcc*.tar.*
+*MacOSX*.*
+cpucount
+build/
+target/
+.DS_Store
+example/build/
+libcurl/build*
+libcurl/tarballs
