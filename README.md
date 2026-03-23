@@ -2,11 +2,11 @@
 
 # 🤖 Altivec Intelligence
 
-**Altivec Intelligence** Is a containerized cross-compile environment that 
+**Altivec Intelligence** is a containerized cross-compile environment that 
 is built for retro tech-enthusiasts that want to build software for their retro
 Mac and iOS device. It builds Mac apps that run on all Macs with 10.4 Tiger and 
 up including PowerPC, Intel, and Apple Silicon Macs. The iPhone toolchain can 
-build Apps that run on iPhone 3GS with iOS 4.3 and later.
+build apps that run on iPhone 3GS with iOS 4.3 and later.
 
 Why include AI? Building apps that target these old platforms requires using
 old Objective-C that does not have the syntactic sugar provided by Objective-C
@@ -20,7 +20,7 @@ or lack of desire to program old-school Objective-C, they have never gotten
 around to building it. I hope that **Altivec Intelligence** will empower this
 niche community to make our favorite retro-tech more useful in the modern world.
 
-Below is a Quick Start Guide, For more detailed information about the project's
+Below is a Quick Start Guide. For more detailed information about the project's
 origins, technical matrix, and safety considerations, please see the
 [**FAQ**](README.FAQ.md).
 
@@ -102,7 +102,7 @@ context so that it knows about its own environment
 
 ```
 Hello, can you start off by reading the README.md file as well as your
-GEMINI.md file. Then explore the docker container your are in, especially
+GEMINI.md file. Then explore the docker container you are in, especially
 /osxcross and the apps folder in the current working directory. After that, let
 me know what you can do and what you can help me with. 
 ```
@@ -143,7 +143,7 @@ iPhone 5 and my iMac G4. I am not a compiler, cmake, SDK, or build-system
 engineer. I would not have been able to do this without Gemini. That said,
 I also know Gemini has probably not produced the most efficient build files
 and scripts. So I am totally open to new ideas. How can we improve them, how
-can I learn more. If you know, I want to know. So please file an issue and lets
+can I learn more. If you know, I want to know. So please file an issue and let's
 talk about it ❤️
 
 ## ⚖️ License & Credit
@@ -155,6 +155,6 @@ building in Linux containers instead of on expensive Mac runners.
 
 This project is licensed under the **MIT License**. This is a permissive license
 that allows for free use, modification, and distribution. Note that it downloads
-various open-source and closed source components (like OSXCross and Apple's
+various open-source and closed-source components (like OSXCross and Apple's
 SDKs) which carry their own licenses.
 
