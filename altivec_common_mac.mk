@@ -20,12 +20,14 @@ DSYMUTIL=/usr/bin/dsymutil-14
 # --- SDK Paths ---
 SDK_MAC_MID_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_MID).sdk
 SDK_MAC_NEW_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_NEW).sdk
+SDK_MAC_10_11_PATH=/osxcross/target/SDK/MacOSX10.11.sdk
 export OSXCROSS_NO_DSYMUTIL=1
 
 # --- Default Build Settings ---
 BUILD_DIR ?= build-release
 INT_DIR = $(BUILD_DIR)/Intermediates
 OPT_FLAGS ?= -O3
+UNIVERSAL_BIN ?= $(INT_DIR)/$(APP_NAME)-universal
 
 # --- Flags (Decoupled from SDK) ---
 COMMON_CFLAGS = $(OPT_FLAGS) -g -Wall
@@ -42,6 +44,7 @@ PPC_OBJS = $(addprefix $(INT_DIR)/ppc/, $(SOURCES:.m=.o))
 X86_OBJS = $(addprefix $(INT_DIR)/x86/, $(SOURCES:.m=.o))
 X64_OBJS = $(addprefix $(INT_DIR)/x64/, $(SOURCES:.m=.o))
 ARM_OBJS = $(addprefix $(INT_DIR)/arm/, $(SOURCES:.m=.o))
+X64_1011_OBJS = $(addprefix $(INT_DIR)/x64_1011/, $(SOURCES:.m=.o))
 
 # --- Top Level Targets ---
 
@@ -53,13 +56,20 @@ debug:
 	@echo "--- Building Mac Debug (-O0) ---"
 	@$(MAKE) --no-print-directory mac BUILD_DIR=build-debug OPT_FLAGS=-O0
 
+teneleven:
+	@echo "--- Building Mac 10.11 (x86_64) ---"
+	@$(MAKE) --no-print-directory build-teneleven-internal BUILD_DIR=build-10.11 OPT_FLAGS=-O3
+
+build-teneleven-internal:
+	@$(MAKE) --no-print-directory $(BUNDLE) UNIVERSAL_BIN=$(INT_DIR)/x64_1011.bin
+
 mac: $(ZIP_FILE)
 
 $(ZIP_FILE): $(BUNDLE)
 	@echo " [4/4] Zipping package..."
 	@cd $(BUILD_DIR) && zip -rq $(APP_NAME).zip $(APP_NAME).app
 
-$(BUNDLE): $(INT_DIR)/$(APP_NAME)-universal
+$(BUNDLE): $(UNIVERSAL_BIN)
 	@echo " [3/4] Building app package..."
 	@mkdir -p $@/Contents/MacOS $@/Contents/Resources
 	@echo "  > copying binary"
@@ -71,8 +81,9 @@ $(BUNDLE): $(INT_DIR)/$(APP_NAME)-universal
 		cp -R $(RES_DIR)/* $@/Contents/Resources/ ; \
 	fi
 	@echo "  > extracting symbols"
-	@$(DSYMUTIL) $(INT_DIR)/x64.bin -o $(BUILD_DIR)/$(APP_NAME).X64.dSYM
-	@$(DSYMUTIL) $(INT_DIR)/arm.bin -o $(BUILD_DIR)/$(APP_NAME).ARM.dSYM
+	@if [ -f "$(INT_DIR)/x64.bin" ]; then $(DSYMUTIL) $(INT_DIR)/x64.bin -o $(BUILD_DIR)/$(APP_NAME).X64.dSYM; fi
+	@if [ -f "$(INT_DIR)/arm.bin" ]; then $(DSYMUTIL) $(INT_DIR)/arm.bin -o $(BUILD_DIR)/$(APP_NAME).ARM.dSYM; fi
+	@if [ -f "$(INT_DIR)/x64_1011.bin" ]; then $(DSYMUTIL) $(INT_DIR)/x64_1011.bin -o $(BUILD_DIR)/$(APP_NAME).10.11.dSYM; fi
 	@echo -n "APPL????" > $@/Contents/PkgInfo
 
 $(INT_DIR)/$(APP_NAME)-universal: $(INT_DIR)/ppc.bin $(INT_DIR)/x86.bin $(INT_DIR)/x64.bin $(INT_DIR)/arm.bin
@@ -117,6 +128,21 @@ $(INT_DIR)/x64/%.o: %.m
 	@echo "  > x64: $(notdir $<)"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) $(COMMON_CFLAGS) -arch x86_64 -isysroot $(SDK_MAC_MID_PATH) \
 	    -c $< -o $@
+
+# --- Intel X64 (10.11) Slice ---
+$(INT_DIR)/x64_1011.bin: $(X64_1011_OBJS)
+	@echo "  > linking x86_64 (10.11) binary"
+	@MACOSX_DEPLOYMENT_TARGET=10.11 $(CLANG14) -target x86_64-apple-macos10.11 -isysroot $(SDK_MAC_10_11_PATH) \
+	    $(MAC_LDFLAGS) -fuse-ld=lld $^ -o $@
+
+$(INT_DIR)/x64_1011/%.o: %.m
+	@mkdir -p $(dir $@)
+	@if [ "$(notdir $<)" = "$(firstword $(notdir $(SOURCES)))" ]; then \
+		echo " [1/4] Compiling Files..."; \
+	fi
+	@echo "  > x86_64 (10.11): $(notdir $<)"
+	@MACOSX_DEPLOYMENT_TARGET=10.11 $(CLANG14) -target x86_64-apple-macos10.11 -isysroot $(SDK_MAC_10_11_PATH) \
+	    $(COMMON_CFLAGS) -c $< -o $@
 
 # --- Apple Silicon ARM Slice ---
 $(INT_DIR)/arm.bin: $(ARM_OBJS)

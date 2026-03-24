@@ -92,9 +92,17 @@ fi
 echo "Finalizing toolchain symlinks in $TARGET_DIR/bin..."
 pushd $TARGET_DIR/bin &>/dev/null
 
+# Detect the base prefix (usually darwin8 for Tiger, or darwin10 for Snow Leopard)
+BASE_PREFIX=$(ls x86_64-apple-darwin*-ld 2>/dev/null | head -n1 | sed 's/-ld//')
+if [ -z "$BASE_PREFIX" ]; then
+    BASE_PREFIX="x86_64-apple-darwin8" # Fallback
+fi
+
+echo "  > Using base prefix: $BASE_PREFIX"
+
 # Ensure ld and lipo exist without prefixes (required by Clang)
-ln -sf x86_64-apple-darwin10-ld ld
-ln -sf x86_64-apple-darwin10-lipo lipo
+ln -sf ${BASE_PREFIX}-ld ld
+ln -sf ${BASE_PREFIX}-lipo lipo
 
 # Link the system dsymutil-14 for modern targets (x86_64)
 ln -sf /usr/bin/dsymutil-14 llvm-dsymutil
@@ -103,13 +111,22 @@ ln -sf /usr/bin/dsymutil-14 osxcross-llvm-dsymutil
 # Link the system lld for Apple Silicon targets (arm64)
 ln -sf /usr/bin/ld64.lld-14 ld64.lld
 
-# Ensure arm wrappers are correctly linked to the universal wrapper
-WRAPPER="powerpc64-apple-darwin10-wrapper"
+# Ensure arm and x86_64 (darwin15) wrappers are correctly linked to the universal wrapper
+# We use powerpc64-* wrapper as the universal base if available
+WRAPPER=$(ls powerpc64-apple-darwin*-wrapper 2>/dev/null | head -n1)
+if [ -z "$WRAPPER" ]; then
+    WRAPPER=$(ls x86_64-apple-darwin*-wrapper 2>/dev/null | head -n1)
+fi
+
 if [ -f "$WRAPPER" ]; then
+    echo "  > Linking wrappers to $WRAPPER"
     for arch in arm64 armv7 armv7s; do
         ln -sf $WRAPPER ${arch}-apple-darwin11-clang
         ln -sf $WRAPPER ${arch}-apple-darwin11-clang++
     done
+    # Add x86_64-apple-darwin15 for the 10.11 SDK
+    ln -sf $WRAPPER x86_64-apple-darwin15-clang
+    ln -sf $WRAPPER x86_64-apple-darwin15-clang++
 fi
 
 popd &>/dev/null
