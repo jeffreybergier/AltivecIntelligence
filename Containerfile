@@ -61,8 +61,8 @@ ENV DISABLE_BOOTSTRAP=1
 
 ENV GCC_VERSION=4.2.1
 ENV APPLE_GCC=1
-ENV SDK_VERSION=10.4u
-ENV OSX_VERSION_MIN=10.4
+ENV SDK_VERSION=10.5
+ENV OSX_VERSION_MIN=10.5
 ENV UNATTENDED=1
 ENV OSXCROSS_NO_DSYMUTIL=1
 ENV INSTALLPREFIX=/osxcross/target
@@ -80,9 +80,9 @@ RUN echo "Pre-Build: Altivec Intelligence" \
 RUN echo "Build: osxcross" \
       && ./build.sh
 
-# RUN echo "Build: Apple GCC 4.2 (PPC)" \
-#       && POWERPC=1 ./build_gcc_ppc.sh \
-#       && rm -rf build
+RUN echo "Build: Apple GCC 4.2 (PPC)" \
+      && POWERPC=1 ./build_gcc_ppc.sh \
+      && rm -rf build
 # 
 # RUN echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
 #       && ./build_gcc.sh \
