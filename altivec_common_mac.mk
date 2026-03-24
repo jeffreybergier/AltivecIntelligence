@@ -70,6 +70,13 @@ tenfour:
 build-tenfour-internal:
 	@$(MAKE) --no-print-directory $(BUNDLE) UNIVERSAL_BIN=$(INT_DIR)/ppc.bin
 
+tenfourintel:
+	@echo "--- Building Mac 10.4 (Intel 32) ---"
+	@$(MAKE) --no-print-directory build-tenfourintel-internal BUILD_DIR=build-10.4-intel OPT_FLAGS=-O3
+
+build-tenfourintel-internal:
+	@$(MAKE) --no-print-directory $(BUNDLE) UNIVERSAL_BIN=$(INT_DIR)/x86.bin
+
 mac: $(ZIP_FILE)
 
 $(ZIP_FILE): $(BUNDLE)
@@ -89,6 +96,7 @@ $(BUNDLE): $(UNIVERSAL_BIN)
 	fi
 	@echo "  > extracting symbols"
 	@if [ -f "$(INT_DIR)/ppc.bin" ]; then $(DSYMUTIL) $(INT_DIR)/ppc.bin -o $(BUILD_DIR)/$(APP_NAME).PPC.dSYM 2>/dev/null || true; fi
+	@if [ -f "$(INT_DIR)/x86.bin" ]; then $(DSYMUTIL) $(INT_DIR)/x86.bin -o $(BUILD_DIR)/$(APP_NAME).X86.dSYM 2>/dev/null || true; fi
 	@if [ -f "$(INT_DIR)/x64.bin" ]; then $(DSYMUTIL) $(INT_DIR)/x64.bin -o $(BUILD_DIR)/$(APP_NAME).X64.dSYM; fi
 	@if [ -f "$(INT_DIR)/arm.bin" ]; then $(DSYMUTIL) $(INT_DIR)/arm.bin -o $(BUILD_DIR)/$(APP_NAME).ARM.dSYM; fi
 	@if [ -f "$(INT_DIR)/x64_1011.bin" ]; then $(DSYMUTIL) $(INT_DIR)/x64_1011.bin -o $(BUILD_DIR)/$(APP_NAME).10.11.dSYM; fi

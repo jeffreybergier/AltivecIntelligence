@@ -83,10 +83,9 @@ RUN echo "Build: osxcross" \
 RUN echo "Build: Apple GCC 4.2 (PPC)" \
       && POWERPC=1 ./build_gcc_ppc.sh \
       && rm -rf build
-# 
-# RUN echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
-#       && ./build_gcc.sh \
-#       && rm -rf build
+RUN echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
+      && ./build_gcc.sh \
+      && rm -rf build
 
 RUN echo "Post-Build: Altivec Intelligence" \
       && ./altivec_postbuild.sh \

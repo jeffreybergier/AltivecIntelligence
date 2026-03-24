@@ -40,9 +40,17 @@ echo "--- Applying Global Patches ---"
 # osxcross-tools.patch eliminated (10.5 SDK has ppc64)
 
 # 4. Prepare GCC scripts
+# Create PPC copy from original first
 cp build_gcc.sh build_gcc_ppc.sh
-patch build_gcc_ppc.sh < altivec_build/osxcross-build-gcc.patch
+
+# Prepare Intel version (default build_gcc.sh)
+patch build_gcc.sh --quiet < altivec_build/osxcross-build-gcc-intel.patch
+
+# Prepare PPC version (build_gcc_ppc.sh)
+patch build_gcc_ppc.sh --quiet < altivec_build/osxcross-build-gcc-ppc.patch
+
 chmod +x build_gcc_ppc.sh build_gcc.sh
+
 ln -sf /usr/bin/python3 /usr/local/bin/python
 
 # 5. Download base SDKs

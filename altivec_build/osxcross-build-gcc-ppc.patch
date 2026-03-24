@@ -1,20 +1,18 @@
---- a/build_gcc.sh
-+++ b/build_gcc.sh
-@@ -53,10 +53,9 @@
+--- build_gcc.sh	2026-03-24 14:13:54.365166970 +0000
++++ build_gcc_ppc.sh	2026-03-24 14:29:57.006050011 +0000
+@@ -53,9 +53,8 @@
      echo "The SDK you are using does not support PowerPC" 1>&2
      exit 1
    fi
 -  GCC_ARCH=powerpc64
 -  GCC_ARCH_SHORT=oppc64
 -  GCC_ARCH32=powerpc
--  GCC_ARCH_SHORT32=oppc32
 +  GCC_ARCH=powerpc
 +  GCC_ARCH_SHORT=oppc32
-+  GCC_ARCH_SHORT32=oppc32
+   GCC_ARCH_SHORT32=oppc32
    TARGETARCHS=ppc
    if [ -z "$APPLE_GCC" ]; then
-     export DISABLE_ANNOYING_LD64_ASSERTION=1
-@@ -75,8 +74,10 @@
+@@ -76,8 +75,10 @@
  
  if [ -n "$APPLE_GCC" ]; then
    # work around broken multilib support
@@ -27,7 +25,7 @@
  
    # fix -lstdc++ link
    if [ ! -f "$OSXCROSS_SDK/usr/lib/libstdc++.dylib" ]; then
-@@ -98,8 +99,8 @@
+@@ -121,8 +122,8 @@
  
  if [ -n "$APPLE_GCC" ]; then
    pushd gcc*$APPLE_GCC_VERSION &>/dev/null
