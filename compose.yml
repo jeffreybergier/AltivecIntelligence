@@ -15,7 +15,7 @@ services:
       target: altivec-gemini
     image: altivec-intelligence-image
     volumes:
-      - .:/opt/osxcross
+      - .:/repo/altivec
       - ~/.gemini:/root/.gemini
       # Uncomment the following line to allow the AI to use your local SSH keys 
       # for deploying applications to your vintage Macs and iPhones.

@@ -110,7 +110,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 
 RUN npm install -g @google/gemini-cli
 
-WORKDIR /opt/osxcross
+WORKDIR /repo/altivec
 ENTRYPOINT ["gemini"]
 CMD ["--yolo"]
 
