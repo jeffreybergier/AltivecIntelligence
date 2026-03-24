@@ -18,7 +18,11 @@
   #define XPWindowStyleMaskMiniaturizable NSMiniaturizableWindowMask
 #endif
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
 @interface AppDelegate : NSObject <NSApplicationDelegate>
+#else
+@interface AppDelegate : NSObject
+#endif
 {
   NSWindow *_window;
 }

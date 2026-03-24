@@ -3,7 +3,7 @@
 # Targets: PPC (10.4), X86 (10.4), X64 (10.5), ARM (11.0)
 
 # --- Versions ---
-SDK_MAC_MID = 10.6
+SDK_MAC_MID = 10.5
 SDK_MAC_NEW = 11.3
 MAC_MIN_PPC = 10.4
 MAC_MIN_X86 = 10.4
@@ -63,6 +63,13 @@ teneleven:
 build-teneleven-internal:
 	@$(MAKE) --no-print-directory $(BUNDLE) UNIVERSAL_BIN=$(INT_DIR)/x64_1011.bin
 
+tenfour:
+	@echo "--- Building Mac 10.4 (PPC32) ---"
+	@$(MAKE) --no-print-directory build-tenfour-internal BUILD_DIR=build-10.4 OPT_FLAGS=-O3
+
+build-tenfour-internal:
+	@$(MAKE) --no-print-directory $(BUNDLE) UNIVERSAL_BIN=$(INT_DIR)/ppc.bin
+
 mac: $(ZIP_FILE)
 
 $(ZIP_FILE): $(BUNDLE)
@@ -81,6 +88,7 @@ $(BUNDLE): $(UNIVERSAL_BIN)
 		cp -R $(RES_DIR)/* $@/Contents/Resources/ ; \
 	fi
 	@echo "  > extracting symbols"
+	@if [ -f "$(INT_DIR)/ppc.bin" ]; then $(DSYMUTIL) $(INT_DIR)/ppc.bin -o $(BUILD_DIR)/$(APP_NAME).PPC.dSYM 2>/dev/null || true; fi
 	@if [ -f "$(INT_DIR)/x64.bin" ]; then $(DSYMUTIL) $(INT_DIR)/x64.bin -o $(BUILD_DIR)/$(APP_NAME).X64.dSYM; fi
 	@if [ -f "$(INT_DIR)/arm.bin" ]; then $(DSYMUTIL) $(INT_DIR)/arm.bin -o $(BUILD_DIR)/$(APP_NAME).ARM.dSYM; fi
 	@if [ -f "$(INT_DIR)/x64_1011.bin" ]; then $(DSYMUTIL) $(INT_DIR)/x64_1011.bin -o $(BUILD_DIR)/$(APP_NAME).10.11.dSYM; fi
