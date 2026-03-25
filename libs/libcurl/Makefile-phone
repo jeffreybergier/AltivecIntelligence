@@ -24,9 +24,9 @@ CROSS_AR=$(AR_LEGACY)
 IOS_V7_FLAGS=-target armv7-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch armv7 -B$(BIN_DIR)
 IOS_64_FLAGS=-target arm64-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch arm64 -B$(BIN_DIR)
 
-all: phone
+all: static
 
-phone: $(PREFIX)/lib/libcurl.a
+static: $(PREFIX)/lib/libcurl.a
 	@echo "Organizing final Phone output..."
 	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
 	cp $(PREFIX)/lib/*.a $(BUILD_ROOT)/lib/
