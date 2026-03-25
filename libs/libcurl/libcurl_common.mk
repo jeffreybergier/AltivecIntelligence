@@ -1,5 +1,5 @@
 # AltivecIntelligence Common Build Settings for libcurl
-# Included by Makefile-i8 and Makefile-X6
+# Included by Makefile-phone and Makefile-mac
 
 # --- Toolchain Paths ---
 OSXCROSS_ROOT=/osxcross/target
