@@ -116,7 +116,7 @@ app for my favorite retro device. ```
 ## 📂 Project Structure
 - [`apps`](./apps/): Sample projects and Makefiles
 - [`altivec_common_mac.mk`](./altivec_common_mac.mk): A "parent" Makefile with the general rules for compiling Mac apps
-- [`altivec_common_iphone.mk`](./altivec_common_iphone.mk): A "parent" Makefile with the general rules for compiling iPhone apps
+- [`altivec_common_phone.mk`](./altivec_common_phone.mk): A "parent" Makefile with the general rules for compiling Phone apps
 - `altivec_deploy.sh`: Automated SSH deployment script.
 - `GEMINI.md`: AI mandates and technical constraints.
 

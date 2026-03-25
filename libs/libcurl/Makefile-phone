@@ -7,7 +7,7 @@ CURL_VER=7.88.1
 
 # Directories
 CWD=$(shell pwd)
-BUILD_ROOT=$(CWD)/build-iphone
+BUILD_ROOT=$(CWD)/build-phone
 INTERMEDIATE=$(BUILD_ROOT)/intermediate
 PREFIX=$(BUILD_ROOT)/prefix
 
@@ -24,15 +24,15 @@ CROSS_AR=$(AR_LEGACY)
 IOS_V7_FLAGS=-target armv7-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch armv7 -B$(BIN_DIR)
 IOS_64_FLAGS=-target arm64-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch arm64 -B$(BIN_DIR)
 
-all: iphone
+all: phone
 
-iphone: $(PREFIX)/lib/libcurl.a
-	@echo "Organizing final iPhone output..."
+phone: $(PREFIX)/lib/libcurl.a
+	@echo "Organizing final Phone output..."
 	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
 	cp $(PREFIX)/lib/*.a $(BUILD_ROOT)/lib/
 	cp -R $(PREFIX)/include/* $(BUILD_ROOT)/include/
 	@echo "-----------------------------------------------------------"
-	@echo "IPHONE UNIVERSAL (armv7 + arm64) BUILD SUCCESSFUL"
+	@echo "PHONE UNIVERSAL (armv7 + arm64) BUILD SUCCESSFUL"
 	@echo "Libraries: $(BUILD_ROOT)/lib"
 	@echo "Headers:   $(BUILD_ROOT)/include"
 	@echo "-----------------------------------------------------------"
@@ -61,6 +61,7 @@ $(PREFIX)/lib/libz.a: $(INTERMEDIATE)/zlib-$(ZLIB_VER)
 	# Lipo
 	mkdir -p $(PREFIX)/lib $(PREFIX)/include
 	$(LIPO) -create $(PREFIX)/arm64/lib/libz.a $(PREFIX)/armv7/lib/libz.a -output $(PREFIX)/lib/libz.a
+	$(RANLIB_MODERN) $(PREFIX)/lib/libz.a
 	cp $(PREFIX)/arm64/include/*.h $(PREFIX)/include/
 
 # --- OPENSSL ---
@@ -85,8 +86,9 @@ $(PREFIX)/lib/libcrypto.a: $(INTERMEDIATE)/openssl-$(OPENSSL_VER) $(PREFIX)/lib/
 	# Lipo
 	$(LIPO) -create $(PREFIX)/arm64/lib/libssl.a $(PREFIX)/armv7/lib/libssl.a -output $(PREFIX)/lib/libssl.a
 	$(LIPO) -create $(PREFIX)/arm64/lib/libcrypto.a $(PREFIX)/armv7/lib/libcrypto.a -output $(PREFIX)/lib/libcrypto.a
+	$(RANLIB_MODERN) $(PREFIX)/lib/libssl.a
+	$(RANLIB_MODERN) $(PREFIX)/lib/libcrypto.a
 	mkdir -p $(PREFIX)/include/openssl && cp -R $(PREFIX)/arm64/include/openssl/* $(PREFIX)/include/openssl/
-
 
 # --- CURL ---
 $(INTERMEDIATE)/curl-$(CURL_VER):
@@ -125,4 +127,4 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: iphone clean
+.PHONY: phone clean
