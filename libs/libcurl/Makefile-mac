@@ -23,9 +23,9 @@ X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -mm
 X64_LDFLAGS=-Wl,-platform_version,macos,$(MAC_MIN_X64),10.11 -Wl,-syslibroot,$(SDK_X64_PATH) -nostartfiles $(SDK_X64_PATH)/usr/lib/crt1.10.6.o
 ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
 
-all: mac
+all: static
 
-mac: $(PREFIX)/lib/libcurl.a
+static: $(PREFIX)/lib/libcurl.a
 	@echo "Organizing final Mac output..."
 	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
 	cp $(PREFIX)/lib/*.a $(BUILD_ROOT)/lib/
