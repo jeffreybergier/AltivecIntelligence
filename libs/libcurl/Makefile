@@ -1,15 +1,22 @@
 # AltivecIntelligence libcurl Master Makefile
+# This Makefile orchestrates the build for iPhone and Mac
 
-all: mac iphone
-
-mac:
-	$(MAKE) -f Makefile-X6
+all: iphone mac
 
 iphone:
+	@echo "==========================================================="
+	@echo "BUILDING IPHONE SLICES (armv7, arm64)"
+	@echo "==========================================================="
 	$(MAKE) -f Makefile-i8
 
-clean:
-	$(MAKE) -f Makefile-X6 clean
-	$(MAKE) -f Makefile-i8 clean
+mac:
+	@echo "==========================================================="
+	@echo "BUILDING MAC SLICES (ppc, x86, x64, arm64)"
+	@echo "==========================================================="
+	$(MAKE) -f Makefile-X6
 
-.PHONY: all mac iphone clean
+clean:
+	$(MAKE) -f Makefile-i8 clean
+	$(MAKE) -f Makefile-X6 clean
+
+.PHONY: all iphone mac clean

@@ -1,4 +1,4 @@
-include ../altivec-make-common.mk
+include altivec_common.mk
 
 # Versions
 ZLIB_VER=1.2.13
@@ -16,13 +16,12 @@ ZLIB_URL=https://zlib.net/fossils/zlib-$(ZLIB_VER).tar.gz
 OPENSSL_URL=https://www.openssl.org/source/openssl-$(OPENSSL_VER).tar.gz
 CURL_URL=https://curl.se/download/curl-$(CURL_VER).tar.gz
 
-# Use absolute path for ranlib from toolchain
-CROSS_RANLIB=$(BIN_DIR)/x86_64-apple-darwin10-ranlib
-CROSS_AR=$(BIN_DIR)/x86_64-apple-darwin10-ar
-
-# Architecture Specific Compilers/Flags
-CC_X64=$(CLANG3) -mmacosx-version-min=10.5 -isysroot $(MAC_SDK_PATH) -arch x86_64
-CC_PPC=$(GCC4) -mmacosx-version-min=10.5 -isysroot $(MAC_SDK_PATH) -arch ppc $(PPC_COMPAT_FLAGS)
+# Architecture Specific Flags
+PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(PPC_COMPAT_FLAGS)
+X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH)
+X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -mmacosx-version-min=$(MAC_MIN_X64) -march=core2 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
+X64_LDFLAGS=-Wl,-platform_version,macos,$(MAC_MIN_X64),10.11 -Wl,-syslibroot,$(SDK_X64_PATH) -nostartfiles $(SDK_X64_PATH)/usr/lib/crt1.10.6.o
+ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
 
 all: mac
 
@@ -32,7 +31,7 @@ mac: $(PREFIX)/lib/libcurl.a
 	cp $(PREFIX)/lib/*.a $(BUILD_ROOT)/lib/
 	cp -R $(PREFIX)/include/* $(BUILD_ROOT)/include/
 	@echo "-----------------------------------------------------------"
-	@echo "MAC UNIVERSAL (x86_64 + ppc) BUILD SUCCESSFUL"
+	@echo "MAC QUAD-FAT (ppc, x86, x64, arm64) BUILD SUCCESSFUL"
 	@echo "Libraries: $(BUILD_ROOT)/lib"
 	@echo "Headers:   $(BUILD_ROOT)/include"
 	@echo "-----------------------------------------------------------"
@@ -40,89 +39,137 @@ mac: $(PREFIX)/lib/libcurl.a
 # --- ZLIB ---
 $(INTERMEDIATE)/zlib-$(ZLIB_VER):
 	mkdir -p $(INTERMEDIATE)
-	[ -f tarballs/zlib-$(ZLIB_VER).tar.gz ] || (mkdir -p tarballs && wget -O tarballs/zlib-$(ZLIB_VER).tar.gz $(ZLIB_URL))
+	[ -f tarballs/zlib-$(ZLIB_VER).tar.gz ] || (mkdir -p tarballs && curl -sL $(ZLIB_URL) -o tarballs/zlib-$(ZLIB_VER).tar.gz)
 	cd $(INTERMEDIATE) && tar -xf $(CWD)/tarballs/zlib-$(ZLIB_VER).tar.gz
 
 $(PREFIX)/lib/libz.a: $(INTERMEDIATE)/zlib-$(ZLIB_VER)
-	# Build x86_64
-	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
-	./configure --static --prefix=$(PREFIX)/x64 && \
-	sed -i 's|^CC=.*|CC=$(CC_X64)|g' Makefile && \
-	sed -i 's|^AR=.*|AR=$(CROSS_AR)|g' Makefile && \
-	sed -i 's|^RANLIB=.*|RANLIB=$(CROSS_RANLIB)|g' Makefile && \
-	sed -i 's|/usr/bin/libtool|$(LIBTOOL)|g' Makefile && \
-	make clean && make -j$(JOBS) ARFLAGS="rc" install
-	# Build PPC
+	@echo "--- Building zlib (ppc) ---"
 	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
 	./configure --static --prefix=$(PREFIX)/ppc && \
-	sed -i 's|^CC=.*|CC=$(CC_PPC)|g' Makefile && \
-	sed -i 's|^AR=.*|AR=$(CROSS_AR)|g' Makefile && \
-	sed -i 's|^RANLIB=.*|RANLIB=$(CROSS_RANLIB)|g' Makefile && \
-	sed -i 's|/usr/bin/libtool|$(LIBTOOL)|g' Makefile && \
+	sed -i 's|^CC=.*|CC=$(COMPILER_PPC) $(PPC_FLAGS)|g' Makefile && \
+	sed -i 's|^AR=.*|AR=$(AR_LEGACY)|g' Makefile && \
+	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_LEGACY)|g' Makefile && \
+	make clean && make -j$(JOBS) ARFLAGS="rc" install
+	@echo "--- Building zlib (x86) ---"
+	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
+	./configure --static --prefix=$(PREFIX)/x86 && \
+	sed -i 's|^CC=.*|CC=$(COMPILER_X86) $(X86_FLAGS)|g' Makefile && \
+	sed -i 's|^AR=.*|AR=$(AR_LEGACY)|g' Makefile && \
+	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_LEGACY)|g' Makefile && \
+	make clean && make -j$(JOBS) ARFLAGS="rc" install
+	@echo "--- Building zlib (x64) ---"
+	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
+	./configure --static --prefix=$(PREFIX)/x64 && \
+	sed -i 's|^CC=.*|CC=$(COMPILER_X64) $(X64_FLAGS) $(X64_LDFLAGS)|g' Makefile && \
+	sed -i 's|^AR=.*|AR=$(AR_MODERN)|g' Makefile && \
+	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MODERN)|g' Makefile && \
+	make clean && make -j$(JOBS) ARFLAGS="rc" install
+	@echo "--- Building zlib (arm64) ---"
+	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
+	./configure --static --prefix=$(PREFIX)/arm64 && \
+	sed -i 's|^CC=.*|CC=$(COMPILER_ARM64) $(ARM64_FLAGS)|g' Makefile && \
+	sed -i 's|^AR=.*|AR=$(AR_MODERN)|g' Makefile && \
+	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MODERN)|g' Makefile && \
 	make clean && make -j$(JOBS) ARFLAGS="rc" install
 	# Lipo
 	mkdir -p $(PREFIX)/lib $(PREFIX)/include
-	$(LIPO) -create $(PREFIX)/x64/lib/libz.a $(PREFIX)/ppc/lib/libz.a -output $(PREFIX)/lib/libz.a
-	$(CROSS_RANLIB) $(PREFIX)/lib/libz.a
+	$(LIPO) -create $(PREFIX)/ppc/lib/libz.a $(PREFIX)/x86/lib/libz.a $(PREFIX)/x64/lib/libz.a $(PREFIX)/arm64/lib/libz.a -output $(PREFIX)/lib/libz.a
 	cp $(PREFIX)/x64/include/*.h $(PREFIX)/include/
 
 # --- OPENSSL ---
 $(INTERMEDIATE)/openssl-$(OPENSSL_VER):
 	mkdir -p $(INTERMEDIATE)
-	[ -f tarballs/openssl-$(OPENSSL_VER).tar.gz ] || (mkdir -p tarballs && wget -O tarballs/openssl-$(OPENSSL_VER).tar.gz $(OPENSSL_URL))
+	[ -f tarballs/openssl-$(OPENSSL_VER).tar.gz ] || (mkdir -p tarballs && curl -sL $(OPENSSL_URL) -o tarballs/openssl-$(OPENSSL_VER).tar.gz)
 	cd $(INTERMEDIATE) && tar -xf $(CWD)/tarballs/openssl-$(OPENSSL_VER).tar.gz
 
 $(PREFIX)/lib/libcrypto.a: $(INTERMEDIATE)/openssl-$(OPENSSL_VER) $(PREFIX)/lib/libz.a
-	# Build x86_64
-	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
-	./Configure darwin64-x86_64-cc no-shared no-tests no-zlib --prefix=$(PREFIX)/x64 \
-	CC="$(CLANG3)" AR="$(CROSS_AR)" RANLIB="$(CROSS_RANLIB)" \
-	CFLAGS="-mmacosx-version-min=10.5 -isysroot $(MAC_SDK_PATH) -arch x86_64 $(OPT_FLAGS) $(COMMON_WARN_FLAGS)" && \
-	make clean && make -j4 build_libs && make install_dev
-	# Build PPC
+	@echo "--- Building OpenSSL (ppc) ---"
 	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
 	./Configure darwin-ppc-cc no-shared no-tests no-zlib --prefix=$(PREFIX)/ppc \
-	CC="$(GCC4)" AR="$(CROSS_AR)" RANLIB="$(CROSS_RANLIB)" \
-	CFLAGS="-mmacosx-version-min=10.5 -isysroot $(MAC_SDK_PATH) -arch ppc $(PPC_COMPAT_FLAGS) $(OPT_FLAGS) $(COMMON_WARN_FLAGS)" && \
-	make clean && make -j4 build_libs && make install_dev
+	CC="$(COMPILER_PPC)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
+	CFLAGS="$(PPC_FLAGS) $(OPT_FLAGS)" && \
+	make clean && make -j$(JOBS) build_libs && make install_dev
+	@echo "--- Building OpenSSL (x86) ---"
+	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
+	./Configure darwin-i386-cc no-shared no-tests no-zlib --prefix=$(PREFIX)/x86 \
+	CC="$(COMPILER_X86)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
+	CFLAGS="$(X86_FLAGS) $(OPT_FLAGS)" && \
+	make clean && make -j$(JOBS) build_libs && make install_dev
+	@echo "--- Building OpenSSL (x64) ---"
+	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
+	./Configure darwin64-x86_64-cc no-shared no-tests no-zlib --prefix=$(PREFIX)/x64 \
+	CC="$(COMPILER_X64)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
+	CFLAGS="$(X64_FLAGS) $(X64_LDFLAGS) $(OPT_FLAGS)" && \
+	make clean && make -j$(JOBS) build_libs && make install_dev
+	@echo "--- Building OpenSSL (arm64) ---"
+	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
+	./Configure darwin64-arm64-cc no-shared no-tests no-zlib --prefix=$(PREFIX)/arm64 \
+	CC="$(COMPILER_ARM64)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
+	CFLAGS="$(ARM64_FLAGS) $(OPT_FLAGS)" && \
+	make clean && make -j$(JOBS) build_libs && make install_dev
 	# Lipo
-	$(LIPO) -create $(PREFIX)/x64/lib/libssl.a $(PREFIX)/ppc/lib/libssl.a -output $(PREFIX)/lib/libssl.a
-	$(LIPO) -create $(PREFIX)/x64/lib/libcrypto.a $(PREFIX)/ppc/lib/libcrypto.a -output $(PREFIX)/lib/libcrypto.a
-	$(CROSS_RANLIB) $(PREFIX)/lib/libssl.a
-	$(CROSS_RANLIB) $(PREFIX)/lib/libcrypto.a
+	$(LIPO) -create $(PREFIX)/ppc/lib/libssl.a $(PREFIX)/x86/lib/libssl.a $(PREFIX)/x64/lib/libssl.a $(PREFIX)/arm64/lib/libssl.a -output $(PREFIX)/lib/libssl.a
+	$(LIPO) -create $(PREFIX)/ppc/lib/libcrypto.a $(PREFIX)/x86/lib/libcrypto.a $(PREFIX)/x64/lib/libcrypto.a $(PREFIX)/arm64/lib/libcrypto.a -output $(PREFIX)/lib/libcrypto.a
 	mkdir -p $(PREFIX)/include/openssl && cp -R $(PREFIX)/x64/include/openssl/* $(PREFIX)/include/openssl/
 
 # --- CURL ---
 $(INTERMEDIATE)/curl-$(CURL_VER):
 	mkdir -p $(INTERMEDIATE)
-	[ -f tarballs/curl-$(CURL_VER).tar.gz ] || (mkdir -p tarballs && wget -O tarballs/curl-$(CURL_VER).tar.gz $(CURL_URL))
+	[ -f tarballs/curl-$(CURL_VER).tar.gz ] || (mkdir -p tarballs && curl -sL $(CURL_URL) -o tarballs/curl-$(CURL_VER).tar.gz)
 	cd $(INTERMEDIATE) && tar -xf $(CWD)/tarballs/curl-$(CURL_VER).tar.gz
 
 $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $(PREFIX)/lib/libcrypto.a
-	# Build x86_64
+	@echo "--- Building curl (ppc) ---"
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
-	CC="$(CC_X64)" AR="$(CROSS_AR)" RANLIB="$(CROSS_RANLIB)" \
+	CC="$(COMPILER_PPC) $(PPC_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/include" LDFLAGS="-L$(PREFIX)/lib" \
-	LIBS="$(PREFIX)/x64/lib/libssl.a $(PREFIX)/x64/lib/libcrypto.a $(PREFIX)/x64/lib/libz.a -lpthread -ldl" \
-	./configure --host=x86_64-apple-darwin10 --disable-shared --enable-static \
-	--with-openssl=$(PREFIX) --with-zlib=$(PREFIX) \
-	--prefix=$(PREFIX)/x64 && \
-	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
-	# Build PPC
-	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
-	CC="$(CC_PPC)" AR="$(CROSS_AR)" RANLIB="$(CROSS_RANLIB)" \
-	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/include" LDFLAGS="-L$(PREFIX)/lib" \
-	LIBS="$(PREFIX)/ppc/lib/libssl.a $(PREFIX)/ppc/lib/libcrypto.a $(PREFIX)/ppc/lib/libz.a -lpthread -ldl" \
-	./configure --host=powerpc-apple-darwin10 --disable-shared --enable-static \
-	--with-openssl=$(PREFIX) --with-zlib=$(PREFIX) \
+	CPPFLAGS="-I$(PREFIX)/ppc/include" LDFLAGS="-L$(PREFIX)/ppc/lib" \
+	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
+	./configure --host=powerpc-apple-darwin --disable-shared --enable-static \
+	--disable-threaded-resolver \
+	--with-openssl=$(PREFIX)/ppc --with-zlib=$(PREFIX)/ppc \
 	--prefix=$(PREFIX)/ppc && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
+	@echo "--- Building curl (x86) ---"
+	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
+	CC="$(COMPILER_X86) $(X86_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
+	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
+	CPPFLAGS="-I$(PREFIX)/x86/include" LDFLAGS="-L$(PREFIX)/x86/lib" \
+	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
+	./configure --host=i386-apple-darwin --disable-shared --enable-static \
+	--disable-threaded-resolver \
+	--with-openssl=$(PREFIX)/x86 --with-zlib=$(PREFIX)/x86 \
+	--prefix=$(PREFIX)/x86 && \
+	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
+	@echo "--- Building curl (x64) ---"
+	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
+	CC="$(COMPILER_X64) $(X64_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
+	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
+	CPPFLAGS="-I$(PREFIX)/x64/include" LDFLAGS="-L$(PREFIX)/x64/lib $(X64_LDFLAGS)" \
+	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
+	./configure --host=x86_64-apple-darwin --disable-shared --enable-static \
+	--disable-threaded-resolver \
+	--with-openssl=$(PREFIX)/x64 --with-zlib=$(PREFIX)/x64 \
+	--prefix=$(PREFIX)/x64 && \
+	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
+	@echo "--- Building curl (arm64) ---"
+	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
+	CC="$(COMPILER_ARM64) $(ARM64_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
+	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
+	CPPFLAGS="-I$(PREFIX)/arm64/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/arm64/lib" \
+	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
+	./configure --host=aarch64-apple-darwin --disable-shared --enable-static \
+	--disable-threaded-resolver --disable-hsts --disable-alt-svc \
+	--with-openssl=$(PREFIX)/arm64 --with-zlib=$(PREFIX)/arm64 \
+	--prefix=$(PREFIX)/arm64 && \
+	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
+	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
+	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	# Lipo
-	$(LIPO) -create $(PREFIX)/x64/lib/libcurl.a $(PREFIX)/ppc/lib/libcurl.a -output $(PREFIX)/lib/libcurl.a
-	$(CROSS_RANLIB) $(PREFIX)/lib/libcurl.a
+	$(LIPO) -create $(PREFIX)/ppc/lib/libcurl.a $(PREFIX)/x86/lib/libcurl.a $(PREFIX)/x64/lib/libcurl.a $(PREFIX)/arm64/lib/libcurl.a -output $(PREFIX)/lib/libcurl.a
 	cp -R $(PREFIX)/x64/include/curl $(PREFIX)/include/
 
 clean:
 	rm -rf $(BUILD_ROOT)
+
+.PHONY: mac clean
