@@ -1,4 +1,4 @@
-include altivec_common.mk
+include libcurl_common.mk
 
 # Versions
 ZLIB_VER=1.2.13
