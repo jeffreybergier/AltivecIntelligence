@@ -95,10 +95,11 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	CC="$(COMPILER_IOS) $(IOS_V7_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
 	CPPFLAGS="-I$(PREFIX)/include" LDFLAGS="-L$(PREFIX)/lib" \
-	LIBS="$(PREFIX)/armv7/lib/libssl.a $(PREFIX)/armv7/lib/libcrypto.a $(PREFIX)/armv7/lib/libz.a -lresolv" \
+	LIBS="-lssl -lcrypto -lz -lresolv" \
 	curl_cv_sizeof_size_t=4 \
 	./configure --host=arm-apple-darwin --disable-shared --enable-static \
 	--with-openssl=$(PREFIX) --with-zlib=$(PREFIX) \
+	--disable-alt-svc --disable-hsts \
 	--prefix=$(PREFIX)/armv7 && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	@echo "--- Building curl (arm64) ---"
@@ -106,10 +107,11 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	CC="$(COMPILER_IOS) $(IOS_64_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
 	CPPFLAGS="-I$(PREFIX)/include" LDFLAGS="-L$(PREFIX)/lib" \
-	LIBS="$(PREFIX)/arm64/lib/libssl.a $(PREFIX)/arm64/lib/libcrypto.a $(PREFIX)/arm64/lib/libz.a -lresolv" \
+	LIBS="-lssl -lcrypto -lz -lresolv" \
 	curl_cv_sizeof_size_t=8 \
 	./configure --host=arm-apple-darwin --disable-shared --enable-static \
 	--with-openssl=$(PREFIX) --with-zlib=$(PREFIX) \
+	--disable-alt-svc --disable-hsts \
 	--prefix=$(PREFIX)/arm64 && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	# Lipo
