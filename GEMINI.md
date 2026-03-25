@@ -9,7 +9,7 @@ Hi, you are an AI programming assistant helping the user develop and deploy apps
 
 ## 📜 Development Rules
 - **MRC Mandatory:** For Mac apps targeting 10.4/10.5, always use `retain`, `release`, and `autorelease`. Use manual getters and setters.
-- **Legacy APIs:** Always verify API compatibility against the 10.4/10.6 headers. Warn the user if they attempt to use symbols that break Tiger/Leopard compatibility.
+- **Legacy APIs:** Always verify API compatibility against the 10.5/10.11 headers. Warn the user if they attempt to use symbols that break Tiger/Leopard compatibility.
 - **Modern Features:** iPhone apps (iOS 4.3+) can use properties and modern features, but be cautious with code shared between Mac and iPhone targets.
 - **Warnings** Make sure you always tell the user when there are warnings as
 this likely indicates the app will crash on older systems. The exception is 
@@ -32,19 +32,21 @@ deprecation warnings as those will be common when dealing with these old API's.
 - **Installation Path:** `/osxcross/target/bin` (Automatically in `PATH`)
 
 ## 📦 Installed SDKs
-Located in `/osxcross/target/SDK/`:
-1. **MacOSX10.6.sdk (Hybrid)**: This SDK uses Mac OS X 10.6 headers as a base to provide broad API support, but has been modified by transplanting the library environment from the 10.5 SDK. By injecting legacy stubs (`crt1.o`, `dylib1.o`, etc.) and the `libgcc_s.10.4` library from 10.5 into the 10.6 root, the toolchain can produce binaries that are fully compatible with the 10.4 Tiger runtime while still benefiting from the more robust 10.6 header definitions.
-2. **MacOSX11.3.sdk**: Modern SDK used for Apple Silicon (`arm64`) slices.
-3. **iPhoneOS8.4.sdk**: Comprehensive SDK for legacy and modern iPhone devices.
+Located in /osxcross/target/SDK/:
+1. MacOSX10.5.sdk: Legacy SDK used for PowerPC and 32-bit Intel slices (Tiger/Leopard compatibility).
+2. MacOSX10.11.sdk: Modern Intel SDK used for 64-bit Intel (x86_64) slices targeting El Capitan.
+3. MacOSX11.3.sdk: Modern SDK used for Apple Silicon (arm64) slices.
+4. iPhoneOS8.4.sdk: Comprehensive SDK for legacy and modern iPhone devices.
+
 
 ## ⚔️ Build Matrix
 
 | Target | Compiler | SDK | Architectures | Optimization |
 | :--- | :--- | :--- | :--- | :--- |
-| **Mac (PPC)** | `oppc32-gcc` | 10.6 Hybrid | ppc (32-bit) | -O3 / -O0 |
-| **Mac (i386)** | `o32-gcc` | 10.6 Hybrid | i386 | -O3 / -O0 |
-| **Mac (x64)** | `o64-gcc` | 10.6 Hybrid | x86_64 | -O3 / -O0 |
-| **Mac (ARM)** | `clang-14` | 11.3 | arm64 | -O3 / -O0 |
+| **Mac (PPC)** | `oppc32-gcc` (4.2.1) | 10.5 | ppc (32-bit) | -O3 / -O0 |
+| **Mac (i386)** | `o32-gcc` (4.2.1) | 10.5 | i386 (32-bit) | -O3 / -O0 |
+| **Mac (x64)** | `o64-clang` (14.0) | 10.11 | x86_64 (64-bit) | -O3 / -O0 |
+| **Mac (ARM)** | `clang-14` (14.0) | 11.3 | arm64 (64-bit) | -O3 / -O0 |
 | **iPhone** | `clang-14` | 8.4 | armv7, arm64 | -O3 / -O0 |
 
 ## 🚀 How to Build
@@ -75,15 +77,15 @@ make clean
 Logs must use a 1-space indentation increment and the `>` symbol for details:
 ```text
 --- Building Mac Release (-O3) ---
- [1/4] Compiling slices...
-  > ppc: compiling main.m
-  > ppc: compiling AppDelegate.m
- [2/4] Merging Quad-Fat binary...
+ [1/7] Compiling ppc...
+  > ppc: main.m
+ [5/7] Merging quad-fat binary...
 ```
 
 ### 3. Debug Symbols (dSYMs)
-- **Status:** Fully operational for X64 and ARM64 slices using system `dsymutil-14`.
+- Status: Fully operational for X64 and ARM64 slices using system dsymutil-14. Legacy PPC and i386 symbols are primarily embedded in the binary.
+
 - **Location:** Produced in the root of the build folder (e.g., `SingleWindow.X64.dSYM`).
 
 ---
-*Last Updated: March 20, 2026*
+*Last Updated: March 25, 2026*
