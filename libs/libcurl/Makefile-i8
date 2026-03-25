@@ -1,0 +1,124 @@
+include ../altivec-make-common.mk
+
+# Versions
+ZLIB_VER=1.2.13
+OPENSSL_VER=1.1.1w
+CURL_VER=7.88.1
+
+# Directories
+CWD=$(shell pwd)
+BUILD_ROOT=$(CWD)/build-iphone
+INTERMEDIATE=$(BUILD_ROOT)/intermediate
+PREFIX=$(BUILD_ROOT)/prefix
+
+# Source URLs
+ZLIB_URL=https://zlib.net/fossils/zlib-$(ZLIB_VER).tar.gz
+OPENSSL_URL=https://www.openssl.org/source/openssl-$(OPENSSL_VER).tar.gz
+CURL_URL=https://curl.se/download/curl-$(CURL_VER).tar.gz
+
+# Use absolute path for ranlib from toolchain
+CROSS_RANLIB=$(BIN_DIR)/x86_64-apple-darwin10-ranlib
+CROSS_AR=$(BIN_DIR)/x86_64-apple-darwin10-ar
+
+all: iphone
+
+iphone: $(PREFIX)/lib/libcurl.a
+	@echo "Organizing final iPhone output..."
+	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
+	cp $(PREFIX)/lib/*.a $(BUILD_ROOT)/lib/
+	cp -R $(PREFIX)/include/* $(BUILD_ROOT)/include/
+	@echo "-----------------------------------------------------------"
+	@echo "IPHONE BUILD SUCCESSFUL"
+	@echo "Libraries: $(BUILD_ROOT)/lib"
+	@echo "Headers:   $(BUILD_ROOT)/include"
+	@echo "-----------------------------------------------------------"
+
+# --- ZLIB ---
+$(INTERMEDIATE)/zlib-$(ZLIB_VER):
+	mkdir -p $(INTERMEDIATE)
+	[ -f tarballs/zlib-$(ZLIB_VER).tar.gz ] || (mkdir -p tarballs && wget -O tarballs/zlib-$(ZLIB_VER).tar.gz $(ZLIB_URL))
+	cd $(INTERMEDIATE) && tar -xf $(CWD)/tarballs/zlib-$(ZLIB_VER).tar.gz
+
+$(PREFIX)/lib/libz.a: $(INTERMEDIATE)/zlib-$(ZLIB_VER)
+	# Build arm64
+	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
+	./configure --static --prefix=$(PREFIX)/arm64 && \
+	sed -i 's|^CC=.*|CC=$(CLANG14) $(IOS_TARGET_FLAGS) -arch arm64|g' Makefile && \
+	sed -i 's|^AR=.*|AR=$(CROSS_AR)|g' Makefile && \
+	sed -i 's|^RANLIB=.*|RANLIB=$(CROSS_RANLIB)|g' Makefile && \
+	make clean && make -j$(JOBS) ARFLAGS="rc" install
+	# Build armv7
+	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
+	./configure --static --prefix=$(PREFIX)/armv7 && \
+	sed -i 's|^CC=.*|CC=$(CLANG14) $(IOS_TARGET_FLAGS) -arch armv7|g' Makefile && \
+	sed -i 's|^AR=.*|AR=$(CROSS_AR)|g' Makefile && \
+	sed -i 's|^RANLIB=.*|RANLIB=$(CROSS_RANLIB)|g' Makefile && \
+	make clean && make -j$(JOBS) ARFLAGS="rc" install
+	# Lipo
+	mkdir -p $(PREFIX)/lib $(PREFIX)/include
+	$(LIPO) -create $(PREFIX)/arm64/lib/libz.a $(PREFIX)/armv7/lib/libz.a -output $(PREFIX)/lib/libz.a
+	$(CROSS_RANLIB) $(PREFIX)/lib/libz.a
+	cp $(PREFIX)/arm64/include/*.h $(PREFIX)/include/
+
+# --- OPENSSL ---
+$(INTERMEDIATE)/openssl-$(OPENSSL_VER):
+	mkdir -p $(INTERMEDIATE)
+	[ -f tarballs/openssl-$(OPENSSL_VER).tar.gz ] || (mkdir -p tarballs && wget -O tarballs/openssl-$(OPENSSL_VER).tar.gz $(OPENSSL_URL))
+	cd $(INTERMEDIATE) && tar -xf $(CWD)/tarballs/openssl-$(OPENSSL_VER).tar.gz
+
+$(PREFIX)/lib/libcrypto.a: $(INTERMEDIATE)/openssl-$(OPENSSL_VER) $(PREFIX)/lib/libz.a
+	# Build arm64
+	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
+	./Configure ios64-cross no-shared no-tests no-zlib --prefix=$(PREFIX)/arm64 \
+	CC="$(CLANG14)" AR="$(CROSS_AR)" RANLIB="$(CROSS_RANLIB)" \
+	CFLAGS="-target arm64-apple-ios$(IOS_MIN_VER) $(IOS_TARGET_FLAGS) -arch arm64 $(CFLAGS_COMMON)" && \
+	make clean && make -j4 build_libs && make install_dev
+	# Build armv7
+	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
+	./Configure ios-cross no-shared no-tests no-zlib --prefix=$(PREFIX)/armv7 \
+	CC="$(CLANG14)" AR="$(CROSS_AR)" RANLIB="$(CROSS_RANLIB)" \
+	CFLAGS="-target armv7-apple-ios$(IOS_MIN_VER) $(IOS_TARGET_FLAGS) -arch armv7 -mfpu=neon $(CFLAGS_COMMON)" && \
+	make clean && make -j4 build_libs && make install_dev
+	# Lipo
+	$(LIPO) -create $(PREFIX)/arm64/lib/libssl.a $(PREFIX)/armv7/lib/libssl.a -output $(PREFIX)/lib/libssl.a
+	$(LIPO) -create $(PREFIX)/arm64/lib/libcrypto.a $(PREFIX)/armv7/lib/libcrypto.a -output $(PREFIX)/lib/libcrypto.a
+	$(CROSS_RANLIB) $(PREFIX)/lib/libssl.a
+	$(CROSS_RANLIB) $(PREFIX)/lib/libcrypto.a
+	mkdir -p $(PREFIX)/include/openssl && cp -R $(PREFIX)/arm64/include/openssl/* $(PREFIX)/include/openssl/
+
+# --- CURL ---
+$(INTERMEDIATE)/curl-$(CURL_VER):
+	mkdir -p $(INTERMEDIATE)
+	[ -f tarballs/curl-$(CURL_VER).tar.gz ] || (mkdir -p tarballs && wget -O tarballs/curl-$(CURL_VER).tar.gz $(CURL_URL))
+	cd $(INTERMEDIATE) && tar -xf $(CWD)/tarballs/curl-$(CURL_VER).tar.gz
+
+$(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $(PREFIX)/lib/libcrypto.a
+	# Build arm64
+	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
+	CC="$(CLANG14)" AR="$(CROSS_AR)" RANLIB="$(CROSS_RANLIB)" \
+	CFLAGS="-target arm64-apple-ios$(IOS_MIN_VER) $(IOS_TARGET_FLAGS) -arch arm64 $(CFLAGS_COMMON)" \
+	CPPFLAGS="-I$(PREFIX)/include" LDFLAGS="-L$(PREFIX)/lib" \
+	LIBS="$(PREFIX)/arm64/lib/libssl.a $(PREFIX)/arm64/lib/libcrypto.a $(PREFIX)/arm64/lib/libz.a -lresolv" \
+	curl_cv_sizeof_size_t=8 \
+	./configure --host=arm-apple-darwin --disable-shared --enable-static \
+	--with-openssl=$(PREFIX) --with-zlib=$(PREFIX) \
+	--prefix=$(PREFIX)/arm64 && \
+	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
+	# Build armv7
+	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
+	CC="$(CLANG14)" AR="$(CROSS_AR)" RANLIB="$(CROSS_RANLIB)" \
+	CFLAGS="-target armv7-apple-ios$(IOS_MIN_VER) $(IOS_TARGET_FLAGS) -arch armv7 $(CFLAGS_COMMON)" \
+	CPPFLAGS="-I$(PREFIX)/include" LDFLAGS="-L$(PREFIX)/lib" \
+	LIBS="$(PREFIX)/armv7/lib/libssl.a $(PREFIX)/armv7/lib/libcrypto.a $(PREFIX)/armv7/lib/libz.a -lresolv" \
+	curl_cv_sizeof_size_t=4 \
+	./configure --host=arm-apple-darwin --disable-shared --enable-static \
+	--with-openssl=$(PREFIX) --with-zlib=$(PREFIX) \
+	--prefix=$(PREFIX)/armv7 && \
+	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
+	# Lipo
+	$(LIPO) -create $(PREFIX)/arm64/lib/libcurl.a $(PREFIX)/armv7/lib/libcurl.a -output $(PREFIX)/lib/libcurl.a
+	$(CROSS_RANLIB) $(PREFIX)/lib/libcurl.a
+	cp -R $(PREFIX)/arm64/include/curl $(PREFIX)/include/
+
+clean:
+	rm -rf $(BUILD_ROOT)
