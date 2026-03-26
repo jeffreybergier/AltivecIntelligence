@@ -4,4 +4,4 @@ SOURCES = main.m AppDelegate.m
 INFO_PLIST = Info.plist
 
 # Import common iPhone build engine
-include ../../altivec_common_iphone.mk
+include ../../altivec_common_phone.mk
