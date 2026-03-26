@@ -126,7 +126,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	CPPFLAGS="-I$(PREFIX)/ppc/include" LDFLAGS="-L$(PREFIX)/ppc/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=powerpc-apple-darwin --disable-shared --enable-static \
-	--disable-threaded-resolver \
+	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
 	--with-openssl=$(PREFIX)/ppc --with-zlib=$(PREFIX)/ppc \
 	--prefix=$(PREFIX)/ppc && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
@@ -137,7 +137,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	CPPFLAGS="-I$(PREFIX)/x86/include" LDFLAGS="-L$(PREFIX)/x86/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=i386-apple-darwin --disable-shared --enable-static \
-	--disable-threaded-resolver \
+	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
 	--with-openssl=$(PREFIX)/x86 --with-zlib=$(PREFIX)/x86 \
 	--prefix=$(PREFIX)/x86 && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
@@ -148,7 +148,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	CPPFLAGS="-I$(PREFIX)/x64/include" LDFLAGS="-L$(PREFIX)/x64/lib $(X64_LDFLAGS)" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=x86_64-apple-darwin --disable-shared --enable-static \
-	--disable-threaded-resolver \
+	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
 	--with-openssl=$(PREFIX)/x64 --with-zlib=$(PREFIX)/x64 \
 	--prefix=$(PREFIX)/x64 && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
