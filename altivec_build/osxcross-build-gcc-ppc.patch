@@ -1,0 +1,38 @@
+--- build_gcc.sh	2026-03-24 14:13:54.365166970 +0000
++++ build_gcc_ppc.sh	2026-03-24 14:29:57.006050011 +0000
+@@ -53,9 +53,8 @@
+     echo "The SDK you are using does not support PowerPC" 1>&2
+     exit 1
+   fi
+-  GCC_ARCH=powerpc64
+-  GCC_ARCH_SHORT=oppc64
+-  GCC_ARCH32=powerpc
++  GCC_ARCH=powerpc
++  GCC_ARCH_SHORT=oppc32
+   GCC_ARCH_SHORT32=oppc32
+   TARGETARCHS=ppc
+   if [ -z "$APPLE_GCC" ]; then
+@@ -76,8 +75,10 @@
+ 
+ if [ -n "$APPLE_GCC" ]; then
+   # work around broken multilib support
+-  ARCHS_TO_BUILD+=" $GCC_ARCH32"
+-  EXTRA_CONFFLAGS+="--with-gxx-include-dir=/usr/include/c++/4.0.0 " ## TODO: version
++  # Forced to 32-bit PPC only (Fix for 64-bit build failures)
++  ARCHS_TO_BUILD="powerpc"
++  EXTRA_CONFFLAGS+="--disable-multilib "
++  EXTRA_CONFFLAGS+="--with-gxx-include-dir=/usr/include/c++/4.2.1 "
+ 
+   # fix -lstdc++ link
+   if [ ! -f "$OSXCROSS_SDK/usr/lib/libstdc++.dylib" ]; then
+@@ -121,8 +122,8 @@
+ 
+ if [ -n "$APPLE_GCC" ]; then
+   pushd gcc*$APPLE_GCC_VERSION &>/dev/null
+-  [ -z "$CC" ] && CC=cc
+-  export CC+=" -std=gnu89"
++  [ -z "$CC" ] && CC=gcc
++  export CC+=" -std=gnu89 -fgnu89-inline -Wno-narrowing"
+ else
+   pushd gcc*$GCC_VERSION* &>/dev/null
+ fi
