@@ -121,7 +121,8 @@ app for my favorite retro device. ```
 - `GEMINI.md`: AI mandates and technical constraints.
 
 ## 🚧 To-Do List
-1. [ ] Build `libcurl` for modern networking on old platforms
+1. [X] Build `libcurl` for modern networking on old platforms
+1. [ ] Build Dynamic Framework for `libcurl`
 1. [ ] Update Deploy Script for Mac to deploy entire build folder for better debugging in GDB
 1. [ ] Setup Github Actions
    1. [ ] Build release apps and save in artifact storage

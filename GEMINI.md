@@ -49,6 +49,13 @@ Located in /osxcross/target/SDK/:
 | **Mac (ARM)** | `clang-14` (14.0) | 11.3 | arm64 (64-bit) | -O3 / -O0 |
 | **iPhone** | `clang-14` | 8.4 | armv7, arm64 | -O3 / -O0 |
 
+## 🔗 Library Build System (libcurl)
+Libraries (libcurl, openssl, zlib) are built as "Quad-Fat" static binaries (`.a`).
+- **Orchestration:** `libs/libcurl/Makefile` manages separate `Makefile-mac` and `Makefile-phone` builds.
+- **Deployment Targets:** PPC (10.4), i386 (10.4), x86_64 (10.6), arm64 (11.0).
+- **Linking:** Each architecture is compiled into its own prefix before being merged with `lipo`.
+- **Legacy Tools:** Use `i386-apple-darwin9-ar` and `i386-apple-darwin9-ranlib` for legacy slices to ensure compatibility.
+
 ## 🚀 How to Build
 
 Projects use a modular Makefile system. App-specific Makefiles include a "Common" engine from the root.
