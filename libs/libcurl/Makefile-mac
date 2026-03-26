@@ -25,16 +25,38 @@ ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH
 
 all: static
 
-static: $(PREFIX)/lib/libcurl.a
+static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a
 	@echo "Organizing final Mac output..."
 	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
 	cp $(PREFIX)/lib/*.a $(BUILD_ROOT)/lib/
 	cp -R $(PREFIX)/include/* $(BUILD_ROOT)/include/
+	cp AICURLConnection.h $(BUILD_ROOT)/include/
 	@echo "-----------------------------------------------------------"
 	@echo "MAC QUAD-FAT (ppc, x86, x64, arm64) BUILD SUCCESSFUL"
 	@echo "Libraries: $(BUILD_ROOT)/lib"
 	@echo "Headers:   $(BUILD_ROOT)/include"
 	@echo "-----------------------------------------------------------"
+
+# --- AICURLConnection ---
+$(PREFIX)/lib/libAICURLConnection.a: $(PREFIX)/lib/libcurl.a
+	@echo "--- Building AICURLConnection (ppc) ---"
+	$(COMPILER_PPC) $(PPC_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/ppc/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-ppc.o
+	$(AR_LEGACY) rc $(PREFIX)/ppc/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-ppc.o
+	$(RANLIB_LEGACY) $(PREFIX)/ppc/lib/libAICURLConnection.a
+	@echo "--- Building AICURLConnection (x86) ---"
+	$(COMPILER_X86) $(X86_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x86/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x86.o
+	$(AR_LEGACY) rc $(PREFIX)/x86/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x86.o
+	$(RANLIB_LEGACY) $(PREFIX)/x86/lib/libAICURLConnection.a
+	@echo "--- Building AICURLConnection (x64) ---"
+	$(COMPILER_X64) $(X64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x64.o
+	$(AR_MODERN) rc $(PREFIX)/x64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x64.o
+	$(RANLIB_MODERN) $(PREFIX)/x64/lib/libAICURLConnection.a
+	@echo "--- Building AICURLConnection (arm64) ---"
+	$(COMPILER_ARM64) $(ARM64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/arm64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-arm64.o
+	$(AR_MODERN) rc $(PREFIX)/arm64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-arm64.o
+	$(RANLIB_MODERN) $(PREFIX)/arm64/lib/libAICURLConnection.a
+	# Lipo
+	$(LIPO) -create $(PREFIX)/ppc/lib/libAICURLConnection.a $(PREFIX)/x86/lib/libAICURLConnection.a $(PREFIX)/x64/lib/libAICURLConnection.a $(PREFIX)/arm64/lib/libAICURLConnection.a -output $(PREFIX)/lib/libAICURLConnection.a
 
 # --- ZLIB ---
 $(INTERMEDIATE)/zlib-$(ZLIB_VER):
