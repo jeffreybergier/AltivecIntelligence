@@ -5,6 +5,13 @@
 
 #import <AppKit/AppKit.h>
 
+/* Cross-Version Protocol Macros */
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+  #define XPApplicationDelegate NSApplicationDelegate
+#else
+  @protocol XPApplicationDelegate @end
+#endif
+
 /* Cross-Version Window Mask Macros */
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
   #define XPWindowStyleMaskTitled         NSWindowStyleMaskTitled
@@ -18,11 +25,7 @@
   #define XPWindowStyleMaskMiniaturizable NSMiniaturizableWindowMask
 #endif
 
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
-@interface AppDelegate : NSObject <NSApplicationDelegate>
-#else
-@interface AppDelegate : NSObject
-#endif
+@interface AppDelegate : NSObject <XPApplicationDelegate>
 {
   NSWindow *_window;
 }
