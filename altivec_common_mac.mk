@@ -1,31 +1,34 @@
 # Altivec Intelligence Common Makefile
-# This file contains the standard logic for Quad-Fat Mac Apps
-# Targets: PPC (10.4), X86 (10.4), X64 (10.5), ARM (11.0)
+# This file contains the standard logic for quad-fat mac apps
+# Targets: ppc (10.4), x86 (10.4), x64 (10.6), arm (11.0)
 
 # --- Versions ---
-SDK_MAC_MID = 10.6
+SDK_MAC_OLD = 10.5
+SDK_MAC_MID = 10.11
 SDK_MAC_NEW = 11.3
-MAC_MIN_PPC = 10.4
-MAC_MIN_X86 = 10.4
-MAC_MIN_X64 = 10.5
-MAC_MIN_ARM = 11.0
+MAC_MIN_OLD = 10.4
+MAC_MIN_MID = 10.6
+MAC_MIN_NEW = 11.0
 
 # --- Compilers ---
-GCC_PPC=oppc32-gcc
-GCC_X86=o32-gcc
-GCC_X64=o64-gcc
-CLANG14=/usr/bin/clang
+COMPILER_PPC=oppc32-gcc
+COMPILER_X86=o32-gcc
+COMPILER_X64=x86_64-apple-darwin15-clang
+COMPILER_ARM=/usr/bin/clang
 DSYMUTIL=/usr/bin/dsymutil-14
 
 # --- SDK Paths ---
+SDK_MAC_OLD_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_OLD).sdk
 SDK_MAC_MID_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_MID).sdk
 SDK_MAC_NEW_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_NEW).sdk
+LD64_LLD=/osxcross/target/bin/ld64.lld
 export OSXCROSS_NO_DSYMUTIL=1
 
 # --- Default Build Settings ---
 BUILD_DIR ?= build-release
 INT_DIR = $(BUILD_DIR)/Intermediates
 OPT_FLAGS ?= -O3
+UNIVERSAL_BIN ?= $(INT_DIR)/$(APP_NAME)-universal
 
 # --- Flags (Decoupled from SDK) ---
 COMMON_CFLAGS = $(OPT_FLAGS) -g -Wall
@@ -56,11 +59,11 @@ debug:
 mac: $(ZIP_FILE)
 
 $(ZIP_FILE): $(BUNDLE)
-	@echo " [4/4] Zipping package..."
+	@echo " [7/7] Zipping package..."
 	@cd $(BUILD_DIR) && zip -rq $(APP_NAME).zip $(APP_NAME).app
 
-$(BUNDLE): $(INT_DIR)/$(APP_NAME)-universal
-	@echo " [3/4] Building app package..."
+$(BUNDLE): $(UNIVERSAL_BIN)
+	@echo " [6/7] Building app package..."
 	@mkdir -p $@/Contents/MacOS $@/Contents/Resources
 	@echo "  > copying binary"
 	@cp $< $@/Contents/MacOS/$(APP_NAME)
@@ -70,64 +73,75 @@ $(BUNDLE): $(INT_DIR)/$(APP_NAME)-universal
 		echo "  > copying resources" ; \
 		cp -R $(RES_DIR)/* $@/Contents/Resources/ ; \
 	fi
-	@echo "  > extracting symbols"
-	@$(DSYMUTIL) $(INT_DIR)/x64.bin -o $(BUILD_DIR)/$(APP_NAME).X64.dSYM
-	@$(DSYMUTIL) $(INT_DIR)/arm.bin -o $(BUILD_DIR)/$(APP_NAME).ARM.dSYM
+	@echo "  > extracting symbols (x64, arm)"
+	@if [ -f "$(INT_DIR)/x64.bin" ]; then $(DSYMUTIL) $(INT_DIR)/x64.bin -o $(BUILD_DIR)/$(APP_NAME).x64.dSYM; fi
+	@if [ -f "$(INT_DIR)/arm.bin" ]; then $(DSYMUTIL) $(INT_DIR)/arm.bin -o $(BUILD_DIR)/$(APP_NAME).arm.dSYM; fi
 	@echo -n "APPL????" > $@/Contents/PkgInfo
 
 $(INT_DIR)/$(APP_NAME)-universal: $(INT_DIR)/ppc.bin $(INT_DIR)/x86.bin $(INT_DIR)/x64.bin $(INT_DIR)/arm.bin
-	@echo " [2/4] Merging Quad-Fat binary (PPC, X86, X64, ARM)..."
+	@echo " [5/7] Merging quad-fat binary (ppc, x86, x64, arm)..."
 	@lipo -create $^ -output $@
 
-# --- PowerPC Slice ---
+# --- ppc slice (10.4, 10.5 sdk) ---
 $(INT_DIR)/ppc.bin: $(PPC_OBJS)
 	@echo "  > linking ppc binary"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(GCC_PPC) -arch ppc -isysroot $(SDK_MAC_MID_PATH) \
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_PPC) -arch ppc -isysroot $(SDK_MAC_OLD_PATH) \
 	    $(MAC_LDFLAGS) -lgcc_s.10.4 $^ -o $@
 
 $(INT_DIR)/ppc/%.o: %.m
 	@mkdir -p $(dir $@)
 	@if [ "$(notdir $<)" = "$(firstword $(notdir $(SOURCES)))" ]; then \
-		echo " [1/4] Compiling Files..."; \
+		echo " [1/7] Compiling ppc (sdk: $(SDK_MAC_OLD), min: $(MAC_MIN_OLD))..."; \
 	fi
 	@echo "  > ppc: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(GCC_PPC) $(COMMON_CFLAGS) -arch ppc -isysroot $(SDK_MAC_MID_PATH) \
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_PPC) $(COMMON_CFLAGS) -arch ppc -isysroot $(SDK_MAC_OLD_PATH) \
 	    -fno-stack-protector -fno-common -fno-zero-initialized-in-bss -c $< -o $@
 
-# --- Intel X86 Slice ---
+# --- x86 slice (10.4, 10.5 sdk) ---
 $(INT_DIR)/x86.bin: $(X86_OBJS)
 	@echo "  > linking x86 binary"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(GCC_X86) -arch i386 -isysroot $(SDK_MAC_MID_PATH) \
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) -arch i386 -isysroot $(SDK_MAC_OLD_PATH) \
 	    $(MAC_LDFLAGS) $^ -o $@
 
 $(INT_DIR)/x86/%.o: %.m
 	@mkdir -p $(dir $@)
+	@if [ "$(notdir $<)" = "$(firstword $(notdir $(SOURCES)))" ]; then \
+		echo " [2/7] Compiling x86 (sdk: $(SDK_MAC_OLD), min: $(MAC_MIN_OLD))..."; \
+	fi
 	@echo "  > x86: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(GCC_X86) $(COMMON_CFLAGS) -arch i386 -isysroot $(SDK_MAC_MID_PATH) \
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) $(COMMON_CFLAGS) -arch i386 -isysroot $(SDK_MAC_OLD_PATH) \
 	    -c $< -o $@
 
-# --- Intel X64 Slice ---
+# --- x64 slice (10.6 target, 10.11 sdk) ---
 $(INT_DIR)/x64.bin: $(X64_OBJS)
 	@echo "  > linking x64 binary"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) -arch x86_64 -isysroot $(SDK_MAC_MID_PATH) \
-	    $(MAC_LDFLAGS) $^ -o $@
+	@(MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_MID_PATH) \
+		-mmacosx-version-min=$(MAC_MIN_MID) -march=core2 \
+		-L$(SDK_MAC_MID_PATH)/usr/lib -Wl,-no_pie $(MAC_LDFLAGS) $^ -o $@ 2>&1) | (grep -v "built for target 'darwin9'" || true)
 
 $(INT_DIR)/x64/%.o: %.m
 	@mkdir -p $(dir $@)
+	@if [ "$(notdir $<)" = "$(firstword $(notdir $(SOURCES)))" ]; then \
+		echo " [3/7] Compiling x64 (sdk: $(SDK_MAC_MID), min: $(MAC_MIN_MID))..."; \
+	fi
 	@echo "  > x64: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X64) $(GCC_X64) $(COMMON_CFLAGS) -arch x86_64 -isysroot $(SDK_MAC_MID_PATH) \
-	    -c $< -o $@
+	@(MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_MID_PATH) \
+		-mmacosx-version-min=$(MAC_MIN_MID) -march=core2 $(COMMON_CFLAGS) -c $< -o $@ 2>&1) | (grep -v "built for target 'darwin9'" || true)
 
-# --- Apple Silicon ARM Slice ---
+# --- arm slice (11.0 target, 11.3 sdk) ---
 $(INT_DIR)/arm.bin: $(ARM_OBJS)
 	@echo "  > linking arm64 binary"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_ARM) $(CLANG14) -target arm64-apple-macos11 -isysroot $(SDK_MAC_NEW_PATH) \
-	    $(MAC_LDFLAGS) -fuse-ld=lld -B/usr/bin/ $^ -o $@
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_NEW) $(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -isysroot $(SDK_MAC_NEW_PATH) \
+		-fuse-ld=$(LD64_LLD) -Wl,-platform_version,macos,$(MAC_MIN_NEW),$(SDK_MAC_NEW) \
+	    $(MAC_LDFLAGS) $^ -o $@
 
 $(INT_DIR)/arm/%.o: %.m
 	@mkdir -p $(dir $@)
+	@if [ "$(notdir $<)" = "$(firstword $(notdir $(SOURCES)))" ]; then \
+		echo " [4/7] Compiling arm64 (sdk: $(SDK_MAC_NEW), min: $(MAC_MIN_NEW))..."; \
+	fi
 	@echo "  > arm64: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_ARM) $(CLANG14) -target arm64-apple-macos11 -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_NEW) $(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
 	    $(COMMON_CFLAGS) -c $< -o $@
 
 clean:

@@ -1,4 +1,4 @@
-[![AltiveIntelligence Fun 90's Header Image](README.png)](README.thumb.png)
+[![AltiveIntelligence Fun 90's Header Image](README.thumb.png)](README.png)
 
 # 🤖 Altivec Intelligence
 
@@ -65,12 +65,9 @@ Verify the Mac toolchain by building the `SingleWindow` app:
 docker compose run --rm altivec "cd apps/SingleWindow && make"
 ```
 Outputs in `apps/SingleWindow/build-release/`:
-- `SingleWindow.app`: Universal Mac App compatible with:
-  - Tiger+ (PPC, X86)
-  - Leopard+ (PPC, X86, X64)
-  - Big Sur+ (X64, ARM64)
+- `SingleWindow.app`: Universal Mac App compatible with all Macs running Mac OS X 10.4 Tiger and newer (PowerPC, Intel 32-bit, Intel 64-bit, Apple Silicon)
 - `SingleWindow.zip`: App Package as a Zip
-- `SingleWindow.[X86|ARM].dSYM`: Debug Symbols for X64 and ARM Macs
+- `SingleWindow.[x64|arm].dSYM`: Debug Symbols for X64 and ARM Macs
 
 Verify the iPhone toolchain by building the `SingleScreen` app:
 ```bash
@@ -129,9 +126,9 @@ app for my favorite retro device. ```
 1. [ ] Setup Github Actions
    1. [ ] Build release apps and save in artifact storage
    1. [ ] Execute tests on Mac runners
-1. [ ] Remove Custom-Built 10.5/10.6 Hybrid SDK 
-   1. [ ] Change x64 Build to use Clang-14 and macOS 10.11 SDK
-   1. [ ] Change PPC and x86 Build to use Apple GCC 4.0 and Mac OS X 10.4u SDK
+1. [X] Remove Custom-Built 10.5/10.6 Hybrid SDK 
+   1. [X] Change x64 Build to use Clang-14 and macOS 10.11 SDK
+   1. [X] Change PPC and x86 Build to use Apple GCC 4.2.1 and Mac OS X 10.5 SDK
 1. [ ] Enable on-device debugging for iOS
 1. [ ] Enable Gemini to debug apps directly on the host Mac
 1. [ ] Include [`PLBlocks` \(Plausible Blocks\)](https://plausible.coop/blog/2009/07/02/blocks-for-iphone-3.0-and-mac-os-x-10/) for use in the 10.4u SDK slices to enable block usage for all toolchains 
