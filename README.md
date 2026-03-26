@@ -109,9 +109,11 @@ me know what you can do and what you can help me with.
 Decide whether you want to make an iPhone App or a Mac App, and then ask Gemini
 to make you a new app.
 
-``` I want to make my own app, can you start with the SingleWindow app and make
+``` 
+I want to make my own app, can you start with the SingleWindow app and make
 me a new app called MyCoolApp? Then we can get started creating the exact retro
-app for my favorite retro device. ```
+app for my favorite retro device. 
+```
 
 ## 📂 Project Structure
 - [`apps`](./apps/): Sample projects and Makefiles
