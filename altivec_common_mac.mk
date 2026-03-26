@@ -31,8 +31,8 @@ OPT_FLAGS ?= -O3
 UNIVERSAL_BIN ?= $(INT_DIR)/$(APP_NAME)-universal
 
 # --- Flags (Decoupled from SDK) ---
-COMMON_CFLAGS = $(OPT_FLAGS) -g -Wall
-MAC_LDFLAGS = -framework AppKit -lobjc
+MAC_FLAGS = $(OPT_FLAGS) -g -Wall
+MAC_LIBS = -framework AppKit -lobjc
 
 # --- Target Paths ---
 BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
@@ -41,22 +41,44 @@ RES_DIR ?= Resources
 INFO_PLIST ?= Info.plist
 
 # --- Object File Mapping ---
-PPC_OBJS = $(addprefix $(INT_DIR)/ppc/, $(SOURCES:.m=.o))
-X86_OBJS = $(addprefix $(INT_DIR)/x86/, $(SOURCES:.m=.o))
-X64_OBJS = $(addprefix $(INT_DIR)/x64/, $(SOURCES:.m=.o))
-ARM_OBJS = $(addprefix $(INT_DIR)/arm/, $(SOURCES:.m=.o))
+# Support both .m and .c files in SOURCES and EXTRA_SOURCES
+ALL_SOURCES = $(SOURCES) $(EXTRA_SOURCES)
+# Function to map sources to objects in a specific directory
+map_objs = $(addprefix $(1)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) $(EXTRA_SOURCES:.m=.o) $(EXTRA_SOURCES:.c=.o)))
+
+PPC_OBJS = $(call map_objs, $(INT_DIR)/ppc)
+X86_OBJS = $(call map_objs, $(INT_DIR)/x86)
+X64_OBJS = $(call map_objs, $(INT_DIR)/x64)
+ARM_OBJS = $(call map_objs, $(INT_DIR)/arm)
 
 # --- Top Level Targets ---
+.DEFAULT_GOAL := release
 
-release:
+release: validate
 	@echo "--- Building Mac Release (-O3) ---"
-	@$(MAKE) --no-print-directory mac BUILD_DIR=build-release OPT_FLAGS=-O3
+	@$(MAKE) --no-print-directory build-release/$(APP_NAME).zip BUILD_DIR=build-release OPT_FLAGS=-O3
 
-debug:
+debug: validate
 	@echo "--- Building Mac Debug (-O0) ---"
-	@$(MAKE) --no-print-directory mac BUILD_DIR=build-debug OPT_FLAGS=-O0
+	@$(MAKE) --no-print-directory build-debug/$(APP_NAME).zip BUILD_DIR=build-debug OPT_FLAGS=-O0
 
-mac: $(ZIP_FILE)
+clean:
+	@echo "Cleaning build artifacts..."
+	@rm -rf build-release build-debug
+
+validate:
+	@if [ ! -d "$(SDK_MAC_OLD_PATH)" ]; then echo " [!] ERROR: Mac SDK 10.5 missing at $(SDK_MAC_OLD_PATH)"; exit 1; fi
+	@if [ ! -d "$(SDK_MAC_MID_PATH)" ]; then echo " [!] ERROR: Mac SDK 10.11 missing at $(SDK_MAC_MID_PATH)"; exit 1; fi
+	@if [ ! -d "$(SDK_MAC_NEW_PATH)" ]; then echo " [!] ERROR: Mac SDK 11.3 missing at $(SDK_MAC_NEW_PATH)"; exit 1; fi
+	@for dir in $(patsubst -I%,%,$(filter -I%,$(MAC_FLAGS))) $(patsubst -L%,%,$(filter -L%,$(MAC_LIBS))); do \
+		if [ ! -d "$$dir" ]; then \
+			echo " [!] ERROR: Dependency directory missing: $$dir"; \
+			echo "     This likely means a required library (like libcurl) hasn't been built."; \
+			exit 1; \
+		fi; \
+	done
+
+# --- Internal File Targets ---
 
 $(ZIP_FILE): $(BUNDLE)
 	@echo " [7/7] Zipping package..."
@@ -86,7 +108,7 @@ $(INT_DIR)/$(APP_NAME)-universal: $(INT_DIR)/ppc.bin $(INT_DIR)/x86.bin $(INT_DI
 $(INT_DIR)/ppc.bin: $(PPC_OBJS)
 	@echo "  > linking ppc binary"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_PPC) -arch ppc -isysroot $(SDK_MAC_OLD_PATH) \
-	    $(MAC_LDFLAGS) -lgcc_s.10.4 $^ -o $@
+	    $^ $(MAC_LIBS) -lgcc_s.10.4 -o $@
 
 $(INT_DIR)/ppc/%.o: %.m
 	@mkdir -p $(dir $@)
@@ -94,14 +116,20 @@ $(INT_DIR)/ppc/%.o: %.m
 		echo " [1/7] Compiling ppc (sdk: $(SDK_MAC_OLD), min: $(MAC_MIN_OLD))..."; \
 	fi
 	@echo "  > ppc: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_PPC) $(COMMON_CFLAGS) -arch ppc -isysroot $(SDK_MAC_OLD_PATH) \
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_PPC) $(MAC_FLAGS) -arch ppc -isysroot $(SDK_MAC_OLD_PATH) \
+	    -fno-stack-protector -fno-common -fno-zero-initialized-in-bss -c $< -o $@
+
+$(INT_DIR)/ppc/%.o: %.c
+	@mkdir -p $(dir $@)
+	@echo "  > ppc: $(notdir $<)"
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_PPC) $(MAC_FLAGS) -arch ppc -isysroot $(SDK_MAC_OLD_PATH) \
 	    -fno-stack-protector -fno-common -fno-zero-initialized-in-bss -c $< -o $@
 
 # --- x86 slice (10.4, 10.5 sdk) ---
 $(INT_DIR)/x86.bin: $(X86_OBJS)
 	@echo "  > linking x86 binary"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) -arch i386 -isysroot $(SDK_MAC_OLD_PATH) \
-	    $(MAC_LDFLAGS) $^ -o $@
+	    $^ $(MAC_LIBS) -o $@
 
 $(INT_DIR)/x86/%.o: %.m
 	@mkdir -p $(dir $@)
@@ -109,15 +137,22 @@ $(INT_DIR)/x86/%.o: %.m
 		echo " [2/7] Compiling x86 (sdk: $(SDK_MAC_OLD), min: $(MAC_MIN_OLD))..."; \
 	fi
 	@echo "  > x86: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) $(COMMON_CFLAGS) -arch i386 -isysroot $(SDK_MAC_OLD_PATH) \
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) $(MAC_FLAGS) -arch i386 -isysroot $(SDK_MAC_OLD_PATH) \
+	    -c $< -o $@
+
+$(INT_DIR)/x86/%.o: %.c
+	@mkdir -p $(dir $@)
+	@echo "  > x86: $(notdir $<)"
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) $(MAC_FLAGS) -arch i386 -isysroot $(SDK_MAC_OLD_PATH) \
 	    -c $< -o $@
 
 # --- x64 slice (10.6 target, 10.11 sdk) ---
 $(INT_DIR)/x64.bin: $(X64_OBJS)
-	@echo "  > linking x64 binary"
-	@(MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_MID_PATH) \
-		-mmacosx-version-min=$(MAC_MIN_MID) -march=core2 \
-		-L$(SDK_MAC_MID_PATH)/usr/lib -Wl,-no_pie $(MAC_LDFLAGS) $^ -o $@ 2>&1) | (grep -v "built for target 'darwin9'" || true)
+	@echo "  > linking x64 binary (ld64.lld)"
+	@$(LD64_LLD) -demangle -dynamic -arch x86_64 -platform_version macos $(MAC_MIN_MID).0 $(MAC_MIN_MID).0 \
+		-syslibroot $(SDK_MAC_MID_PATH) -o $@ \
+		-L$(SDK_MAC_MID_PATH)/usr/lib \
+		$^ $(MAC_LIBS) -lSystem -framework AppKit -lobjc $(SDK_MAC_MID_PATH)/usr/lib/crt1.10.6.o
 
 $(INT_DIR)/x64/%.o: %.m
 	@mkdir -p $(dir $@)
@@ -126,14 +161,20 @@ $(INT_DIR)/x64/%.o: %.m
 	fi
 	@echo "  > x64: $(notdir $<)"
 	@(MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_MID_PATH) \
-		-mmacosx-version-min=$(MAC_MIN_MID) -march=core2 $(COMMON_CFLAGS) -c $< -o $@ 2>&1) | (grep -v "built for target 'darwin9'" || true)
+		-mmacosx-version-min=$(MAC_MIN_MID) -march=core2 $(MAC_FLAGS) -c $< -o $@ 2>&1) | (grep -v "built for target 'darwin9'" || true)
+
+$(INT_DIR)/x64/%.o: %.c
+	@mkdir -p $(dir $@)
+	@echo "  > x64: $(notdir $<)"
+	@(MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_MID_PATH) \
+		-mmacosx-version-min=$(MAC_MIN_MID) -march=core2 $(MAC_FLAGS) -c $< -o $@ 2>&1) | (grep -v "built for target 'darwin9'" || true)
 
 # --- arm slice (11.0 target, 11.3 sdk) ---
 $(INT_DIR)/arm.bin: $(ARM_OBJS)
 	@echo "  > linking arm64 binary"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_NEW) $(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -isysroot $(SDK_MAC_NEW_PATH) \
 		-fuse-ld=$(LD64_LLD) -Wl,-platform_version,macos,$(MAC_MIN_NEW),$(SDK_MAC_NEW) \
-	    $(MAC_LDFLAGS) $^ -o $@
+	    $^ $(MAC_LIBS) -o $@
 
 $(INT_DIR)/arm/%.o: %.m
 	@mkdir -p $(dir $@)
@@ -142,10 +183,12 @@ $(INT_DIR)/arm/%.o: %.m
 	fi
 	@echo "  > arm64: $(notdir $<)"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_NEW) $(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
-	    $(COMMON_CFLAGS) -c $< -o $@
+	    $(MAC_FLAGS) -c $< -o $@
 
-clean:
-	@echo "Cleaning build artifacts..."
-	@rm -rf build-release build-debug
+$(INT_DIR)/arm/%.o: %.c
+	@mkdir -p $(dir $@)
+	@echo "  > arm64: $(notdir $<)"
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_NEW) $(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
+	    $(MAC_FLAGS) -c $< -o $@
 
-.PHONY: release debug mac clean
+.PHONY: release debug clean validate

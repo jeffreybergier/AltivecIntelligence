@@ -17,7 +17,9 @@ INFO_PLIST ?= Info.plist
 OPT_FLAGS ?= -O3
 
 # --- Object Mapping ---
-OBJS = $(addprefix $(INT_DIR)/, $(SOURCES:.m=.o))
+# Support both .m and .c files in SOURCES and EXTRA_SOURCES
+ALL_SOURCES = $(SOURCES) $(EXTRA_SOURCES)
+OBJS = $(addprefix $(INT_DIR)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) $(EXTRA_SOURCES:.m=.o) $(EXTRA_SOURCES:.c=.o)))
 
 # --- Flags ---
 IOS_FLAGS = $(OPT_FLAGS) -g -Wall \
@@ -29,16 +31,31 @@ IOS_FLAGS = $(OPT_FLAGS) -g -Wall \
 IOS_FRAMEWORKS = -framework UIKit -framework Foundation -framework CoreGraphics
 
 # --- Top Level Targets ---
+.DEFAULT_GOAL := release
 
-release:
+release: validate
 	@echo "--- Building Phone Release ($(OPT_FLAGS)) ---"
-	@$(MAKE) --no-print-directory phone BUILD_DIR=build-release OPT_FLAGS=-O3
+	@$(MAKE) --no-print-directory build-release/$(APP_NAME).ipa BUILD_DIR=build-release OPT_FLAGS=-O3
 
-debug:
+debug: validate
 	@echo "--- Building Phone Debug (-O0) ---"
-	@$(MAKE) --no-print-directory phone BUILD_DIR=build-debug OPT_FLAGS=-O0
+	@$(MAKE) --no-print-directory build-debug/$(APP_NAME).ipa BUILD_DIR=build-debug OPT_FLAGS=-O0
 
-phone: $(PHONE_IPA)
+clean:
+	@echo "Cleaning build artifacts..."
+	@rm -rf build-release build-debug
+
+validate:
+	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi
+	@for dir in $(patsubst -I%,%,$(filter -I%,$(IOS_FLAGS))) $(patsubst -L%,%,$(filter -L%,$(IOS_FRAMEWORKS))); do \
+		if [ ! -d "$$dir" ]; then \
+			echo " [!] ERROR: Dependency directory missing: $$dir"; \
+			echo "     This likely means a required library (like libcurl) hasn't been built."; \
+			exit 1; \
+		fi; \
+	done
+
+# --- Internal File Targets ---
 
 $(PHONE_IPA): $(APP_BUNDLE)
 	@echo " [4/4] Packaging IPA..."
@@ -72,15 +89,20 @@ $(INT_DIR)/$(APP_NAME)-bin: $(OBJS)
 
 $(INT_DIR)/%.o: %.m
 	@mkdir -p $(INT_DIR)
-	@if [ "$(notdir $<)" = "$(firstword $(notdir $(SOURCES)))" ]; then \
+	@if [ "$(notdir $<)" = "$(firstword $(notdir $(ALL_SOURCES)))" ]; then \
 		echo " [1/4] Compiling Files..."; \
 	fi
 	@echo "  > $(notdir $<)"
 	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
 	           $(IOS_FLAGS) -c $< -o $@
 
-clean:
-	@echo "Cleaning build artifacts..."
-	@rm -rf build-release build-debug
+$(INT_DIR)/%.o: %.c
+	@mkdir -p $(INT_DIR)
+	@if [ "$(notdir $<)" = "$(firstword $(notdir $(ALL_SOURCES)))" ]; then \
+		echo " [1/4] Compiling Files..."; \
+	fi
+	@echo "  > $(notdir $<)"
+	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
+	           $(IOS_FLAGS) -c $< -o $@
 
-.PHONY: release debug phone clean
+.PHONY: release debug clean validate
