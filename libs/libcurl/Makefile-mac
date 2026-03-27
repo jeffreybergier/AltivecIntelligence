@@ -25,6 +25,13 @@ ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH
 
 all: static
 
+aic: $(PREFIX)/lib/libAICURLConnection.a
+	@echo "Updating AICURLConnection output..."
+	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
+	cp $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/
+	cp AICURLConnection.h $(BUILD_ROOT)/include/
+	@echo "AICURLConnection build successful."
+
 static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/cacert.pem
 	@echo "Organizing final Mac output..."
 	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
@@ -43,7 +50,7 @@ $(BUILD_ROOT)/lib/cacert.pem:
 	cp tarballs/cacert.pem $@
 
 # --- AICURLConnection ---
-$(PREFIX)/lib/libAICURLConnection.a: $(PREFIX)/lib/libcurl.a
+$(PREFIX)/lib/libAICURLConnection.a: AICURLConnection.m AICURLConnection.h
 	@echo "--- Building AICURLConnection (ppc) ---"
 	$(COMPILER_PPC) $(PPC_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/ppc/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-ppc.o
 	$(AR_LEGACY) rc $(PREFIX)/ppc/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-ppc.o
@@ -209,4 +216,4 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: mac clean
+.PHONY: mac static aic clean

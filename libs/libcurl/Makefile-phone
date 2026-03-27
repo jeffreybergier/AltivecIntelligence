@@ -22,6 +22,13 @@ IOS_64_FLAGS=-target arm64-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -ar
 
 all: static
 
+aic: $(PREFIX)/lib/libAICURLConnection.a
+	@echo "Updating AICURLConnection output..."
+	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
+	cp $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/
+	cp AICURLConnection.h $(BUILD_ROOT)/include/
+	@echo "AICURLConnection build successful."
+
 static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/cacert.pem
 	@echo "Organizing final Phone output..."
 	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
@@ -40,7 +47,7 @@ $(BUILD_ROOT)/lib/cacert.pem:
 	cp tarballs/cacert.pem $@
 
 # --- AICURLConnection ---
-$(PREFIX)/lib/libAICURLConnection.a: $(PREFIX)/lib/libcurl.a
+$(PREFIX)/lib/libAICURLConnection.a: AICURLConnection.m AICURLConnection.h
 	@echo "--- Building AICURLConnection (armv7) ---"
 	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/armv7/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-armv7.o
 	$(AR_MODERN) rc $(PREFIX)/armv7/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-armv7.o
@@ -142,4 +149,4 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: static clean
+.PHONY: static aic clean
