@@ -17,14 +17,13 @@
   label.font = [UIFont fontWithName:@"Courier" size:14.0f];
   label.textColor = [UIColor blackColor];
   
-  NSString *curlVer = [NSString stringWithUTF8String:curl_version()];
-  NSString *sslVer = [NSString stringWithUTF8String:OpenSSL_version(OPENSSL_VERSION)];
-  NSString *cryptoVer = [NSString stringWithUTF8String:OpenSSL_version(OPENSSL_VERSION)]; // Usually same as SSL
   NSString *zlibVer = [NSString stringWithUTF8String:zlibVersion()];
-  
-  label.text = [NSString stringWithFormat:@"1. Curl:\n%@\n\n2. SSL:\n%@\n\n3. Crypto:\n%@\n\n4. Zlib:\n%@", 
-                curlVer, sslVer, cryptoVer, zlibVer];
-  
+  NSString *sslVer = [NSString stringWithUTF8String:OpenSSL_version(OPENSSL_VERSION)];
+  NSString *curlVer = [NSString stringWithUTF8String:curl_version()];
+  NSString *cryptoVer = [NSString stringWithUTF8String:OpenSSL_version(OPENSSL_VERSION)]; // Usually same as SSL
+
+  label.text = [NSString stringWithFormat:@"1. libz:\n%@\n\n2. libssl:\n%@\n\n3. libcurl:\n%@\n\n4. libcrypto:\n%@",
+                zlibVer, sslVer, curlVer, cryptoVer];  
   [vc.view addSubview:label];
   
   UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
