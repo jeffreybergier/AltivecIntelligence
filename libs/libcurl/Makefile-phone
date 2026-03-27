@@ -114,6 +114,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	./configure --host=arm-apple-darwin --disable-shared --enable-static \
 	--with-openssl=$(PREFIX) --with-zlib=$(PREFIX) \
 	--disable-alt-svc --disable-hsts \
+	--disable-ldap --disable-ldaps \
 	--prefix=$(PREFIX)/armv7 && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	@echo "--- Building curl (arm64) ---"
@@ -126,6 +127,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	./configure --host=arm-apple-darwin --disable-shared --enable-static \
 	--with-openssl=$(PREFIX) --with-zlib=$(PREFIX) \
 	--disable-alt-svc --disable-hsts \
+	--disable-ldap --disable-ldaps \
 	--prefix=$(PREFIX)/arm64 && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	# Lipo
