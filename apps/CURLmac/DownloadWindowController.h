@@ -1,9 +1,10 @@
 #import <AppKit/AppKit.h>
 
+@class DownloadView;
+
 @interface DownloadWindowController : NSWindowController {
-    NSTextField *_urlField;
-    NSButton *_downloadButton;
-    NSTextView *_statusView;
+    DownloadView *_curlView;
+    DownloadView *_systemView;
 }
 
 @end
