@@ -169,13 +169,15 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
 	CC="$(COMPILER_X64) $(X64_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/x64/include" LDFLAGS="-L$(PREFIX)/x64/lib $(X64_LDFLAGS)" \
+	CPPFLAGS="-I$(PREFIX)/x64/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/x64/lib $(X64_LDFLAGS)" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=x86_64-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
 	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/x64 --with-zlib=$(PREFIX)/x64 \
 	--prefix=$(PREFIX)/x64 && \
+	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
+	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	@echo "--- Building curl (arm64) ---"
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
