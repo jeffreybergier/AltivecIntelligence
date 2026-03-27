@@ -1,1 +1,4 @@
-.gitignore
+.DS_Store
+libs/*/build-*
+libs/*/tarballs
+apps/*/build-*
