@@ -22,7 +22,7 @@ IOS_64_FLAGS=-target arm64-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -ar
 
 all: static
 
-static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a
+static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/cacert.pem
 	@echo "Organizing final Phone output..."
 	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
 	cp $(PREFIX)/lib/*.a $(BUILD_ROOT)/lib/
@@ -33,6 +33,11 @@ static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a
 	@echo "Libraries: $(BUILD_ROOT)/lib"
 	@echo "Headers:   $(BUILD_ROOT)/include"
 	@echo "-----------------------------------------------------------"
+
+$(BUILD_ROOT)/lib/cacert.pem:
+	mkdir -p $(BUILD_ROOT)/lib
+	[ -f tarballs/cacert.pem ] || (mkdir -p tarballs && curl -sL https://curl.se/ca/cacert.pem -o tarballs/cacert.pem)
+	cp tarballs/cacert.pem $@
 
 # --- AICURLConnection ---
 $(PREFIX)/lib/libAICURLConnection.a: $(PREFIX)/lib/libcurl.a

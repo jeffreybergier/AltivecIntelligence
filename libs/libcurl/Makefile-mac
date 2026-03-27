@@ -25,7 +25,7 @@ ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH
 
 all: static
 
-static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a
+static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/cacert.pem
 	@echo "Organizing final Mac output..."
 	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
 	cp $(PREFIX)/lib/*.a $(BUILD_ROOT)/lib/
@@ -36,6 +36,11 @@ static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a
 	@echo "Libraries: $(BUILD_ROOT)/lib"
 	@echo "Headers:   $(BUILD_ROOT)/include"
 	@echo "-----------------------------------------------------------"
+
+$(BUILD_ROOT)/lib/cacert.pem:
+	mkdir -p $(BUILD_ROOT)/lib
+	[ -f tarballs/cacert.pem ] || (mkdir -p tarballs && curl -sL https://curl.se/ca/cacert.pem -o tarballs/cacert.pem)
+	cp tarballs/cacert.pem $@
 
 # --- AICURLConnection ---
 $(PREFIX)/lib/libAICURLConnection.a: $(PREFIX)/lib/libcurl.a
@@ -153,17 +158,19 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	--with-openssl=$(PREFIX)/ppc --with-zlib=$(PREFIX)/ppc \
 	--prefix=$(PREFIX)/ppc && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
-	@echo "--- Building curl (x86) ---"
+	@echo "--- Building curl (arm64) ---"
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
-	CC="$(COMPILER_X86) $(X86_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
+	CC="$(COMPILER_ARM64) $(ARM64_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/x86/include" LDFLAGS="-L$(PREFIX)/x86/lib" \
+	CPPFLAGS="-I$(PREFIX)/arm64/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/arm64/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
-	./configure --host=i386-apple-darwin --disable-shared --enable-static \
-	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
+	./configure --host=aarch64-apple-darwin --disable-shared --enable-static \
+	--disable-threaded-resolver --disable-hsts --disable-alt-svc \
 	--disable-ldap --disable-ldaps \
-	--with-openssl=$(PREFIX)/x86 --with-zlib=$(PREFIX)/x86 \
-	--prefix=$(PREFIX)/x86 && \
+	--with-openssl=$(PREFIX)/arm64 --with-zlib=$(PREFIX)/arm64 \
+	--prefix=$(PREFIX)/arm64 && \
+	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
+	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	@echo "--- Building curl (x64) ---"
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
