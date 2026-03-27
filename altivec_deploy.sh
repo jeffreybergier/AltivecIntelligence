@@ -1,46 +1,31 @@
 #!/usr/bin/env bash
 
 # AltivecIntelligence Deployment Script
-# Usage: ./altivec_deploy.sh -td <ssh_host> -tp <package_path>
+# Usage: ./altivec_deploy.sh -d <ssh_host> -b <build_dir>
 
 set -e
 
 # Initialize variables
 TARGET_DEVICE=""
-TARGET_PACKAGE=""
+BUILD_DIR=""
 
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do
   case $1 in
-    -td|--targetDevice) TARGET_DEVICE="$2"; shift ;;
-    -tp|--targetPackage) TARGET_PACKAGE="$2"; shift ;;
+    -d|--device) TARGET_DEVICE="$2"; shift ;;
+    -b|--build) BUILD_DIR="$2"; shift ;;
     *) echo "Unknown parameter passed: $1"; exit 1 ;;
   esac
   shift
 done
 
-# --- Local Preflight ---
-echo "--- PREFLIGHT CHECK (Local) ---"
-if [ -z "$TARGET_DEVICE" ] || [ -z "$TARGET_PACKAGE" ]; then
-  echo "[FAIL] Missing required parameters."
-  echo "Usage: ./altivec_deploy.sh -td <ssh_host> -tp <package_path>"
+# --- Check Device first ---
+if [ -z "$TARGET_DEVICE" ]; then
+  echo "[FAIL] Missing required -d <device> parameter."
   exit 1
 fi
 
-if [ ! -f "$TARGET_PACKAGE" ]; then
-  if [ -d "$TARGET_PACKAGE" ]; then
-    echo "[FAIL] '$TARGET_PACKAGE' is a directory."
-    echo "Please provide a .zip file (containing the .app) for Mac or an .ipa file for iPhone."
-  else
-    echo "[FAIL] Target package '$TARGET_PACKAGE' not found."
-  fi
-  exit 1
-fi
-echo "[OK] Local package found: $TARGET_PACKAGE"
-
-# --- Remote Preflight ---
-echo ""
-echo "--- PREFLIGHT CHECK (Remote: $TARGET_DEVICE) ---"
+echo "--- REMOTE CONNECTION CHECK ($TARGET_DEVICE) ---"
 
 # 1. Connection & OS Info
 REMOTE_INFO=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$TARGET_DEVICE" "uname -sm; [ -d /var/mobile ] && echo 'iOS' || echo 'macOS'" 2>/dev/null)
@@ -66,9 +51,43 @@ if [[ "$OS_NAME" == "Darwin" ]]; then
 fi
 echo "[OK] Detected Device Type: $DEVICE_TYPE ($UNAME_OUTPUT)"
 
-# 2. iPhone-Specific Checks
+# --- Local Preflight ---
+echo ""
+echo "--- PREFLIGHT CHECK (Local: $BUILD_DIR) ---"
+if [ -z "$BUILD_DIR" ]; then
+  echo "[FAIL] Missing required -b <build_dir> parameter."
+  exit 1
+fi
+
+if [ ! -d "$BUILD_DIR" ]; then
+  echo "[FAIL] Build directory '$BUILD_DIR' not found."
+  exit 1
+fi
+
+# Check for appropriate package based on device type
+if [[ "$DEVICE_TYPE" == "mac" ]]; then
+  PACKAGE_PATH=$(find "$BUILD_DIR" -name "*.app" -maxdepth 1 | head -n 1)
+  if [ -z "$PACKAGE_PATH" ]; then
+    echo "[FAIL] Could not find a .app bundle in '$BUILD_DIR'."
+    exit 1
+  fi
+  echo "[OK] Found Mac bundle: $(basename "$PACKAGE_PATH")"
+elif [[ "$DEVICE_TYPE" == "iphone" ]]; then
+  PACKAGE_PATH=$(find "$BUILD_DIR" -name "*.ipa" -maxdepth 1 | head -n 1)
+  if [ -z "$PACKAGE_PATH" ]; then
+    echo "[FAIL] Could not find a .ipa package in '$BUILD_DIR'."
+    exit 1
+  fi
+  echo "[OK] Found iPhone package: $(basename "$PACKAGE_PATH")"
+fi
+
+# --- Device-Specific Utility Checks ---
+echo ""
+echo "--- UTILITY CHECK ---"
 HAS_IPAINSTALLER=false
 HAS_SYSLOG=false
+HAS_LLDB=false
+HAS_GDB=false
 
 if [[ "$DEVICE_TYPE" == "iphone" ]]; then
   if ssh -o BatchMode=yes "$TARGET_DEVICE" "which ipainstaller" &>/dev/null; then
@@ -76,22 +95,16 @@ if [[ "$DEVICE_TYPE" == "iphone" ]]; then
     HAS_IPAINSTALLER=true
   else
     echo "[FAIL] 'ipainstaller' NOT found. (Install via Cydia)"
+    exit 1
   fi
 
   if ssh -o BatchMode=yes "$TARGET_DEVICE" "[ -f /var/log/syslog ]" &>/dev/null; then
     echo "[OK] found '/var/log/syslog' for log tailing."
     HAS_SYSLOG=true
   else
-    echo "[WARN] '/var/log/syslog' NOT found. (Install 'syslogd' via Cydia for logs)"
+    echo "[WARN] '/var/log/syslog' NOT found."
   fi
-fi
-
-# 3. Mac-Specific Checks
-HAS_LLDB=false
-HAS_GDB=false
-
-if [[ "$DEVICE_TYPE" == "mac" ]]; then
-  # Robust debugger check: Try to execute with --version or --help
+elif [[ "$DEVICE_TYPE" == "mac" ]]; then
   if ssh -o BatchMode=yes "$TARGET_DEVICE" "lldb --version" &>/dev/null; then
     echo "[OK] found 'lldb' debugger."
     HAS_LLDB=true
@@ -99,40 +112,30 @@ if [[ "$DEVICE_TYPE" == "mac" ]]; then
     echo "[OK] found 'gdb' debugger."
     HAS_GDB=true
   else
-    echo "[WARN] No debugger found. Will fall back to system log."
+    echo "[WARN] No debugger found."
   fi
-fi
-
-# Final Preflight Validation
-if [[ "$DEVICE_TYPE" == "iphone" ]] && [[ "$HAS_IPAINSTALLER" == false ]]; then
-  echo ""
-  echo "Preflight failed: Missing mandatory utilities on iPhone."
-  exit 1
 fi
 
 echo ""
 echo "--- DEPLOYMENT STARTING ---"
 
-PACKAGE_NAME=$(basename "$TARGET_PACKAGE")
-APP_NAME=$(echo "$PACKAGE_NAME" | sed 's/\.zip$//' | sed 's/\.ipa$//')
+BUILD_DIR_NAME=$(basename "$BUILD_DIR")
 
-# --- iPhone Deployment Logic ---
 if [[ "$DEVICE_TYPE" == "iphone" ]]; then
-  TMP_DIR="~/tmp_altivec"
+  REMOTE_ROOT="~/tmp_altivec"
+  REMOTE_BUILD_DIR="$REMOTE_ROOT/$BUILD_DIR_NAME"
   
-  echo "Creating remote temp directory: $TMP_DIR"
-  ssh -o BatchMode=yes "$TARGET_DEVICE" "mkdir -p $TMP_DIR"
+  echo "Preparing remote directory: $REMOTE_ROOT"
+  ssh -o BatchMode=yes "$TARGET_DEVICE" "mkdir -p $REMOTE_ROOT"
   
-  echo "Uploading package..."
-  scp -o BatchMode=yes "$TARGET_PACKAGE" "$TARGET_DEVICE:$TMP_DIR/$PACKAGE_NAME"
+  echo "Copying whole build directory to iPhone..."
+  scp -r -o BatchMode=yes "$BUILD_DIR" "$TARGET_DEVICE:$REMOTE_ROOT/"
   
-  echo "Installing package..."
+  IPA_NAME=$(basename "$PACKAGE_PATH")
+  echo "Installing package: $IPA_NAME"
   set +e
-  ssh -o BatchMode=yes "$TARGET_DEVICE" "ipainstaller $TMP_DIR/$PACKAGE_NAME"
+  ssh -o BatchMode=yes "$TARGET_DEVICE" "ipainstaller $REMOTE_BUILD_DIR/$IPA_NAME"
   set -e
-  
-  echo "Cleaning up remote temp file..."
-  ssh -o BatchMode=yes "$TARGET_DEVICE" "rm $TMP_DIR/$PACKAGE_NAME"
   
   echo "Deployment complete!"
 
@@ -145,32 +148,21 @@ if [[ "$DEVICE_TYPE" == "iphone" ]]; then
     echo ""
     ssh "$TARGET_DEVICE" "tail -f /var/log/syslog"
   fi
-fi
 
-# --- Mac Deployment Logic ---
-if [[ "$DEVICE_TYPE" == "mac" ]]; then
-  DEPLOY_DIR="~/Desktop/Altivec"
+elif [[ "$DEVICE_TYPE" == "mac" ]]; then
+  REMOTE_ROOT="~/Desktop/Altivec"
+  # The scp -r command will put the build folder INSIDE REMOTE_ROOT
+  REMOTE_BUILD_DIR="$REMOTE_ROOT/$BUILD_DIR_NAME"
   
-  echo "Creating deployment directory: $DEPLOY_DIR"
-  ssh -o BatchMode=yes "$TARGET_DEVICE" "mkdir -p $DEPLOY_DIR"
+  echo "Preparing remote directory: $REMOTE_ROOT"
+  ssh -o BatchMode=yes "$TARGET_DEVICE" "mkdir -p $REMOTE_ROOT"
   
-  echo "Uploading package..."
-  scp -o BatchMode=yes "$TARGET_PACKAGE" "$TARGET_DEVICE:$DEPLOY_DIR/$PACKAGE_NAME"
+  echo "Copying whole build directory to Mac..."
+  scp -r -o BatchMode=yes "$BUILD_DIR" "$TARGET_DEVICE:$REMOTE_ROOT/"
   
-  echo "Extracting application..."
-  ssh -o BatchMode=yes "$TARGET_DEVICE" "cd $DEPLOY_DIR && unzip -oq $PACKAGE_NAME && rm $PACKAGE_NAME"
-  
-  # Heuristic to find the .app inside the directory
-  REMOTE_APP_PATH=$(ssh -o BatchMode=yes "$TARGET_DEVICE" "find $DEPLOY_DIR -name '*.app' -maxdepth 1 | head -n 1")
-  
-  if [ -z "$REMOTE_APP_PATH" ]; then
-    echo "Error: Could not find .app bundle after extraction in $DEPLOY_DIR"
-    exit 1
-  fi
-
-  # Find the actual executable inside the bundle
-  EXECUTABLE_NAME=$(echo $(basename "$REMOTE_APP_PATH") | sed 's/\.app$//')
-  REMOTE_BIN="$REMOTE_APP_PATH/Contents/MacOS/$EXECUTABLE_NAME"
+  APP_NAME=$(basename "$PACKAGE_PATH")
+  EXECUTABLE_NAME=$(echo "$APP_NAME" | sed 's/\.app$//')
+  REMOTE_BIN="$REMOTE_BUILD_DIR/$APP_NAME/Contents/MacOS/$EXECUTABLE_NAME"
 
   echo "Deployment complete!"
   echo ""
@@ -203,6 +195,7 @@ if [[ "$DEVICE_TYPE" == "mac" ]]; then
     echo "***************************************************"
     echo "  PLEASE OPEN THE APP ON YOUR MAC NOW"
     echo "  Tailing /var/log/system.log (Press Ctrl+C to stop)..."
+    echo ""
     echo "  NOTICE: Remote files will be deleted upon exit."
     echo "***************************************************"
     echo ""
@@ -211,6 +204,6 @@ if [[ "$DEVICE_TYPE" == "mac" ]]; then
 
   echo ""
   echo "Cleaning up remote Altivec folder..."
-  ssh -o BatchMode=yes "$TARGET_DEVICE" "rm -rf $DEPLOY_DIR"
+  ssh -o BatchMode=yes "$TARGET_DEVICE" "rm -rf $REMOTE_ROOT"
   echo "Mac cleanup complete."
 fi
