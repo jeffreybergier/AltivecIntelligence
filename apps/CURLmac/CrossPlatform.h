@@ -13,8 +13,8 @@
 /* Cross-Version Window Mask Macros */
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
   #define XPWindowStyleMaskTitled         NSWindowStyleMaskTitled
-  #define XPWindowStyleMaskClosable       NSClosableWindowMask
-  #define XPWindowStyleMaskResizable      NSResizableWindowMask
+  #define XPWindowStyleMaskClosable       NSWindowStyleMaskClosable
+  #define XPWindowStyleMaskResizable      NSWindowStyleMaskResizable
   #define XPWindowStyleMaskMiniaturizable NSWindowStyleMaskMiniaturizable
 #else
   #define XPWindowStyleMaskTitled         NSTitledWindowMask

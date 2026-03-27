@@ -5,12 +5,44 @@
 #import <zlib.h>
 
 
-static size_t AICWriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
   size_t realsize = size * nmemb;
   NSMutableData *data = (NSMutableData *)userp;
   [data appendBytes:contents length:realsize];
   return realsize;
 }
+
+#pragma mark - AIHTTPURLResponse (Internal Helper)
+
+// This class allows us to return an NSHTTPURLResponse on Leopard (10.5) 
+// which doesn't have a public initializer for it.
+@interface AIHTTPURLResponse : NSHTTPURLResponse {
+    NSInteger _aiStatusCode;
+    NSDictionary *_aiHeaderFields;
+}
+- (id)initWithURL:(NSURL *)url statusCode:(NSInteger)statusCode headerFields:(NSDictionary *)headerFields;
+- (NSInteger)statusCode;
+- (NSDictionary *)allHeaderFields;
+@end
+
+@implementation AIHTTPURLResponse
+- (id)initWithURL:(NSURL *)url statusCode:(NSInteger)statusCode headerFields:(NSDictionary *)headerFields {
+    // Note: Leopard's NSHTTPURLResponse might not like -init.
+    // We call the base NSURLResponse initializer.
+    self = [super initWithURL:url MIMEType:nil expectedContentLength:-1 textEncodingName:nil];
+    if (self) {
+        _aiStatusCode = statusCode;
+        _aiHeaderFields = [headerFields retain];
+    }
+    return self;
+}
+- (void)dealloc {
+    [_aiHeaderFields release];
+    [super dealloc];
+}
+- (NSInteger)statusCode { return _aiStatusCode; }
+- (NSDictionary *)allHeaderFields { return _aiHeaderFields; }
+@end
 
 @implementation AICURLConnection
 
@@ -112,7 +144,7 @@ static size_t AICWriteCallback(void *contents, size_t size, size_t nmemb, void *
 
   // Response Data Buffer
   NSMutableData *receivedData = [NSMutableData data];
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AICWriteCallback);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AIWriteCallback);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)receivedData);
 
   // Perform the request
@@ -133,11 +165,10 @@ static size_t AICWriteCallback(void *contents, size_t size, size_t nmemb, void *
     long responseCode;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
     
-    // In a real implementation, we'd extract headers too
-    // For now, we'll return a basic NSURLResponse or NSHTTPURLResponse
-    *response = [[[NSHTTPURLResponse alloc] initWithURL:[request URL]
+    // We use our helper to return an NSHTTPURLResponse-compatible object
+    // that works on Leopard (10.5).
+    *response = [[[AIHTTPURLResponse alloc] initWithURL:[request URL]
                                               statusCode:responseCode
-                                             HTTPVersion:@"HTTP/1.1"
                                             headerFields:nil] autorelease];
   }
 
