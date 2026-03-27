@@ -38,14 +38,14 @@ static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a
 $(PREFIX)/lib/libAICURLConnection.a: $(PREFIX)/lib/libcurl.a
 	@echo "--- Building AICURLConnection (armv7) ---"
 	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/armv7/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-armv7.o
-	$(AR_LEGACY) rc $(PREFIX)/armv7/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-armv7.o
-	$(RANLIB_LEGACY) $(PREFIX)/armv7/lib/libAICURLConnection.a
+	$(AR_MODERN) rc $(PREFIX)/armv7/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-armv7.o
+	$(RANLIB_MODERN) $(PREFIX)/armv7/lib/libAICURLConnection.a
 	@echo "--- Building AICURLConnection (arm64) ---"
 	$(COMPILER_IOS) $(IOS_64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/arm64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-arm64.o
 	$(AR_MODERN) rc $(PREFIX)/arm64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-arm64.o
 	$(RANLIB_MODERN) $(PREFIX)/arm64/lib/libAICURLConnection.a
 	# Lipo
-	$(LIPO) -create $(PREFIX)/arm64/lib/libAICURLConnection.a $(PREFIX)/armv7/lib/libAICURLConnection.a -output $(PREFIX)/lib/libAICURLConnection.a
+	$(LIPO_MODERN) -create $(PREFIX)/arm64/lib/libAICURLConnection.a $(PREFIX)/armv7/lib/libAICURLConnection.a -output $(PREFIX)/lib/libAICURLConnection.a
 
 # --- ZLIB ---
 $(INTERMEDIATE)/zlib-$(ZLIB_VER):
@@ -58,8 +58,8 @@ $(PREFIX)/lib/libz.a: $(INTERMEDIATE)/zlib-$(ZLIB_VER)
 	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
 	./configure --static --prefix=$(PREFIX)/armv7 && \
 	sed -i 's|^CC=.*|CC=$(COMPILER_IOS) $(IOS_V7_FLAGS)|g' Makefile && \
-	sed -i 's|^AR=.*|AR=$(AR_LEGACY)|g' Makefile && \
-	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_LEGACY)|g' Makefile && \
+	sed -i 's|^AR=.*|AR=$(AR_MODERN)|g' Makefile && \
+	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MODERN)|g' Makefile && \
 	make clean && make -j$(JOBS) ARFLAGS="rc" install
 	@echo "--- Building zlib (arm64) ---"
 	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
@@ -70,7 +70,7 @@ $(PREFIX)/lib/libz.a: $(INTERMEDIATE)/zlib-$(ZLIB_VER)
 	make clean && make -j$(JOBS) ARFLAGS="rc" install
 	# Lipo
 	mkdir -p $(PREFIX)/lib $(PREFIX)/include
-	$(LIPO) -create $(PREFIX)/arm64/lib/libz.a $(PREFIX)/armv7/lib/libz.a -output $(PREFIX)/lib/libz.a
+	$(LIPO_MODERN) -create $(PREFIX)/arm64/lib/libz.a $(PREFIX)/armv7/lib/libz.a -output $(PREFIX)/lib/libz.a
 	cp $(PREFIX)/arm64/include/*.h $(PREFIX)/include/
 
 # --- OPENSSL ---
@@ -83,7 +83,7 @@ $(PREFIX)/lib/libcrypto.a: $(INTERMEDIATE)/openssl-$(OPENSSL_VER) $(PREFIX)/lib/
 	@echo "--- Building OpenSSL (armv7) ---"
 	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
 	./Configure ios-cross no-shared no-tests no-zlib --prefix=$(PREFIX)/armv7 \
-	CC="$(COMPILER_IOS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
+	CC="$(COMPILER_IOS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(IOS_V7_FLAGS) -mfpu=neon $(OPT_FLAGS)" && \
 	make clean && make -j$(JOBS) build_libs && make install_dev
 	@echo "--- Building OpenSSL (arm64) ---"
@@ -93,8 +93,8 @@ $(PREFIX)/lib/libcrypto.a: $(INTERMEDIATE)/openssl-$(OPENSSL_VER) $(PREFIX)/lib/
 	CFLAGS="$(IOS_64_FLAGS) $(OPT_FLAGS)" && \
 	make clean && make -j$(JOBS) build_libs && make install_dev
 	# Lipo
-	$(LIPO) -create $(PREFIX)/arm64/lib/libssl.a $(PREFIX)/armv7/lib/libssl.a -output $(PREFIX)/lib/libssl.a
-	$(LIPO) -create $(PREFIX)/arm64/lib/libcrypto.a $(PREFIX)/armv7/lib/libcrypto.a -output $(PREFIX)/lib/libcrypto.a
+	$(LIPO_MODERN) -create $(PREFIX)/arm64/lib/libssl.a $(PREFIX)/armv7/lib/libssl.a -output $(PREFIX)/lib/libssl.a
+	$(LIPO_MODERN) -create $(PREFIX)/arm64/lib/libcrypto.a $(PREFIX)/armv7/lib/libcrypto.a -output $(PREFIX)/lib/libcrypto.a
 	mkdir -p $(PREFIX)/include/openssl && cp -R $(PREFIX)/arm64/include/openssl/* $(PREFIX)/include/openssl/
 
 # --- CURL ---
@@ -106,7 +106,7 @@ $(INTERMEDIATE)/curl-$(CURL_VER):
 $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $(PREFIX)/lib/libcrypto.a
 	@echo "--- Building curl (armv7) ---"
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
-	CC="$(COMPILER_IOS) $(IOS_V7_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
+	CC="$(COMPILER_IOS) $(IOS_V7_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
 	CPPFLAGS="-I$(PREFIX)/include" LDFLAGS="-L$(PREFIX)/lib" \
 	LIBS="-lssl -lcrypto -lz -lresolv" \
@@ -129,7 +129,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	--prefix=$(PREFIX)/arm64 && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	# Lipo
-	$(LIPO) -create $(PREFIX)/arm64/lib/libcurl.a $(PREFIX)/armv7/lib/libcurl.a -output $(PREFIX)/lib/libcurl.a
+	$(LIPO_MODERN) -create $(PREFIX)/arm64/lib/libcurl.a $(PREFIX)/armv7/lib/libcurl.a -output $(PREFIX)/lib/libcurl.a
 	cp -R $(PREFIX)/arm64/include/curl $(PREFIX)/include/
 
 clean:

@@ -21,12 +21,15 @@ SDK_ARM64_PATH=$(SDK_DIR)/MacOSX11.3.sdk
 SDK_IOS_PATH=$(SDK_DIR)/iPhoneOS8.4.sdk
 
 # --- Cross Tools ---
-# Use darwin9 tools for legacy slices (PPC, X86, i8-armv7)
+# Use darwin9 tools for legacy slices (PPC, X86)
 AR_LEGACY=$(BIN_DIR)/i386-apple-darwin9-ar
 RANLIB_LEGACY=$(BIN_DIR)/i386-apple-darwin9-ranlib
-# Use modern tools for modern slices (X64, ARM64 Mac, i8-arm64)
-AR_MODERN=/usr/bin/llvm-ar
-RANLIB_MODERN=/usr/bin/llvm-ranlib
+
+# Use modern LLVM 14 tools for modern slices (X64, ARM64, iOS)
+AR_MODERN=/usr/bin/llvm-ar-14
+RANLIB_MODERN=/usr/bin/llvm-ranlib-14
+LIPO_MODERN=/usr/bin/llvm-lipo-14
+LIBTOOL_MODERN=/usr/bin/llvm-libtool-darwin-14
 
 LIPO=$(BIN_DIR)/i386-apple-darwin9-lipo
 LIBTOOL=$(BIN_DIR)/i386-apple-darwin9-libtool
