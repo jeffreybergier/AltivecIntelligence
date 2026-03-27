@@ -149,6 +149,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=powerpc-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
+	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/ppc --with-zlib=$(PREFIX)/ppc \
 	--prefix=$(PREFIX)/ppc && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
@@ -160,6 +161,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=i386-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
+	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/x86 --with-zlib=$(PREFIX)/x86 \
 	--prefix=$(PREFIX)/x86 && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
@@ -171,6 +173,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=x86_64-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
+	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/x64 --with-zlib=$(PREFIX)/x64 \
 	--prefix=$(PREFIX)/x64 && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
@@ -182,6 +185,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=aarch64-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-hsts --disable-alt-svc \
+	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/arm64 --with-zlib=$(PREFIX)/arm64 \
 	--prefix=$(PREFIX)/arm64 && \
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
