@@ -150,25 +150,27 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
 	CC="$(COMPILER_PPC) $(PPC_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/ppc/include" LDFLAGS="-L$(PREFIX)/ppc/lib" \
+	CPPFLAGS="-I$(PREFIX)/ppc/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/ppc/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=powerpc-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
 	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/ppc --with-zlib=$(PREFIX)/ppc \
 	--prefix=$(PREFIX)/ppc && \
+	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
+	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
-	@echo "--- Building curl (arm64) ---"
+	@echo "--- Building curl (x86) ---"
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
-	CC="$(COMPILER_ARM64) $(ARM64_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
+	CC="$(COMPILER_X86) $(X86_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/arm64/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/arm64/lib" \
+	CPPFLAGS="-I$(PREFIX)/x86/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/x86/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
-	./configure --host=aarch64-apple-darwin --disable-shared --enable-static \
-	--disable-threaded-resolver --disable-hsts --disable-alt-svc \
+	./configure --host=i386-apple-darwin --disable-shared --enable-static \
+	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
 	--disable-ldap --disable-ldaps \
-	--with-openssl=$(PREFIX)/arm64 --with-zlib=$(PREFIX)/arm64 \
-	--prefix=$(PREFIX)/arm64 && \
+	--with-openssl=$(PREFIX)/x86 --with-zlib=$(PREFIX)/x86 \
+	--prefix=$(PREFIX)/x86 && \
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
 	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
