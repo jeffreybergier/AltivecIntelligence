@@ -61,4 +61,9 @@
   #define XPTextAlignmentCenter           NSCenterTextAlignment
 #endif
 
+/* Cross-Version String Helpers */
+@interface NSString (XPByteCount)
++ (NSString *)XP_stringFromByteCount:(long long)bytes;
+@end
+
 #endif /* CROSS_PLATFORM_H */

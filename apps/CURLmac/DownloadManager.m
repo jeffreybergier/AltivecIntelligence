@@ -87,10 +87,16 @@
 
     if (code < 200 || code > 299) {
       [connection cancel];
+      NSString *statusText = [AIHTTPURLResponse localizedStringForStatusCode:code];
+      NSString *fullError = [NSString stringWithFormat:@"Failed: %ld (%@)", 
+                             (long)code, statusText];
+
+      NSDictionary *userInfo = [NSDictionary dictionaryWithObject:fullError 
+                                                           forKey:NSLocalizedDescriptionKey];
       [self connection:connection didFailWithError:
-        [NSError errorWithDomain:@"AICDownloadErrorDomain" 
+        [NSError errorWithDomain:@"com.altivecintelligence.example" 
                             code:code 
-                        userInfo:nil]];
+                        userInfo:userInfo]];
     }
   }
 }
@@ -103,14 +109,25 @@
     [[view_ progressIndicator] incrementBy:(double)[data length]];
   }
   
-  [self updateStatus:[NSString stringWithFormat:@"Receiving: %lu bytes...", 
-                      (unsigned long)[receivedData_ length]]];
+  NSString *received = [NSString XP_stringFromByteCount:[receivedData_ length]];
+  if (![[view_ progressIndicator] isIndeterminate]) {
+    long long expected = (long long)[[view_ progressIndicator] maxValue];
+    NSString *total = [NSString XP_stringFromByteCount:expected];
+    [self updateStatus:[NSString stringWithFormat:@"Receiving: %@ / %@", 
+                        received, total]];
+  } else {
+    [self updateStatus:[NSString stringWithFormat:@"Receiving: %@...", 
+                        received]];
+  }
 }
 
 - (void)connection:(id)connection didFailWithError:(NSError *)error;
 {
   NSLog(@"[DownloadManager connection:didFailWithError:] error: %@", error);
   [[view_ progressIndicator] stopAnimation:nil];
+  [[view_ progressIndicator] setIndeterminate:NO];
+  [[view_ progressIndicator] setMaxValue:1.0];
+  [[view_ progressIndicator] setDoubleValue:1.0];
   [[view_ downloadButton] setEnabled:YES];
   
   NSString *msg = [NSString stringWithFormat:@"Failed: %@", 
@@ -126,8 +143,8 @@
   [[view_ progressIndicator] stopAnimation:nil];
   [[view_ downloadButton] setEnabled:YES];
   
-  [self updateStatus:[NSString stringWithFormat:@"Success! Total: %lu bytes", 
-                      (unsigned long)[receivedData_ length]]];
+  NSString *total = [NSString XP_stringFromByteCount:[receivedData_ length]];
+  [self updateStatus:[NSString stringWithFormat:@"Success! Total: %@", total]];
 
   NSImage *image = [[NSImage alloc] initWithData:receivedData_];
   if (image) {

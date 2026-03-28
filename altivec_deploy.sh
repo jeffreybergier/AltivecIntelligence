@@ -121,7 +121,6 @@ fi
 echo ""
 echo "--- UTILITY CHECK ---"
 HAS_IPAINSTALLER=false
-HAS_SYSLOG=false
 HAS_LLDB=false
 HAS_GDB=false
 
@@ -140,6 +139,13 @@ if [[ "$DEVICE_TYPE" == "iphone" ]]; then
   else
     echo "[FAIL] 'ipainstaller' NOT found. (Install via Cydia)"
     exit 1
+  fi
+
+  if check_util "[ -f /var/log/syslog ]"; then
+    echo "[OK] found '/var/log/syslog' for log tailing."
+    HAS_SYSLOG=true
+  else
+    echo "[WARN] '/var/log/syslog' NOT found."
   fi
 elif [[ "$DEVICE_TYPE" == "mac" ]]; then
   if check_util "lldb --version"; then
@@ -178,6 +184,20 @@ if [[ "$DEVICE_TYPE" == "iphone" ]]; then
     ipainstaller "$INSTALL_PATH"
   fi
   echo "Deployment complete!"
+
+  if [[ "$HAS_SYSLOG" == true ]]; then
+    echo ""
+    echo "***************************************************"
+    echo "  PLEASE OPEN THE APP ON YOUR IPHONE NOW"
+    echo "  Tailing /var/log/syslog (Press Ctrl+C to stop)..."
+    echo "***************************************************"
+    echo ""
+    if [ "$IS_REMOTE" = true ]; then
+      ssh "$TARGET_DEVICE" "tail -f /var/log/syslog"
+    else
+      tail -f /var/log/syslog
+    fi
+  fi
 
 elif [[ "$DEVICE_TYPE" == "mac" ]]; then
   if [ "$IS_REMOTE" = true ]; then
