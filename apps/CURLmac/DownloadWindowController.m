@@ -17,12 +17,13 @@
                     | XPWindowStyleMaskMiniaturizable 
                     | XPWindowStyleMaskResizable;
   
-  NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 480, 320)
+  NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 600)
                                                  styleMask:mask
                                                    backing:NSBackingStoreBuffered
                                                      defer:YES];
   [window setTitle:@"CURLmac Downloader"];
   [window setReleasedWhenClosed:NO];
+  [window setMinSize:NSMakeSize(800, 600)];
   
   self = [super initWithWindow:window];
   if (self) {
@@ -36,7 +37,7 @@
   NSWindow *window = [self window];
   NSView *contentView = [window contentView];
   
-  NSTabView *tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(10, 10, 460, 300)];
+  NSTabView *tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(8, 8, 784, 584)];
   [tabView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
   
   // --- Tab 0: CURL ---
@@ -84,13 +85,19 @@
   DownloadView *view = (DownloadView *)[button superview];
   NSString *identifier = [view identifier];
   NSString *urlStr = [[view urlField] stringValue];
-  NSTextView *status = [view statusView];
+  NSTextField *status = [view statusLabel];
+  NSProgressIndicator *progress = [view progressIndicator];
 
   NSURL *url = [NSURL URLWithString:urlStr];
   if (!url) {
-    [status setString:@"Error: Invalid URL\n"];
+    [status setStringValue:@"Error: Invalid URL"];
     return;
   }
+
+  [button setEnabled:NO];
+  [progress startAnimation:nil];
+  [status setStringValue:@""]; // Clear text while progress bar is on top
+  [[view imageView] setImage:nil]; // Clear old image data
 
   NSURLRequest *request = [NSURLRequest requestWithURL:url];
   NSURLResponse *response = nil;
@@ -98,24 +105,45 @@
   NSData *data = nil;
 
   if ([identifier isEqualToString:@"CURL"]) {
-    [status setString:[NSString stringWithFormat:@"Starting AIC (CURL) download: %@\n", urlStr]];
     data = [AICURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
   } else if ([identifier isEqualToString:@"System"]) {
-    [status setString:[NSString stringWithFormat:@"Starting System (Cocoa) download: %@\n", urlStr]];
     data = [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
   }
 
+  [progress stopAnimation:nil];
+  [button setEnabled:YES];
+
   if (error) {
-    [status setString:[NSString stringWithFormat:@"Download failed!\nError: %@\n", [error localizedDescription]]];
+    [status setStringValue:[NSString stringWithFormat:@"Failed: %@", [error localizedDescription]]];
+    // Present error as a sheet
+    [self presentError:error 
+        modalForWindow:[self window] 
+              delegate:nil 
+    didPresentSelector:NULL 
+           contextInfo:NULL];
   } else if (data) {
-    long statusCode = 0;
+    NSInteger statusCode = 0;
     if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
       statusCode = [(NSHTTPURLResponse *)response statusCode];
     }
     
-    NSString *result = [NSString stringWithFormat:@"Download successful!\nStatus Code: %ld\nData received: %lu bytes\n", 
-                        statusCode, (unsigned long)[data length]];
-    [status setString:result];
+    // Check for success status codes (200-299)
+    if (statusCode < 200 || statusCode > 299) {
+      NSString *errorMsg = [NSString stringWithFormat:@"Server returned status code: %ld", (long)statusCode];
+      NSDictionary *userInfo = [NSDictionary dictionaryWithObject:errorMsg forKey:NSLocalizedDescriptionKey];
+      NSError *statusError = [NSError errorWithDomain:@"AICDownloadErrorDomain" code:statusCode userInfo:userInfo];
+      
+      [status setStringValue:[NSString stringWithFormat:@"Failed: %ld", (long)statusCode]];
+      [self presentError:statusError 
+          modalForWindow:[self window] 
+                delegate:nil 
+      didPresentSelector:NULL 
+             contextInfo:NULL];
+      return;
+    }
+
+    [status setStringValue:[NSString stringWithFormat:@"Status: %ld | Size: %lu bytes", 
+                            (long)statusCode, (unsigned long)[data length]]];
 
     // Populate the well (Image View)
     NSImage *image = [[NSImage alloc] initWithData:data];
@@ -123,21 +151,11 @@
       [[view imageView] setImage:image];
       [image release];
     } else {
-      NSString *msg = @"Data received is not a valid image.\n";
-      [[status textStorage] appendAttributedString:[[[NSAttributedString alloc] initWithString:msg] autorelease]];
+      [status setStringValue:@"Data received is not a valid image."];
     }
   } else {
-    [status setString:@"Download finished with no data and no error.\n"];
+    [status setStringValue:@"Finished with no data."];
   }
-}
-
-- (void)resetButtonClicked:(id)sender {
-  NSButton *button = (NSButton *)sender;
-  DownloadView *view = (DownloadView *)[button superview];
-  [[view urlField] setStringValue:@""];
-  [[view statusView] setString:@""];
-  [[view imageView] setImage:nil];
-  NSLog(@"[DownloadWindowController resetButtonClicked:] UI Reset");
 }
 
 - (void)dealloc {

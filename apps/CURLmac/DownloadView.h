@@ -4,16 +4,16 @@
 @interface DownloadView : NSView {
   NSTextField *_urlField;
   NSButton *_downloadButton;
-  NSButton *_resetButton;
+  NSProgressIndicator *_progressIndicator;
   NSImageView *_imageView;
-  NSTextView *_statusView;
+  NSTextField *_statusLabel;
   NSString *_identifier;
 }
 
 - (NSTextField *)urlField;
-- (NSTextView *)statusView;
+- (NSTextField *)statusLabel;
 - (NSButton *)downloadButton;
-- (NSButton *)resetButton;
+- (NSProgressIndicator *)progressIndicator;
 - (NSImageView *)imageView;
 
 - (NSString *)identifier;
