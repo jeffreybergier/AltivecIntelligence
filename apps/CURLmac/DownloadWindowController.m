@@ -19,29 +19,27 @@
 - (void)loadWindow;
 {
   // 2. Create the window programmatically with defer:NO
-  NSUInteger mask = XPWindowStyleMaskTitled 
-                  | XPWindowStyleMaskClosable 
-                  | XPWindowStyleMaskMiniaturizable 
-                  | XPWindowStyleMaskResizable;
+  XPWindowStyleMask mask = XPWindowStyleMaskTitled 
+                         | XPWindowStyleMaskMiniaturizable
+                         | XPWindowStyleMaskResizable;
   
   NSWindow *window = [[[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 600)
-                                                 styleMask:mask
-                                                   backing:NSBackingStoreBuffered
-                                                     defer:NO] autorelease];
+                                                  styleMask:mask
+                                                    backing:NSBackingStoreBuffered
+                                                      defer:NO] autorelease];
   [window setTitle:@"CURLmac Downloader"];
   [window setReleasedWhenClosed:NO];
   [window setMinSize:NSMakeSize(800, 600)];
   [window XP_setContentBorderThickness:24.0 forEdge:NSMinYEdge];
   [window XP_setAutorecalculatesContentBorderThickness:NO forEdge:NSMinYEdge];
   [window center];
-  // 3. Set the window - this will automatically trigger windowDidLoad
   [self setWindow:window];
 }
 
 - (void)windowDidLoad;
 {
   [super windowDidLoad];
-  
+
   NSWindow *window = [self window];
   NSView *contentView = [window contentView];
   

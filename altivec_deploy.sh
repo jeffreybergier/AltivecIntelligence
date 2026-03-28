@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 
 # AltivecIntelligence Deployment Script
-# Usage: ./altivec_deploy.sh <build_dir> [-d <ssh_host>]
+# Usage: ./altivec_deploy.sh <app_dir_or_build_dir> [-d <ssh_host>]
 
 set -e
 
 # Initialize variables
 TARGET_DEVICE=""
-BUILD_DIR=""
+INPUT_PATH=""
 
-# Parse positional argument (build_dir)
+# Parse positional argument (app directory or build directory)
 if [[ "$#" -gt 0 ]] && [[ ! "$1" == -* ]]; then
-  BUILD_DIR="$1"
+  INPUT_PATH="$1"
   shift
 fi
 
@@ -23,6 +23,27 @@ while [[ "$#" -gt 0 ]]; do
   esac
   shift
 done
+
+# --- Resolve Build Directory ---
+BUILD_DIR=""
+if [ -z "$INPUT_PATH" ]; then
+  echo "[FAIL] Missing required <app_dir> argument."
+  echo "Usage: ./altivec_deploy.sh <app_dir> [-d <ssh_host>]"
+  exit 1
+fi
+
+if [ -d "$INPUT_PATH/build-debug" ]; then
+  BUILD_DIR="$INPUT_PATH/build-debug"
+  echo "[OK] Using debug build: $BUILD_DIR"
+elif [ -d "$INPUT_PATH/build-release" ]; then
+  BUILD_DIR="$INPUT_PATH/build-release"
+  echo "[OK] Using release build: $BUILD_DIR"
+elif [ -d "$INPUT_PATH" ]; then
+  BUILD_DIR="$INPUT_PATH"
+else
+  echo "[FAIL] Build directory '$INPUT_PATH' not found."
+  exit 1
+fi
 
 # --- Determine Mode (Remote vs Local) ---
 IS_REMOTE=false
@@ -78,16 +99,6 @@ fi
 # --- Local Preflight ---
 echo ""
 echo "--- PREFLIGHT CHECK (Local: $BUILD_DIR) ---"
-if [ -z "$BUILD_DIR" ]; then
-  echo "[FAIL] Missing required <build_dir> argument."
-  echo "Usage: ./altivec_deploy.sh <build_dir> [-d <ssh_host>]"
-  exit 1
-fi
-
-if [ ! -d "$BUILD_DIR" ]; then
-  echo "[FAIL] Build directory '$BUILD_DIR' not found."
-  exit 1
-fi
 
 # Check for appropriate package based on device type
 if [[ "$DEVICE_TYPE" == "mac" ]]; then
@@ -202,7 +213,6 @@ elif [[ "$DEVICE_TYPE" == "mac" ]]; then
     if [ "$IS_REMOTE" = true ]; then
       DEBUG_CMD="gdb -x $REMOTE_ROOT/gdbinit $BIN_PATH"
     else
-      # Check for local gdbinit
       if [ -f "altivec_build/gdbinit" ]; then
         DEBUG_CMD="gdb -x altivec_build/gdbinit $BIN_PATH"
       else
