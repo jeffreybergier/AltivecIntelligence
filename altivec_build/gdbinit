@@ -1,8 +1,8 @@
+## Do not ask for confirmation
+set confirm off
+
 ## Stop on Exception
 fb -[NSException raise]
-
-## Do not ask for confirmation (e.g. on kill or quit)
-set confirm off
 
 ## Run automatically
 run

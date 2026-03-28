@@ -5,38 +5,43 @@
 #import "KeyValueTableView.h"
 
 @interface DownloadWindowController (Private)
-- (void)setupUI;
-- (void)updateStatus:(NSString *)text;
 - (DownloadView *)currentView;
+- (void)updateStatus:(NSString *)text;
 @end
 
 @implementation DownloadWindowController
 
 - (id)init;
 {
+  return [super initWithWindowNibName:@"ignored"];
+}
+
+- (void)loadWindow;
+{
+  // 2. Create the window programmatically with defer:NO
   NSUInteger mask = XPWindowStyleMaskTitled 
-                    | XPWindowStyleMaskClosable 
-                    | XPWindowStyleMaskMiniaturizable 
-                    | XPWindowStyleMaskResizable;
+                  | XPWindowStyleMaskClosable 
+                  | XPWindowStyleMaskMiniaturizable 
+                  | XPWindowStyleMaskResizable;
   
   NSWindow *window = [[[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 600)
-                                                  styleMask:mask
-                                                    backing:NSBackingStoreBuffered
-                                                      defer:YES] autorelease];
+                                                 styleMask:mask
+                                                   backing:NSBackingStoreBuffered
+                                                     defer:NO] autorelease];
   [window setTitle:@"CURLmac Downloader"];
   [window setReleasedWhenClosed:NO];
   [window setMinSize:NSMakeSize(800, 600)];
   [window XP_setContentBorderThickness:24.0 forEdge:NSMinYEdge];
   [window XP_setAutorecalculatesContentBorderThickness:NO forEdge:NSMinYEdge];
-  
-  if ((self = [super initWithWindow:window])) {
-    [self setupUI];
-  }
-  return self;
+  [window center];
+  // 3. Set the window - this will automatically trigger windowDidLoad
+  [self setWindow:window];
 }
 
-- (void)setupUI;
+- (void)windowDidLoad;
 {
+  [super windowDidLoad];
+  
   NSWindow *window = [self window];
   NSView *contentView = [window contentView];
   
@@ -113,24 +118,15 @@
 
 - (DownloadView *)currentView;
 {
-  NSTabView *tabView = (NSTabView *)[[[self window] contentView] viewWithTag:999];
-  if (!tabView) {
-    // If we didn't set a tag, just find it in the subviews
-    NSArray *subviews = [[[self window] contentView] subviews];
-    unsigned int i;
-    for (i = 0; i < [subviews count]; i++) {
-      if ([[subviews objectAtIndex:i] isKindOfClass:[NSTabView class]]) {
-        tabView = [subviews objectAtIndex:i];
-        break;
-      }
+  NSArray *subviews = [[[self window] contentView] subviews];
+  unsigned int i;
+  for (i = 0; i < [subviews count]; i++) {
+    if ([[subviews objectAtIndex:i] isKindOfClass:[NSTabView class]]) {
+      NSTabView *tabView = (NSTabView *)[subviews objectAtIndex:i];
+      NSTabViewItem *item = [tabView selectedTabViewItem];
+      return (DownloadView *)[item view];
     }
   }
-  
-  if (tabView) {
-    NSTabViewItem *item = [tabView selectedTabViewItem];
-    return (DownloadView *)[item view];
-  }
-  
   return curlView_; 
 }
 
