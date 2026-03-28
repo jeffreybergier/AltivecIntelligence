@@ -5,11 +5,12 @@ This document summarizes the changes and improvements made to the **Altivec Inte
 ## 🚀 Key Improvements
 
 ### 1. `AICURLConnection` Library
-- **New Core Component**: A robust wrapper for `libcurl` providing synchronous request capabilities.
-- **Leopard & Tiger Support**: Implemented a `CrossPlatform` category on `NSHTTPURLResponse` to handle the lack of a public initializer prior to macOS 10.7.
-- **Dynamic Initializer**: Uses a 3-way check (Modern API -> Private Legacy API -> Fallback) to ensure compatibility from 10.4 Tiger through modern macOS.
-- **Version Reporting**: Added class methods to retrieve linked versions of `libcurl`, `libssl`, `libcrypto`, and `libz`.
-- **Formatting**: All source code strictly follows the 80-column limit and uses the "Semicolon-Implementation" style preferred for legacy projects.
+- **Asynchronous Engine**: Implemented full non-blocking support using `NSThread`. The UI now remains responsive during transfers.
+- **Tiger-Compatible Threading**: Uses `detachNewThreadSelector:` and `performSelectorOnMainThread:` to ensure 10.4 compatibility.
+- **NSURLConnection Parity**: Added `+connectionWithRequest:delegate:`, `start`, and `cancel` methods.
+- **Full Header Support**: Now parses and accumulates HTTP headers into a dictionary, allowing delegates to access full response metadata.
+- **AIHTTPURLResponse Subclass**: Reliable status code and header storage for legacy systems where `NSHTTPURLResponse` is restricted.
+- **Memory Safety**: Optimized for Tiger's autorelease pool behavior to prevent leaks on background threads.
 
 ### 2. `CURLmac` Application Refactoring
 - **Polished UI**: Implemented a vertical stack layout for the `DownloadView` with Aqua-native feel.

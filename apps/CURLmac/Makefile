@@ -1,6 +1,6 @@
 # Altivec Intelligence - CURLmac (Mac)
 APP_NAME = CURLmac
-SOURCES = main.m AppDelegate.m DownloadWindowController.m DownloadView.m KeyValueTableView.m MainMenu.m CrossPlatform.m
+SOURCES = main.m AppDelegate.m DownloadWindowController.m DownloadView.m KeyValueTableView.m MainMenu.m CrossPlatform.m DownloadManager.m
 INFO_PLIST = Info.plist
 
 CURL_DIR = ../../libs/libcurl/build-mac

@@ -31,9 +31,17 @@
   // Async Support
   NSThread *thread_;
   BOOL cancelled_;
+  
+  // Header Accumulation
+  NSMutableDictionary *responseHeaders_;
+  AIHTTPURLResponse *pendingResponse_;
 }
 
 #pragma mark - Class Properties
+
+// Returns an initialized connection and begins the loading of the data.
++ (AICURLConnection *)connectionWithRequest:(NSURLRequest *)request 
+                                   delegate:(id)delegate;
 
 // Returns YES if the library can handle the scheme in the request (http/https).
 + (BOOL)canHandleRequest:(NSURLRequest *)request;

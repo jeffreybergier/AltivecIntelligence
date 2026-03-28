@@ -1,4 +1,5 @@
 #import "DownloadView.h"
+#import "DownloadManager.h"
 
 @implementation DownloadView
 
@@ -13,7 +14,7 @@
     CGFloat buttonWidth = 90;
 
     // 1. URL Field: Top row, flexible width
-    // X: 8, Y: height - 8 (padding) - 24 (height) = height - 32
+    // X: 8, Width: width - buttonWidth (90) - padding (8) - gap (4) - startX (8) = width - 110
     urlField_ = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 
                                                               height - 32, 
                                                               width - 110, 
@@ -25,7 +26,6 @@
     [self addSubview:urlField_];
     
     // 2. Download Button: To the right of URL
-    // Aligning visually with URL field.
     downloadButton_ = [[NSButton alloc] initWithFrame:NSMakeRect(width - buttonWidth - padding, 
                                                                   height - 36, 
                                                                   buttonWidth, 
@@ -33,18 +33,39 @@
     [downloadButton_ setTitle:@"Download"];
     [downloadButton_ setBezelStyle:XPBezelStyleRounded];
     [downloadButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMinYMargin];
-    [downloadButton_ setTarget:nil];
+    [downloadButton_ setTarget:self]; // Target self to forward to manager
     [downloadButton_ setAction:@selector(downloadButtonClicked:)];
     [self addSubview:downloadButton_];
 
-    // 3. Image View (Well): Centerpiece
-    // Spacing: Even 8px on left, right, and bottom.
-    // X: 8, Y: 8, Width: width - 16
-    // Height: height - 36 (button top) - 4 (gap) - 8 (bottom) = height - 48
+    // 3. Status Label & Progress (Overlapping at bottom)
+    statusLabel_ = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 
+                                                                 4, 
+                                                                 width - (padding * 2), 
+                                                                 16)];
+    [statusLabel_ setStringValue:@"Ready"];
+    [statusLabel_ setBezeled:NO];
+    [statusLabel_ setDrawsBackground:NO];
+    [statusLabel_ setEditable:NO];
+    [statusLabel_ setSelectable:YES];
+    [statusLabel_ setFont:[NSFont systemFontOfSize:11]];
+    [statusLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+    [self addSubview:statusLabel_];
+
+    progressIndicator_ = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(padding, 
+                                                                               4, 
+                                                                               width - (padding * 2), 
+                                                                               16)];
+    [progressIndicator_ setStyle:XPProgressIndicatorStyleBar];
+    [progressIndicator_ setIndeterminate:YES];
+    [progressIndicator_ setDisplayedWhenStopped:NO];
+    [progressIndicator_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+    [self addSubview:progressIndicator_];
+
+    // 4. Image View (Well): Centerpiece
     imageView_ = [[NSImageView alloc] initWithFrame:NSMakeRect(padding, 
-                                                                padding, 
+                                                                24, 
                                                                 width - (padding * 2), 
-                                                                height - 48)];
+                                                                height - 68)];
     [imageView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [imageView_ setImageFrameStyle:NSImageFrameGrayBezel];
     [imageView_ setImageScaling:NSImageScaleProportionallyUpOrDown];
@@ -57,9 +78,21 @@
 {
   [urlField_ release];
   [downloadButton_ release];
+  [progressIndicator_ release];
+  [statusLabel_ release];
   [imageView_ release];
   [identifier_ release];
+  [manager_ release];
   [super dealloc];
+}
+
+#pragma mark - Actions
+
+- (void)downloadButtonClicked:(id)sender;
+{
+  if (manager_) {
+    [manager_ downloadButtonClicked:sender];
+  }
 }
 
 #pragma mark - Accessors
@@ -74,9 +107,19 @@
   return downloadButton_;
 }
 
+- (NSProgressIndicator *)progressIndicator;
+{
+  return progressIndicator_;
+}
+
 - (NSImageView *)imageView;
 {
   return imageView_;
+}
+
+- (NSTextField *)statusLabel;
+{
+  return statusLabel_;
 }
 
 - (NSString *)identifier;
@@ -88,6 +131,19 @@
 {
   [identifier_ autorelease];
   identifier_ = [identifier copy];
+}
+
+- (DownloadManager *)manager;
+{
+  return manager_;
+}
+
+- (void)setManager:(DownloadManager *)manager;
+{
+  if (manager_ != manager) {
+    [manager_ release];
+    manager_ = [manager retain];
+  }
 }
 
 @end
