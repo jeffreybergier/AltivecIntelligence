@@ -27,9 +27,17 @@
   void *curl_;
   NSURLRequest *request_;
   id delegate_;
+
+  // Async Support
+  NSThread *thread_;
+  NSThread *originThread_;
+  BOOL cancelled_;
 }
 
 #pragma mark - Class Properties
+
+// Returns YES if the library can handle the scheme in the request (http/https).
++ (BOOL)canHandleRequest:(NSURLRequest *)request;
 
 // Returns the version string for the linked zlib library.
 + (NSString *)zlibVersion;
@@ -54,6 +62,11 @@
 - (id)initWithRequest:(NSURLRequest *)request
              delegate:(id)delegate
      startImmediately:(BOOL)startImmediately;
+
+#pragma mark - Lifecycle
+
+- (void)start;
+- (void)cancel;
 
 #pragma mark - Shared Request
 
