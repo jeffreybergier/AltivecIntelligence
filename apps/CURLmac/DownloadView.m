@@ -13,8 +13,7 @@
     CGFloat padding = 8;
     CGFloat buttonWidth = 90;
 
-    // 1. URL Field: Top row, flexible width
-    // X: 8, Width: width - buttonWidth (90) - padding (8) - gap (4) - startX (8) = width - 110
+    // 1. URL Field: Top row
     urlField_ = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 
                                                               height - 32, 
                                                               width - 110, 
@@ -33,22 +32,25 @@
     [downloadButton_ setTitle:@"Download"];
     [downloadButton_ setBezelStyle:XPBezelStyleRounded];
     [downloadButton_ setAutoresizingMask:NSViewMinXMargin | NSViewMinYMargin];
-    [downloadButton_ setTarget:self]; // Target self to forward to manager
+    [downloadButton_ setTarget:self];
     [downloadButton_ setAction:@selector(downloadButtonClicked:)];
     [self addSubview:downloadButton_];
 
-    // 3. Progress Indicator: At bottom (Permanent background)
+    // 3. Progress Indicator: Below Top Row
     progressIndicator_ = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(padding, 
-                                                                               4, 
+                                                                               height - 56, 
                                                                                width - (padding * 2), 
                                                                                16)];
     [progressIndicator_ setStyle:XPProgressIndicatorStyleBar];
-    [progressIndicator_ setIndeterminate:YES];
-    [progressIndicator_ setDisplayedWhenStopped:YES]; // Always visible
-    [progressIndicator_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+    [progressIndicator_ setIndeterminate:NO];
+    [progressIndicator_ setMinValue:0.0];
+    [progressIndicator_ setMaxValue:1.0];
+    [progressIndicator_ setDoubleValue:1.0]; // Set to 1 of 1 on load
+    [progressIndicator_ setDisplayedWhenStopped:YES];
+    [progressIndicator_ setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
     [self addSubview:progressIndicator_];
 
-    // 4. Status Label: On top of progress bar
+    // 4. Status Label: At bottom
     statusLabel_ = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 
                                                                  4, 
                                                                  width - (padding * 2), 
@@ -62,11 +64,13 @@
     [statusLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
     [self addSubview:statusLabel_];
 
-    // 4. Image View (Well): Centerpiece
+    // 5. Image View (Well): Centerpiece
+    // Space below: 4 (padding) + 16 (status) + 4 (gap) = 24
+    // Space above: 56 (progress top) + 4 (gap) = 60
     imageView_ = [[NSImageView alloc] initWithFrame:NSMakeRect(padding, 
                                                                 24, 
                                                                 width - (padding * 2), 
-                                                                height - 68)];
+                                                                height - 84)];
     [imageView_ setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     [imageView_ setImageFrameStyle:NSImageFrameGrayBezel];
     [imageView_ setImageScaling:NSImageScaleProportionallyUpOrDown];
