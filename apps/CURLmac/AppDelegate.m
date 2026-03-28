@@ -4,23 +4,20 @@
 
 @implementation AppDelegate
 
--(void)applicationDidFinishLaunching:(NSNotification*)aNotification;
+-(void)applicationWillFinishLaunching:(NSNotification*)aNotification;
 {
   [MainMenu setupMenu];
-  if (!_windowController) {
-    _windowController = [[DownloadWindowController alloc] init];
-  }
-  [[_windowController window] center];
+}
+
+-(void)applicationDidFinishLaunching:(NSNotification*)aNotification;
+{
+  _windowController = [[DownloadWindowController alloc] init];
   [_windowController showWindow:self];
 }
 
 -(BOOL)applicationOpenUntitledFile:(NSApplication*)sender;
 {
-  if (!_windowController) {
-    _windowController = [[DownloadWindowController alloc] init];
-  }
-  [_windowController showWindow:self];
-  return YES;
+  return NO;
 }
 
 -(void)dealloc;
