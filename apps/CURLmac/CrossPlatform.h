@@ -30,4 +30,11 @@
   #define XPBezelStyleRounded             NSRoundedBezelStyle
 #endif
 
+/* Cross-Version Progress Indicator Macros */
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101400
+  #define XPProgressIndicatorStyleBar     NSProgressIndicatorStyleBar
+#else
+  #define XPProgressIndicatorStyleBar     NSProgressIndicatorBarStyle
+#endif
+
 #endif /* CROSS_PLATFORM_H */

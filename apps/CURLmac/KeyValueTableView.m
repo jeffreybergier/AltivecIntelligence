@@ -17,14 +17,14 @@
     
     NSTableColumn *keyCol = [[NSTableColumn alloc] initWithIdentifier:@"Key"];
     [[keyCol headerCell] setStringValue:@"Key"];
-    [keyCol setWidth:150.0];
+    [keyCol setWidth:152.0];
     [keyCol setEditable:NO];
     [_tableView addTableColumn:keyCol];
     [keyCol release];
 
     NSTableColumn *valCol = [[NSTableColumn alloc] initWithIdentifier:@"Value"];
     [[valCol headerCell] setStringValue:@"Value"];
-    [valCol setWidth:250.0];
+    [valCol setWidth:252.0];
     [valCol setEditable:NO];
     [valCol setResizingMask:NSTableColumnAutoresizingMask];
     [_tableView addTableColumn:valCol];
