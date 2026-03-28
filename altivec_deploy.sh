@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # AltivecIntelligence Deployment Script
-# Usage: ./altivec_deploy.sh -d <ssh_host> -b <build_dir>
+# Usage: ./altivec_deploy.sh <build_dir> [-d <ssh_host>]
 
 set -e
 
@@ -9,41 +9,57 @@ set -e
 TARGET_DEVICE=""
 BUILD_DIR=""
 
-# Parse arguments
+# Parse positional argument (build_dir)
+if [[ "$#" -gt 0 ]] && [[ ! "$1" == -* ]]; then
+  BUILD_DIR="$1"
+  shift
+fi
+
+# Parse remaining options
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     -d|--device) TARGET_DEVICE="$2"; shift ;;
-    -b|--build) BUILD_DIR="$2"; shift ;;
     *) echo "Unknown parameter passed: $1"; exit 1 ;;
   esac
   shift
 done
 
-# --- Check Device first ---
-if [ -z "$TARGET_DEVICE" ]; then
-  echo "[FAIL] Missing required -d <device> parameter."
-  exit 1
+# --- Determine Mode (Remote vs Local) ---
+IS_REMOTE=false
+if [ -n "$TARGET_DEVICE" ]; then
+  IS_REMOTE=true
+  echo "--- REMOTE CONNECTION CHECK ($TARGET_DEVICE) ---"
+else
+  echo "--- LOCAL MODE CHECK ---"
 fi
-
-echo "--- REMOTE CONNECTION CHECK ($TARGET_DEVICE) ---"
 
 # 1. Connection & OS Info
-REMOTE_INFO=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$TARGET_DEVICE" "uname -sm; [ -d /var/mobile ] && echo 'iOS' || echo 'macOS'" 2>/dev/null)
-
-if [ $? -ne 0 ]; then
-  echo "[FAIL] Could not connect to '$TARGET_DEVICE' via SSH."
-  exit 1
+if [ "$IS_REMOTE" = true ]; then
+  set +e
+  REMOTE_INFO=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$TARGET_DEVICE" "uname -sm; [ -d /var/mobile ] && echo 'iOS' || echo 'macOS'" 2>/dev/null)
+  SSH_EXIT_CODE=$?
+  set -e
+  
+  if [ $SSH_EXIT_CODE -ne 0 ]; then
+    echo "[FAIL] Could not connect to '$TARGET_DEVICE' via SSH."
+    exit 1
+  fi
+  echo "[OK] SSH Connection established."
+  UNAME_OUTPUT=$(echo "$REMOTE_INFO" | head -n 1)
+  TYPE_HINT=$(echo "$REMOTE_INFO" | tail -n 1)
+else
+  UNAME_OUTPUT=$(uname -sm)
+  [ -d /var/mobile ] && TYPE_HINT="iOS" || TYPE_HINT="macOS"
 fi
-echo "[OK] SSH Connection established."
 
-UNAME_OUTPUT=$(echo "$REMOTE_INFO" | head -n 1)
-TYPE_HINT=$(echo "$REMOTE_INFO" | tail -n 1)
 OS_NAME=$(echo "$UNAME_OUTPUT" | awk '{print $1}')
 MACHINE_ARCH=$(echo "$UNAME_OUTPUT" | awk '{print $2}')
 
 DEVICE_TYPE="unknown"
 if [[ "$OS_NAME" == "Darwin" ]]; then
-  if [[ "$TYPE_HINT" == "iOS" ]] || [[ "$MACHINE_ARCH" == iPhone* ]] || [[ "$MACHINE_ARCH" == arm* ]]; then
+  if [[ "$TYPE_HINT" == "iOS" ]]; then
+    DEVICE_TYPE="iphone"
+  elif [[ "$MACHINE_ARCH" == iPhone* ]] || [[ "$MACHINE_ARCH" == iPad* ]]; then
     DEVICE_TYPE="iphone"
   else
     DEVICE_TYPE="mac"
@@ -51,11 +67,20 @@ if [[ "$OS_NAME" == "Darwin" ]]; then
 fi
 echo "[OK] Detected Device Type: $DEVICE_TYPE ($UNAME_OUTPUT)"
 
+# 2. Check compatibility
+if [[ "$DEVICE_TYPE" == "unknown" ]]; then
+  echo ""
+  echo "[FAIL] This device ($OS_NAME) is not a Mac or iPhone."
+  echo "Please run this script on a Mac or specify a remote target device with -d|--device."
+  exit 1
+fi
+
 # --- Local Preflight ---
 echo ""
 echo "--- PREFLIGHT CHECK (Local: $BUILD_DIR) ---"
 if [ -z "$BUILD_DIR" ]; then
-  echo "[FAIL] Missing required -b <build_dir> parameter."
+  echo "[FAIL] Missing required <build_dir> argument."
+  echo "Usage: ./altivec_deploy.sh <build_dir> [-d <ssh_host>]"
   exit 1
 fi
 
@@ -81,7 +106,7 @@ elif [[ "$DEVICE_TYPE" == "iphone" ]]; then
   echo "[OK] Found iPhone package: $(basename "$PACKAGE_PATH")"
 fi
 
-# --- Device-Specific Utility Checks ---
+# --- Utility Checks ---
 echo ""
 echo "--- UTILITY CHECK ---"
 HAS_IPAINSTALLER=false
@@ -89,26 +114,27 @@ HAS_SYSLOG=false
 HAS_LLDB=false
 HAS_GDB=false
 
+check_util() {
+  if [ "$IS_REMOTE" = true ]; then
+    ssh -o BatchMode=yes "$TARGET_DEVICE" "$1" &>/dev/null
+  else
+    eval "$1" &>/dev/null
+  fi
+}
+
 if [[ "$DEVICE_TYPE" == "iphone" ]]; then
-  if ssh -o BatchMode=yes "$TARGET_DEVICE" "which ipainstaller" &>/dev/null; then
+  if check_util "which ipainstaller"; then
     echo "[OK] found 'ipainstaller' utility."
     HAS_IPAINSTALLER=true
   else
     echo "[FAIL] 'ipainstaller' NOT found. (Install via Cydia)"
     exit 1
   fi
-
-  if ssh -o BatchMode=yes "$TARGET_DEVICE" "[ -f /var/log/syslog ]" &>/dev/null; then
-    echo "[OK] found '/var/log/syslog' for log tailing."
-    HAS_SYSLOG=true
-  else
-    echo "[WARN] '/var/log/syslog' NOT found."
-  fi
 elif [[ "$DEVICE_TYPE" == "mac" ]]; then
-  if ssh -o BatchMode=yes "$TARGET_DEVICE" "lldb --version" &>/dev/null; then
+  if check_util "lldb --version"; then
     echo "[OK] found 'lldb' debugger."
     HAS_LLDB=true
-  elif ssh -o BatchMode=yes "$TARGET_DEVICE" "gdb --version" &>/dev/null; then
+  elif check_util "gdb --version"; then
     echo "[OK] found 'gdb' debugger."
     HAS_GDB=true
   else
@@ -122,88 +148,106 @@ echo "--- DEPLOYMENT STARTING ---"
 BUILD_DIR_NAME=$(basename "$BUILD_DIR")
 
 if [[ "$DEVICE_TYPE" == "iphone" ]]; then
-  REMOTE_ROOT="~/tmp_altivec"
-  REMOTE_BUILD_DIR="$REMOTE_ROOT/$BUILD_DIR_NAME"
+  if [ "$IS_REMOTE" = true ]; then
+    REMOTE_ROOT="~/tmp_altivec"
+    REMOTE_BUILD_DIR="$REMOTE_ROOT/$BUILD_DIR_NAME"
+    echo "Preparing remote directory: $REMOTE_ROOT"
+    ssh -o BatchMode=yes "$TARGET_DEVICE" "mkdir -p $REMOTE_ROOT"
+    echo "Copying whole build directory to iPhone..."
+    scp -r -o BatchMode=yes "$BUILD_DIR" "$TARGET_DEVICE:$REMOTE_ROOT/"
+    INSTALL_PATH="$REMOTE_BUILD_DIR/$(basename "$PACKAGE_PATH")"
+  else
+    INSTALL_PATH="$BUILD_DIR/$(basename "$PACKAGE_PATH")"
+  fi
   
-  echo "Preparing remote directory: $REMOTE_ROOT"
-  ssh -o BatchMode=yes "$TARGET_DEVICE" "mkdir -p $REMOTE_ROOT"
-  
-  echo "Copying whole build directory to iPhone..."
-  scp -r -o BatchMode=yes "$BUILD_DIR" "$TARGET_DEVICE:$REMOTE_ROOT/"
-  
-  IPA_NAME=$(basename "$PACKAGE_PATH")
-  echo "Installing package: $IPA_NAME"
-  set +e
-  ssh -o BatchMode=yes "$TARGET_DEVICE" "ipainstaller $REMOTE_BUILD_DIR/$IPA_NAME"
-  set -e
-  
+  echo "Installing package: $(basename "$PACKAGE_PATH")"
+  if [ "$IS_REMOTE" = true ]; then
+    ssh -o BatchMode=yes "$TARGET_DEVICE" "ipainstaller $INSTALL_PATH"
+  else
+    ipainstaller "$INSTALL_PATH"
+  fi
   echo "Deployment complete!"
 
-  if [[ "$HAS_SYSLOG" == true ]]; then
-    echo ""
-    echo "***************************************************"
-    echo "  PLEASE OPEN THE APP ON YOUR IPHONE NOW"
-    echo "  Tailing /var/log/syslog (Press Ctrl+C to stop)..."
-    echo "***************************************************"
-    echo ""
-    ssh "$TARGET_DEVICE" "tail -f /var/log/syslog"
-  fi
-
 elif [[ "$DEVICE_TYPE" == "mac" ]]; then
-  REMOTE_ROOT="~/Desktop/Altivec"
-  # The scp -r command will put the build folder INSIDE REMOTE_ROOT
-  REMOTE_BUILD_DIR="$REMOTE_ROOT/$BUILD_DIR_NAME"
+  if [ "$IS_REMOTE" = true ]; then
+    REMOTE_ROOT="~/Desktop/Altivec"
+    REMOTE_BUILD_DIR="$REMOTE_ROOT/$BUILD_DIR_NAME"
+    echo "Preparing remote directory: $REMOTE_ROOT"
+    ssh -o BatchMode=yes "$TARGET_DEVICE" "mkdir -p $REMOTE_ROOT"
+    echo "Copying whole build directory to Mac..."
+    scp -r -o BatchMode=yes "$BUILD_DIR" "$TARGET_DEVICE:$REMOTE_ROOT/"
+    
+    # Copy gdbinit if it exists
+    if [ -f "altivec_build/gdbinit" ]; then
+      echo "Uploading gdbinit..."
+      scp -o BatchMode=yes "altivec_build/gdbinit" "$TARGET_DEVICE:$REMOTE_ROOT/gdbinit"
+    fi
+    
+    APP_PATH="$REMOTE_BUILD_DIR/$(basename "$PACKAGE_PATH")"
+  else
+    APP_PATH="$(pwd)/$BUILD_DIR/$(basename "$PACKAGE_PATH")"
+  fi
   
-  echo "Preparing remote directory: $REMOTE_ROOT"
-  ssh -o BatchMode=yes "$TARGET_DEVICE" "mkdir -p $REMOTE_ROOT"
-  
-  echo "Copying whole build directory to Mac..."
-  scp -r -o BatchMode=yes "$BUILD_DIR" "$TARGET_DEVICE:$REMOTE_ROOT/"
-  
-  APP_NAME=$(basename "$PACKAGE_PATH")
-  EXECUTABLE_NAME=$(echo "$APP_NAME" | sed 's/\.app$//')
-  REMOTE_BIN="$REMOTE_BUILD_DIR/$APP_NAME/Contents/MacOS/$EXECUTABLE_NAME"
+  EXECUTABLE_NAME=$(echo "$(basename "$PACKAGE_PATH")" | sed 's/\.app$//')
+  BIN_PATH="$APP_PATH/Contents/MacOS/$EXECUTABLE_NAME"
 
   echo "Deployment complete!"
   echo ""
 
+  DEBUG_CMD=""
   if [[ "$HAS_LLDB" == true ]]; then
-    echo "***************************************************"
-    echo "  LAUNCHING LLDB"
-    echo "  - Type 'run' to start the application."
-    echo "  - Press Ctrl+C to pause/interrupt."
-    echo "  - Type 'kill' to stop the process."
-    echo "  - Type 'quit' to exit the debugger."
-    echo ""
-    echo "  NOTICE: Remote files will be deleted upon exit."
-    echo "***************************************************"
-    echo ""
-    ssh -t "$TARGET_DEVICE" "lldb $REMOTE_BIN"
+    DEBUG_CMD="lldb $BIN_PATH"
+    DEBUG_NAME="LLDB"
   elif [[ "$HAS_GDB" == true ]]; then
+    if [ "$IS_REMOTE" = true ]; then
+      DEBUG_CMD="gdb -x $REMOTE_ROOT/gdbinit $BIN_PATH"
+    else
+      # Check for local gdbinit
+      if [ -f "altivec_build/gdbinit" ]; then
+        DEBUG_CMD="gdb -x altivec_build/gdbinit $BIN_PATH"
+      else
+        DEBUG_CMD="gdb $BIN_PATH"
+      fi
+    fi
+    DEBUG_NAME="GDB"
+  fi
+
+  if [ -n "$DEBUG_CMD" ]; then
     echo "***************************************************"
-    echo "  LAUNCHING GDB"
+    echo "  LAUNCHING $DEBUG_NAME"
     echo "  - Type 'run' to start the application."
     echo "  - Press Ctrl+C to pause/interrupt."
     echo "  - Type 'kill' to stop the process."
     echo "  - Type 'quit' to exit the debugger."
-    echo ""
-    echo "  NOTICE: Remote files will be deleted upon exit."
+    if [ "$IS_REMOTE" = true ]; then
+      echo ""
+      echo "  NOTICE: Remote files will be deleted upon exit."
+    fi
     echo "***************************************************"
     echo ""
-    ssh -t "$TARGET_DEVICE" "gdb $REMOTE_BIN"
+    if [ "$IS_REMOTE" = true ]; then
+      ssh -t "$TARGET_DEVICE" "$DEBUG_CMD"
+    else
+      $DEBUG_CMD
+    fi
   else
     echo "***************************************************"
     echo "  PLEASE OPEN THE APP ON YOUR MAC NOW"
-    echo "  Tailing /var/log/system.log (Press Ctrl+C to stop)..."
-    echo ""
-    echo "  NOTICE: Remote files will be deleted upon exit."
-    echo "***************************************************"
-    echo ""
-    ssh "$TARGET_DEVICE" "tail -f /var/log/system.log"
+    if [ "$IS_REMOTE" = true ]; then
+      echo "  Tailing /var/log/system.log (Press Ctrl+C to stop)..."
+      echo "  NOTICE: Remote files will be deleted upon exit."
+      echo "***************************************************"
+      echo ""
+      ssh "$TARGET_DEVICE" "tail -f /var/log/system.log"
+    else
+      echo "***************************************************"
+    fi
   fi
 
-  echo ""
-  echo "Cleaning up remote Altivec folder..."
-  ssh -o BatchMode=yes "$TARGET_DEVICE" "rm -rf $REMOTE_ROOT"
-  echo "Mac cleanup complete."
+  if [ "$IS_REMOTE" = true ]; then
+    echo ""
+    echo "Cleaning up remote Altivec folder..."
+    ssh -o BatchMode=yes "$TARGET_DEVICE" "rm -rf $REMOTE_ROOT"
+    echo "Mac cleanup complete."
+  fi
 fi
