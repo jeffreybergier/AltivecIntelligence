@@ -94,6 +94,13 @@ Logs must use a 1-space indentation increment and the `>` symbol for details:
 
 - **Location:** Produced in the root of the build folder (e.g., `SingleWindow.X64.dSYM`).
 
+## 🖼 Nibless NSWindowController Pattern
+When creating an `NSWindowController` programmatically without a NIB/XIB file, follow the "Lapcat Pattern" to ensure proper lifecycle and Window Server stability:
+1. **Initializer**: Use `[super initWithWindowNibName:@"ignored"]`. Even though we aren't using a NIB, AppKit requires a non-nil string to avoid internal assertion failures.
+2. **loadWindow**: Override `loadWindow` but **DO NOT** call `[super loadWindow]`. Manually create the `NSWindow` with `defer:NO`.
+3. **setWindow**: At the end of `loadWindow`, call `[self setWindow:window]`. This will automatically trigger `windowDidLoad`.
+4. **Memory Management**: Ensure `[window setReleasedWhenClosed:NO]` is set so the controller can safely manage the window's lifecycle.
+
 ## Google's Objective-C style guide from April 18th, 2009
 
 Original:
