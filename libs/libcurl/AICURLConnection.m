@@ -12,58 +12,71 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
   return realsize;
 }
 
-#pragma mark - AIHTTPURLResponse (Internal Helper)
+#pragma mark - NSHTTPURLResponse (CrossPlatform)
 
-// This class allows us to return an NSHTTPURLResponse on Leopard (10.5) 
-// which doesn't have a public initializer for it.
-@interface AIHTTPURLResponse : NSHTTPURLResponse {
-    NSInteger _aiStatusCode;
-    NSDictionary *_aiHeaderFields;
-}
-- (id)initWithURL:(NSURL *)url statusCode:(NSInteger)statusCode headerFields:(NSDictionary *)headerFields;
-- (NSInteger)statusCode;
-- (NSDictionary *)allHeaderFields;
-@end
+@implementation NSHTTPURLResponse (CrossPlatform)
 
-@implementation AIHTTPURLResponse
-- (id)initWithURL:(NSURL *)url statusCode:(NSInteger)statusCode headerFields:(NSDictionary *)headerFields {
-    // Note: Leopard's NSHTTPURLResponse might not like -init.
-    // We call the base NSURLResponse initializer.
-    self = [super initWithURL:url MIMEType:nil expectedContentLength:-1 textEncodingName:nil];
-    if (self) {
-        _aiStatusCode = statusCode;
-        _aiHeaderFields = [headerFields retain];
+- (id)XP_initWithURL:(NSURL *)url
+          statusCode:(NSInteger)statusCode
+         HTTPVersion:(NSString *)HTTPVersion
+        headerFields:(NSDictionary *)headerFields;
+{
+    // 1. Check for modern 10.7+ API
+    SEL modernSelector = @selector(initWithURL:statusCode:HTTPVersion:headerFields:);
+    if ([NSHTTPURLResponse instancesRespondToSelector:modernSelector]) {
+        NSLog(@"[NSHTTPURLResponse XP_initWithURL:] Using modern 10.7+ initializer.");
+        return [self initWithURL:url
+                      statusCode:statusCode
+                     HTTPVersion:HTTPVersion
+                    headerFields:headerFields];
     }
-    return self;
+    
+    // 2. Check for legacy private API used in 10.4/10.5
+    // - (id)_initWithURL:(id)arg1 statusCode:(int)arg2 headerFields:(id)arg3 mapping:(id)arg4
+    SEL legacySelector = NSSelectorFromString(@"_initWithURL:statusCode:headerFields:mapping:");
+    if ([NSHTTPURLResponse instancesRespondToSelector:legacySelector]) {
+        NSLog(@"[NSHTTPURLResponse XP_initWithURL:] Using legacy private 10.4/10.5 initializer.");
+        return [self performSelector:legacySelector
+                          withObject:url
+                          withObject:(id)statusCode
+                          withObject:headerFields
+                          withObject:nil];
+    }
+    
+    // 3. Absolute fallback to base NSURLResponse if all else fails (Better than a crash)
+    NSLog(@"[NSHTTPURLResponse XP_initWithURL:] WARNING: Falling back to base NSURLResponse initializer.");
+    return (id)[self initWithURL:url
+                        MIMEType:nil
+           expectedContentLength:-1
+                textEncodingName:nil];
 }
-- (void)dealloc {
-    [_aiHeaderFields release];
-    [super dealloc];
-}
-- (NSInteger)statusCode { return _aiStatusCode; }
-- (NSDictionary *)allHeaderFields { return _aiHeaderFields; }
+
 @end
 
 @implementation AICURLConnection
 
 #pragma mark - Class Properties
 
-+ (NSString *)zlibVersion {
++ (NSString *)zlibVersion;
+{
     const char *ver = zlibVersion();
     return [NSString stringWithUTF8String:ver];
 }
 
-+ (NSString *)sslVersion {
++ (NSString *)sslVersion;
+{
     const char *ver = OpenSSL_version(OPENSSL_VERSION);
     return [NSString stringWithUTF8String:ver];
 }
 
-+ (NSString *)curlVersion {
++ (NSString *)curlVersion;
+{
     const char *ver = curl_version();
     return [NSString stringWithUTF8String:ver];
 }
 
-+ (NSString *)cryptoVersion {
++ (NSString *)cryptoVersion;
+{
     const char *ver = OpenSSL_version(OPENSSL_VERSION);
     return [NSString stringWithUTF8String:ver];
 }
@@ -80,7 +93,8 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
 
 #pragma mark - Initializers
 
-+ (void)initialize {
++ (void)initialize;
+{
   if (self == [AICURLConnection class]) {
     // Check that ca certificates file can be found
     [self certPath];
@@ -89,15 +103,21 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
   }
 }
 
-- (id)init {
+- (id)init;
+{
   return [self initWithRequest:nil delegate:nil startImmediately:YES];
 }
 
-- (id)initWithRequest:(NSURLRequest *)request delegate:(id)delegate {
+- (id)initWithRequest:(NSURLRequest *)request
+             delegate:(id)delegate;
+{
   return [self initWithRequest:request delegate:delegate startImmediately:YES];
 }
 
-- (id)initWithRequest:(NSURLRequest *)request delegate:(id)delegate startImmediately:(BOOL)startImmediately {
+- (id)initWithRequest:(NSURLRequest *)request
+             delegate:(id)delegate
+     startImmediately:(BOOL)startImmediately;
+{
   self = [super init];
   if (self) {
     _request = [request retain];
@@ -114,7 +134,8 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
   return self;
 }
 
-- (void)dealloc {
+- (void)dealloc;
+{
   [_request release];
   [_delegate release];
   if (_curl) {
@@ -126,7 +147,10 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
 
 #pragma mark - Shared Request
 
-+ (NSData *)sendSynchronousRequest:(NSURLRequest *)request returningResponse:(NSURLResponse **)response error:(NSError **)error {
++ (NSData *)sendSynchronousRequest:(NSURLRequest *)request
+                 returningResponse:(NSURLResponse **)response
+                             error:(NSError **)error;
+{
   CURL *curl = curl_easy_init();
   if (!curl) {
     if (error) {
@@ -165,11 +189,12 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
     long responseCode;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
     
-    // We use our helper to return an NSHTTPURLResponse-compatible object
-    // that works on Leopard (10.5).
-    *response = [[[AIHTTPURLResponse alloc] initWithURL:[request URL]
-                                              statusCode:responseCode
-                                            headerFields:nil] autorelease];
+    // We use our category to return an NSHTTPURLResponse-compatible object
+    // that works on all versions (Tiger through modern).
+    *response = [[[NSHTTPURLResponse alloc] XP_initWithURL:[request URL]
+                                                statusCode:responseCode
+                                               HTTPVersion:@"HTTP/1.1"
+                                              headerFields:nil] autorelease];
   }
 
   curl_easy_cleanup(curl);
