@@ -54,4 +54,11 @@
 - (void)XP_setAutorecalculatesContentBorderThickness:(BOOL)flag forEdge:(NSRectEdge)edge;
 @end
 
+/* Cross-Version Text Alignment Macros */
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
+  #define XPTextAlignmentCenter           NSTextAlignmentCenter
+#else
+  #define XPTextAlignmentCenter           NSCenterTextAlignment
+#endif
+
 #endif /* CROSS_PLATFORM_H */

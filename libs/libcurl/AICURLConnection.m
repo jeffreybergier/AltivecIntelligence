@@ -9,14 +9,19 @@
 
 - (id)initWithURL:(NSURL *)url
        statusCode:(NSInteger)statusCode
-     headerFields:(NSDictionary *)headerFields;
+     headerFields:(NSDictionary *)headerFields
+expectedContentLength:(long long)expectedContentLength;
 {
+  NSString *mimeType = [headerFields objectForKey:@"Content-Type"];
+  
+  // We call the base NSURLResponse initializer to stay safe on Tiger.
   if ((self = [super initWithURL:url 
-                        MIMEType:nil 
-           expectedContentLength:-1 
+                        MIMEType:mimeType 
+           expectedContentLength:(NSInteger)expectedContentLength 
                 textEncodingName:nil])) {
     statusCode_ = statusCode;
     headerFields_ = [headerFields retain];
+    expectedContentLength_ = expectedContentLength;
   }
   return self;
 }
@@ -42,6 +47,11 @@
   return headerFields_;
 }
 
+- (long long)expectedContentLength;
+{
+  return expectedContentLength_;
+}
+
 @end
 
 #pragma mark - CURL Callbacks (Internal)
@@ -62,7 +72,6 @@ static size_t AIWriteCallback(void *contents,
                               void *userp) {
   size_t realsize = size * nmemb;
   AICURLConnection *connection = (AICURLConnection *)userp;
-  
   NSData *data = [NSData dataWithBytes:contents length:realsize];
   
   [connection performSelectorOnMainThread:@selector(__didReceiveData:) 
@@ -172,6 +181,7 @@ static size_t AIHeaderCallback(void *contents,
     delegate_ = [delegate retain];
     responseHeaders_ = [[NSMutableDictionary alloc] init];
     curl_ = curl_easy_init();
+    totalExpectedLength_ = -1;
     
     if (!curl_) {
       [self release];
@@ -267,7 +277,8 @@ static size_t AIHeaderCallback(void *contents,
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
     *response = [[[AIHTTPURLResponse alloc] initWithURL:[request URL]
                                              statusCode:responseCode
-                                           headerFields:nil] autorelease];
+                                           headerFields:nil
+                                  expectedContentLength:-1] autorelease];
   }
 
   curl_easy_cleanup(curl);
@@ -312,9 +323,6 @@ static size_t AIHeaderCallback(void *contents,
     }
   }
   
-  // To prevent the "autoreleased with no pool" error on Leopard, 
-  // we must ensure that our final release happens WITHIN the pool's 
-  // lifetime if we are doing a direct release of 'self'.
   [self autorelease];
   [pool release];
 }
@@ -326,7 +334,8 @@ static size_t AIHeaderCallback(void *contents,
     int code = [[headerLine substringWithRange:NSMakeRange(9, 3)] intValue];
     pendingResponse_ = [[AIHTTPURLResponse alloc] initWithURL:[request_ URL] 
                                                    statusCode:code 
-                                                 headerFields:nil];
+                                                 headerFields:nil
+                                        expectedContentLength:-1];
     return;
   }
   
@@ -334,7 +343,8 @@ static size_t AIHeaderCallback(void *contents,
     if (pendingResponse_ && [delegate_ respondsToSelector:@selector(connection:didReceiveResponse:)]) {
       AIHTTPURLResponse *finalResp = [[[AIHTTPURLResponse alloc] initWithURL:[pendingResponse_ URL] 
                                                                   statusCode:[pendingResponse_ statusCode] 
-                                                                headerFields:responseHeaders_] autorelease];
+                                                                headerFields:responseHeaders_
+                                                       expectedContentLength:totalExpectedLength_] autorelease];
       [delegate_ connection:(id)self didReceiveResponse:finalResp];
       [pendingResponse_ release];
       pendingResponse_ = nil;
@@ -348,6 +358,11 @@ static size_t AIHeaderCallback(void *contents,
     NSString *value = [headerLine substringFromIndex:colonRange.location + 1];
     key = [key stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     value = [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    
+    if ([[key lowercaseString] isEqualToString:@"content-length"]) {
+      totalExpectedLength_ = atoll([value UTF8String]);
+    }
+    
     [responseHeaders_ setObject:value forKey:key];
   }
 }
