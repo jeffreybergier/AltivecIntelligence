@@ -5,7 +5,10 @@
 #import <zlib.h>
 
 
-static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+static size_t AIWriteCallback(void *contents, 
+                              size_t size, 
+                              size_t nmemb, 
+                              void *userp) {
   size_t realsize = size * nmemb;
   NSMutableData *data = (NSMutableData *)userp;
   [data appendBytes:contents length:realsize];
@@ -32,7 +35,6 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
     }
     
     // 2. Check for legacy private API used in 10.4/10.5
-    // - (id)_initWithURL:(id)arg1 statusCode:(int)arg2 headerFields:(id)arg3 mapping:(id)arg4
     SEL legacySelector = NSSelectorFromString(@"_initWithURL:statusCode:headerFields:mapping:");
     if ([NSHTTPURLResponse instancesRespondToSelector:legacySelector]) {
         NSLog(@"[NSHTTPURLResponse XP_initWithURL:] Using legacy private 10.4/10.5 initializer.");
@@ -43,8 +45,8 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
                           withObject:nil];
     }
     
-    // 3. Absolute fallback to base NSURLResponse if all else fails (Better than a crash)
-    NSLog(@"[NSHTTPURLResponse XP_initWithURL:] WARNING: Falling back to base NSURLResponse initializer.");
+    // 3. Absolute fallback to base NSURLResponse if all else fails
+    NSLog(@"[NSHTTPURLResponse XP_initWithURL:] WARNING: Falling back to base NSURLResponse.");
     return (id)[self initWithURL:url
                         MIMEType:nil
            expectedContentLength:-1
@@ -89,7 +91,7 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
 }
 
 #pragma mark - Properties
-// None yet
+// None (Manual MRC Accessors for 10.4 compatibility)
 
 #pragma mark - Initializers
 
@@ -118,29 +120,27 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
              delegate:(id)delegate
      startImmediately:(BOOL)startImmediately;
 {
-  self = [super init];
-  if (self) {
-    _request = [request retain];
-    _delegate = [delegate retain];
-    _curl = curl_easy_init();
-    if (!_curl) {
+  if ((self = [super init])) {
+    request_ = [request retain];
+    delegate_ = [delegate retain];
+    curl_ = curl_easy_init();
+    if (!curl_) {
       [self release];
       return nil;
     }
-    [self __newCURLHandle:_curl];
-    NSLog(@"[AICURLConnection initWithRequest:delegate:startImmediately:] initialized with request: %@", request);
-    // TODO: Handle startImmediately
+    [self __newCURLHandle:curl_];
+    NSLog(@"[AICURLConnection initWithRequest:...] initialized with request: %@", request);
   }
   return self;
 }
 
 - (void)dealloc;
 {
-  [_request release];
-  [_delegate release];
-  if (_curl) {
-    [self __releaseCURLHandle:_curl];
-    _curl = NULL;
+  [request_ release];
+  [delegate_ release];
+  if (curl_) {
+    [self __releaseCURLHandle:curl_];
+    curl_ = NULL;
   }
   [super dealloc];
 }
@@ -154,7 +154,9 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
   CURL *curl = curl_easy_init();
   if (!curl) {
     if (error) {
-      *error = [NSError errorWithDomain:@"AICURLConnectionErrorDomain" code:0 userInfo:nil];
+      *error = [NSError errorWithDomain:@"AICURLConnectionErrorDomain" 
+                                   code:0 
+                               userInfo:nil];
     }
     return nil;
   }
@@ -162,7 +164,7 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
   // Setup basic options
   curl_easy_setopt(curl, CURLOPT_URL, [[[request URL] absoluteString] UTF8String]);
   
-  // CA Certs (we have our helper for this)
+  // CA Certs
   NSString *certPath = [self certPath];
   curl_easy_setopt(curl, CURLOPT_CAINFO, [certPath UTF8String]);
 
@@ -177,20 +179,21 @@ static size_t AIWriteCallback(void *contents, size_t size, size_t nmemb, void *u
   if (res != CURLE_OK) {
     if (error) {
       NSString *errorMsg = [NSString stringWithUTF8String:curl_easy_strerror(res)];
-      NSDictionary *userInfo = [NSDictionary dictionaryWithObject:errorMsg forKey:NSLocalizedDescriptionKey];
-      *error = [NSError errorWithDomain:@"AICURLConnectionErrorDomain" code:res userInfo:userInfo];
+      NSDictionary *userInfo = [NSDictionary dictionaryWithObject:errorMsg 
+                                                           forKey:NSLocalizedDescriptionKey];
+      *error = [NSError errorWithDomain:@"AICURLConnectionErrorDomain" 
+                                   code:res 
+                               userInfo:userInfo];
     }
     curl_easy_cleanup(curl);
     return nil;
   }
 
-  // Handle Response (Basic for now)
+  // Handle Response
   if (response) {
     long responseCode;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
     
-    // We use our category to return an NSHTTPURLResponse-compatible object
-    // that works on all versions (Tiger through modern).
     *response = [[[NSHTTPURLResponse alloc] XP_initWithURL:[request URL]
                                                 statusCode:responseCode
                                                HTTPVersion:@"HTTP/1.1"
