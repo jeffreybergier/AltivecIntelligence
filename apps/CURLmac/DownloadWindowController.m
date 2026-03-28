@@ -2,10 +2,10 @@
 #import "CrossPlatform.h"
 #import <AICURLConnection.h>
 #import "DownloadView.h"
+#import "KeyValueTableView.h"
 
 @interface DownloadWindowController (Private)
 - (void)setupUI;
-- (NSBox *)versionBoxWithTitle:(NSString *)title version:(NSString *)version yOffset:(CGFloat)yOffset;
 - (void)downloadButtonClicked:(id)sender;
 @end
 
@@ -41,7 +41,7 @@
   
   // --- Tab 0: CURL ---
   NSTabViewItem *curlItem = [[NSTabViewItem alloc] initWithIdentifier:@"CURL"];
-  [curlItem setLabel:@"CURL"];
+  [curlItem setLabel:@"AICURLConnection"];
   _curlView = [[DownloadView alloc] initWithFrame:[tabView contentRect]];
   [_curlView setIdentifier:@"CURL"];
   [curlItem setView:_curlView];
@@ -50,7 +50,7 @@
   
   // --- Tab 1: System ---
   NSTabViewItem *systemItem = [[NSTabViewItem alloc] initWithIdentifier:@"System"];
-  [systemItem setLabel:@"System"];
+  [systemItem setLabel:@"NSURLConnection"];
   _systemView = [[DownloadView alloc] initWithFrame:[tabView contentRect]];
   [_systemView setIdentifier:@"System"];
   [systemItem setView:_systemView];
@@ -59,23 +59,16 @@
   
   // --- Tab 2: Info ---
   NSTabViewItem *infoItem = [[NSTabViewItem alloc] initWithIdentifier:@"Info"];
-  [infoItem setLabel:@"Info"];
-  NSRect infoFrame = [tabView contentRect];
-  NSView *infoView = [[NSView alloc] initWithFrame:infoFrame];
-  [infoView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+  [infoItem setLabel:@"Libraries"];
   
-  CGFloat boxHeight = 60;
-  CGFloat padding = 8;
-  // Start from the top: height - padding - boxHeight
-  CGFloat currentY = infoFrame.size.height - padding - boxHeight;
-  
-  [infoView addSubview:[self versionBoxWithTitle:@"libz" version:[AICURLConnection zlibVersion] yOffset:currentY]];
-  currentY -= (boxHeight + padding);
-  [infoView addSubview:[self versionBoxWithTitle:@"libssl" version:[AICURLConnection sslVersion] yOffset:currentY]];
-  currentY -= (boxHeight + padding);
-  [infoView addSubview:[self versionBoxWithTitle:@"libcurl" version:[AICURLConnection curlVersion] yOffset:currentY]];
-  currentY -= (boxHeight + padding);
-  [infoView addSubview:[self versionBoxWithTitle:@"libcrypto" version:[AICURLConnection cryptoVersion] yOffset:currentY]];
+  KeyValueTableView *infoView = [[KeyValueTableView alloc] initWithFrame:[tabView contentRect]];
+  NSDictionary *versions = [NSDictionary dictionaryWithObjectsAndKeys:
+    [AICURLConnection zlibVersion], @"libz",
+    [AICURLConnection sslVersion], @"libssl",
+    [AICURLConnection curlVersion], @"libcurl",
+    [AICURLConnection cryptoVersion], @"libcrypto",
+    nil];
+  [infoView setData:versions];
   
   [infoItem setView:infoView];
   [tabView addTabViewItem:infoItem];
@@ -84,27 +77,6 @@
   
   [contentView addSubview:tabView];
   [tabView release];
-}
-
-- (NSBox *)versionBoxWithTitle:(NSString *)title version:(NSString *)version yOffset:(CGFloat)yOffset {
-  // NSViewMinYMargin keeps the box top-aligned
-  NSBox *box = [[NSBox alloc] initWithFrame:NSMakeRect(8, yOffset, 424, 60)];
-  [box setTitle:title];
-  [box setAutoresizingMask:NSViewWidthSizable | NSViewMinYMargin];
-  
-  // Lower the label (y=4) to move it further from the title
-  NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(10, 4, 400, 24)];
-  [label setStringValue:version];
-  [label setBezeled:NO];
-  [label setDrawsBackground:NO];
-  [label setEditable:NO];
-  [label setSelectable:YES];
-  [label setAutoresizingMask:NSViewWidthSizable];
-  
-  [[box contentView] addSubview:label];
-  [label release];
-  
-  return [box autorelease];
 }
 
 - (void)downloadButtonClicked:(id)sender {
