@@ -37,7 +37,18 @@
     [downloadButton_ setAction:@selector(downloadButtonClicked:)];
     [self addSubview:downloadButton_];
 
-    // 3. Status Label & Progress (Overlapping at bottom)
+    // 3. Progress Indicator: At bottom (Permanent background)
+    progressIndicator_ = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(padding, 
+                                                                               4, 
+                                                                               width - (padding * 2), 
+                                                                               16)];
+    [progressIndicator_ setStyle:XPProgressIndicatorStyleBar];
+    [progressIndicator_ setIndeterminate:YES];
+    [progressIndicator_ setDisplayedWhenStopped:YES]; // Always visible
+    [progressIndicator_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+    [self addSubview:progressIndicator_];
+
+    // 4. Status Label: On top of progress bar
     statusLabel_ = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 
                                                                  4, 
                                                                  width - (padding * 2), 
@@ -46,20 +57,10 @@
     [statusLabel_ setBezeled:NO];
     [statusLabel_ setDrawsBackground:NO];
     [statusLabel_ setEditable:NO];
-    [statusLabel_ setSelectable:YES];
+    [statusLabel_ setSelectable:NO];
     [statusLabel_ setFont:[NSFont systemFontOfSize:11]];
     [statusLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
     [self addSubview:statusLabel_];
-
-    progressIndicator_ = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(padding, 
-                                                                               4, 
-                                                                               width - (padding * 2), 
-                                                                               16)];
-    [progressIndicator_ setStyle:XPProgressIndicatorStyleBar];
-    [progressIndicator_ setIndeterminate:YES];
-    [progressIndicator_ setDisplayedWhenStopped:NO];
-    [progressIndicator_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
-    [self addSubview:progressIndicator_];
 
     // 4. Image View (Well): Centerpiece
     imageView_ = [[NSImageView alloc] initWithFrame:NSMakeRect(padding, 

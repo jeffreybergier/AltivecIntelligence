@@ -44,7 +44,6 @@
 
   [[view_ downloadButton] setEnabled:NO];
   [[view_ progressIndicator] startAnimation:nil];
-  [self updateStatus:@""]; 
   [[view_ imageView] setImage:nil];
 
   [receivedData_ release];
@@ -76,6 +75,16 @@
     [self updateStatus:[NSString stringWithFormat:@"Response: %ld (%@)", 
                         (long)code, msg]];
     
+    // Setup progress indicator if length is known
+    long long length = [response expectedContentLength];
+    if (length > 0) {
+      [[view_ progressIndicator] setIndeterminate:NO];
+      [[view_ progressIndicator] setMaxValue:(double)length];
+      [[view_ progressIndicator] setDoubleValue:0.0];
+    } else {
+      [[view_ progressIndicator] setIndeterminate:YES];
+    }
+
     if (code < 200 || code > 299) {
       [connection cancel];
       [self connection:connection didFailWithError:
@@ -89,6 +98,11 @@
 - (void)connection:(id)connection didReceiveData:(NSData *)data;
 {
   [receivedData_ appendData:data];
+  
+  if (![[view_ progressIndicator] isIndeterminate]) {
+    [[view_ progressIndicator] incrementBy:(double)[data length]];
+  }
+  
   [self updateStatus:[NSString stringWithFormat:@"Receiving: %lu bytes...", 
                       (unsigned long)[receivedData_ length]]];
 }

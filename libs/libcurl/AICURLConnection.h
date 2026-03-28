@@ -2,20 +2,24 @@
 
 // A subclass of NSHTTPURLResponse that provides a reliable way to 
 // initialize and store HTTP metadata on legacy systems like Tiger (10.4).
+// Matches the standard NSURLResponse and NSHTTPURLResponse APIs.
 @interface AIHTTPURLResponse : NSHTTPURLResponse {
  @private
   NSInteger statusCode_;
   NSDictionary *headerFields_;
+  long long expectedContentLength_;
 }
 
 - (id)initWithURL:(NSURL *)url
        statusCode:(NSInteger)statusCode
-     headerFields:(NSDictionary *)headerFields;
+     headerFields:(NSDictionary *)headerFields
+expectedContentLength:(long long)expectedContentLength;
 
 + (NSString *)localizedStringForStatusCode:(NSInteger)statusCode;
 
 - (NSInteger)statusCode;
 - (NSDictionary *)allHeaderFields;
+- (long long)expectedContentLength;
 
 @end
 
@@ -35,6 +39,7 @@
   // Header Accumulation
   NSMutableDictionary *responseHeaders_;
   AIHTTPURLResponse *pendingResponse_;
+  long long totalExpectedLength_;
 }
 
 #pragma mark - Class Properties
