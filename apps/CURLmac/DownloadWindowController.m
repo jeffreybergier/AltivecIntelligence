@@ -60,6 +60,7 @@
   curlManager_ = [[DownloadManager alloc] initWithView:curlView_ 
                                        connectionClass:[AICURLConnection class]];
   [curlView_ setManager:curlManager_];
+  [curlManager_ setNextResponder:self];
   
   [curlItem setView:curlView_];
   [tabView addTabViewItem:curlItem];
@@ -75,6 +76,7 @@
   systemManager_ = [[DownloadManager alloc] initWithView:systemView_ 
                                           connectionClass:[NSURLConnection class]];
   [systemView_ setManager:systemManager_];
+  [systemManager_ setNextResponder:self];
   
   [systemItem setView:systemView_];
   [tabView addTabViewItem:systemItem];
@@ -98,6 +100,18 @@
   
   [contentView addSubview:tabView];
   [tabView release];
+}
+
+#pragma mark - Error Handling
+
+- (BOOL)presentError:(NSError *)error;
+{
+  [self presentError:error 
+      modalForWindow:[self window] 
+            delegate:nil 
+  didPresentSelector:NULL 
+         contextInfo:NULL];
+  return YES;
 }
 
 - (void)dealloc;

@@ -62,6 +62,7 @@ static size_t AIWriteCallback(void *contents,
                               void *userp) {
   size_t realsize = size * nmemb;
   AICURLConnection *connection = (AICURLConnection *)userp;
+  
   NSData *data = [NSData dataWithBytes:contents length:realsize];
   
   [connection performSelectorOnMainThread:@selector(__didReceiveData:) 
@@ -208,9 +209,8 @@ static size_t AIHeaderCallback(void *contents,
                 format:@"[AICURLConnection start] Cannot start an asynchronous "
                        @"request without a delegate."];
   }
-  if (cancelled_) return;
+  if (thread_ || cancelled_) return;
   
-  // Use Tiger-compatible thread creation (10.0+)
   [self retain];
   [NSThread detachNewThreadSelector:@selector(__workerThread:) 
                            toTarget:self 
@@ -312,14 +312,15 @@ static size_t AIHeaderCallback(void *contents,
     }
   }
   
-  [pool release];
-  // Match the retain in -start
+  // To prevent the "autoreleased with no pool" error on Leopard, 
+  // we must ensure that our final release happens WITHIN the pool's 
+  // lifetime if we are doing a direct release of 'self'.
   [self autorelease];
+  [pool release];
 }
 
 - (void)__didReceiveHeaderLine:(NSString *)headerLine;
 {
-  // 1. Status Line (e.g. HTTP/1.1 200 OK)
   if ([headerLine length] >= 12 && 
       ([headerLine hasPrefix:@"HTTP/1.1 "] || [headerLine hasPrefix:@"HTTP/1.0 "])) {
     int code = [[headerLine substringWithRange:NSMakeRange(9, 3)] intValue];
@@ -329,10 +330,8 @@ static size_t AIHeaderCallback(void *contents,
     return;
   }
   
-  // 2. Empty Line (End of Headers)
   if ([headerLine isEqualToString:@"\r\n"] || [headerLine isEqualToString:@"\n"]) {
     if (pendingResponse_ && [delegate_ respondsToSelector:@selector(connection:didReceiveResponse:)]) {
-      // Create final response with accumulated headers
       AIHTTPURLResponse *finalResp = [[[AIHTTPURLResponse alloc] initWithURL:[pendingResponse_ URL] 
                                                                   statusCode:[pendingResponse_ statusCode] 
                                                                 headerFields:responseHeaders_] autorelease];
@@ -343,16 +342,12 @@ static size_t AIHeaderCallback(void *contents,
     return;
   }
   
-  // 3. Header Fields (e.g. Content-Type: image/jpeg)
   NSRange colonRange = [headerLine rangeOfString:@":"];
   if (colonRange.location != NSNotFound) {
     NSString *key = [headerLine substringToIndex:colonRange.location];
     NSString *value = [headerLine substringFromIndex:colonRange.location + 1];
-    
-    // Trim whitespace
     key = [key stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     value = [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    
     [responseHeaders_ setObject:value forKey:key];
   }
 }
