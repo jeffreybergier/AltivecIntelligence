@@ -1,20 +1,17 @@
 #import <AppKit/AppKit.h>
 
 @class DownloadView;
+@class DownloadManager;
 
 // The main window controller for the CURLmac application.
-// Manages the tabbed interface and coordinates downloads between 
-// AICURLConnection and NSURLConnection.
-// Features a persistent window-level status bar at the bottom.
+// Manages the tabbed interface and coordinates downloads.
 @interface DownloadWindowController : NSWindowController {
  @private
   DownloadView *curlView_;
   DownloadView *systemView_;
   
-  NSTextField *statusLabel_;
-  NSProgressIndicator *progressIndicator_;
-  
-  NSMutableData *receivedData_;
+  DownloadManager *curlManager_;
+  DownloadManager *systemManager_;
 }
 
 @end

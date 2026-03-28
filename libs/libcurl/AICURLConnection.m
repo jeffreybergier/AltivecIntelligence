@@ -62,11 +62,8 @@ static size_t AIWriteCallback(void *contents,
                               void *userp) {
   size_t realsize = size * nmemb;
   AICURLConnection *connection = (AICURLConnection *)userp;
-  
-  // Create an autoreleased copy of the data
   NSData *data = [NSData dataWithBytes:contents length:realsize];
   
-  // Use Tiger-compatible main thread dispatch (10.2+)
   [connection performSelectorOnMainThread:@selector(__didReceiveData:) 
                                withObject:data 
                             waitUntilDone:NO];
@@ -104,6 +101,13 @@ static size_t AIHeaderCallback(void *contents,
 @implementation AICURLConnection
 
 #pragma mark - Class Properties
+
++ (AICURLConnection *)connectionWithRequest:(NSURLRequest *)request 
+                                   delegate:(id)delegate;
+{
+  return [[[AICURLConnection alloc] initWithRequest:request 
+                                           delegate:delegate] autorelease];
+}
 
 + (BOOL)canHandleRequest:(NSURLRequest *)request;
 {
@@ -165,6 +169,7 @@ static size_t AIHeaderCallback(void *contents,
   if ((self = [super init])) {
     request_ = [request retain];
     delegate_ = [delegate retain];
+    responseHeaders_ = [[NSMutableDictionary alloc] init];
     curl_ = curl_easy_init();
     
     if (!curl_) {
@@ -185,6 +190,8 @@ static size_t AIHeaderCallback(void *contents,
 {
   [request_ release];
   [delegate_ release];
+  [responseHeaders_ release];
+  [pendingResponse_ release];
   if (curl_) {
     [self __releaseCURLHandle:curl_];
     curl_ = NULL;
@@ -306,22 +313,47 @@ static size_t AIHeaderCallback(void *contents,
   }
   
   [pool release];
-  // Match the retain in -start. We use release here to ensure 
-  // cleanup happens exactly when the thread finishes.
-  [self release];
+  // Match the retain in -start
+  [self autorelease];
 }
 
 - (void)__didReceiveHeaderLine:(NSString *)headerLine;
 {
+  // 1. Status Line (e.g. HTTP/1.1 200 OK)
   if ([headerLine length] >= 12 && 
       ([headerLine hasPrefix:@"HTTP/1.1 "] || [headerLine hasPrefix:@"HTTP/1.0 "])) {
     int code = [[headerLine substringWithRange:NSMakeRange(9, 3)] intValue];
-    AIHTTPURLResponse *resp = [[[AIHTTPURLResponse alloc] initWithURL:[request_ URL] 
-                                                           statusCode:code 
-                                                         headerFields:nil] autorelease];
-    if ([delegate_ respondsToSelector:@selector(connection:didReceiveResponse:)]) {
-      [delegate_ connection:(id)self didReceiveResponse:resp];
+    pendingResponse_ = [[AIHTTPURLResponse alloc] initWithURL:[request_ URL] 
+                                                   statusCode:code 
+                                                 headerFields:nil];
+    return;
+  }
+  
+  // 2. Empty Line (End of Headers)
+  if ([headerLine isEqualToString:@"\r\n"] || [headerLine isEqualToString:@"\n"]) {
+    if (pendingResponse_ && [delegate_ respondsToSelector:@selector(connection:didReceiveResponse:)]) {
+      // Create final response with accumulated headers
+      AIHTTPURLResponse *finalResp = [[[AIHTTPURLResponse alloc] initWithURL:[pendingResponse_ URL] 
+                                                                  statusCode:[pendingResponse_ statusCode] 
+                                                                headerFields:responseHeaders_] autorelease];
+      [delegate_ connection:(id)self didReceiveResponse:finalResp];
+      [pendingResponse_ release];
+      pendingResponse_ = nil;
     }
+    return;
+  }
+  
+  // 3. Header Fields (e.g. Content-Type: image/jpeg)
+  NSRange colonRange = [headerLine rangeOfString:@":"];
+  if (colonRange.location != NSNotFound) {
+    NSString *key = [headerLine substringToIndex:colonRange.location];
+    NSString *value = [headerLine substringFromIndex:colonRange.location + 1];
+    
+    // Trim whitespace
+    key = [key stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    value = [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    
+    [responseHeaders_ setObject:value forKey:key];
   }
 }
 
@@ -355,7 +387,7 @@ static size_t AIHeaderCallback(void *contents,
 
 - (void)__releaseCURLHandle:(void *)handle;
 {
-  CURL *curl = (CURL *)handle;
+  CURL *curl = (id)handle;
   curl_easy_cleanup(curl);
 }
 
