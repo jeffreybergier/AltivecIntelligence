@@ -1,10 +1,12 @@
 #import "AppDelegate.h"
 #import "DownloadWindowController.h"
+#import "MainMenu.h"
 
 @implementation AppDelegate
 
 -(void)applicationDidFinishLaunching:(NSNotification*)aNotification;
 {
+  [MainMenu setupMenu];
   if (!_windowController) {
     _windowController = [[DownloadWindowController alloc] init];
   }
