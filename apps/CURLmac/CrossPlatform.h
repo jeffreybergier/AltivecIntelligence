@@ -37,4 +37,13 @@
   #define XPProgressIndicatorStyleBar     NSProgressIndicatorBarStyle
 #endif
 
+/* Cross-Version Event Modifier Macros */
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
+  #define XPEventModifierFlagCommand      NSEventModifierFlagCommand
+  #define XPEventModifierFlagOption       NSEventModifierFlagOption
+#else
+  #define XPEventModifierFlagCommand      NSCommandKeyMask
+  #define XPEventModifierFlagOption       NSAlternateKeyMask
+#endif
+
 #endif /* CROSS_PLATFORM_H */
