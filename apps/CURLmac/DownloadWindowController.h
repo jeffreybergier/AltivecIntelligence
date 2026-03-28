@@ -2,9 +2,13 @@
 
 @class DownloadView;
 
+// The main window controller for the CURLmac application.
+// Manages the tabbed interface and coordinates downloads between 
+// AICURLConnection and NSURLConnection.
 @interface DownloadWindowController : NSWindowController {
-    DownloadView *_curlView;
-    DownloadView *_systemView;
+ @private
+  DownloadView *curlView_;
+  DownloadView *systemView_;
 }
 
 @end

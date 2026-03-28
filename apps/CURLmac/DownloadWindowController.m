@@ -11,7 +11,8 @@
 
 @implementation DownloadWindowController
 
-- (id)init {
+- (id)init;
+{
   unsigned int mask = XPWindowStyleMaskTitled 
                     | XPWindowStyleMaskClosable 
                     | XPWindowStyleMaskMiniaturizable 
@@ -25,36 +26,39 @@
   [window setReleasedWhenClosed:NO];
   [window setMinSize:NSMakeSize(800, 600)];
   
-  self = [super initWithWindow:window];
-  if (self) {
+  if ((self = [super initWithWindow:window])) {
     [self setupUI];
   }
   [window release];
   return self;
 }
 
-- (void)setupUI {
+- (void)setupUI;
+{
   NSWindow *window = [self window];
   NSView *contentView = [window contentView];
   
-  NSTabView *tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(8, 8, 784, 584)];
+  NSTabView *tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(8, 
+                                                                   8, 
+                                                                   784, 
+                                                                   584)];
   [tabView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
   
   // --- Tab 0: CURL ---
   NSTabViewItem *curlItem = [[NSTabViewItem alloc] initWithIdentifier:@"CURL"];
   [curlItem setLabel:@"AICURLConnection"];
-  _curlView = [[DownloadView alloc] initWithFrame:[tabView contentRect]];
-  [_curlView setIdentifier:@"CURL"];
-  [curlItem setView:_curlView];
+  curlView_ = [[DownloadView alloc] initWithFrame:[tabView contentRect]];
+  [curlView_ setIdentifier:@"CURL"];
+  [curlItem setView:curlView_];
   [tabView addTabViewItem:curlItem];
   [curlItem release];
   
   // --- Tab 1: System ---
   NSTabViewItem *systemItem = [[NSTabViewItem alloc] initWithIdentifier:@"System"];
   [systemItem setLabel:@"NSURLConnection"];
-  _systemView = [[DownloadView alloc] initWithFrame:[tabView contentRect]];
-  [_systemView setIdentifier:@"System"];
-  [systemItem setView:_systemView];
+  systemView_ = [[DownloadView alloc] initWithFrame:[tabView contentRect]];
+  [systemView_ setIdentifier:@"System"];
+  [systemItem setView:systemView_];
   [tabView addTabViewItem:systemItem];
   [systemItem release];
   
@@ -80,7 +84,8 @@
   [tabView release];
 }
 
-- (void)downloadButtonClicked:(id)sender {
+- (void)downloadButtonClicked:(id)sender;
+{
   NSButton *button = (NSButton *)sender;
   DownloadView *view = (DownloadView *)[button superview];
   NSString *identifier = [view identifier];
@@ -105,16 +110,21 @@
   NSData *data = nil;
 
   if ([identifier isEqualToString:@"CURL"]) {
-    data = [AICURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
+    data = [AICURLConnection sendSynchronousRequest:request 
+                                  returningResponse:&response 
+                                              error:&error];
   } else if ([identifier isEqualToString:@"System"]) {
-    data = [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
+    data = [NSURLConnection sendSynchronousRequest:request 
+                                 returningResponse:&response 
+                                             error:&error];
   }
 
   [progress stopAnimation:nil];
   [button setEnabled:YES];
 
   if (error) {
-    [status setStringValue:[NSString stringWithFormat:@"Failed: %@", [error localizedDescription]]];
+    [status setStringValue:[NSString stringWithFormat:@"Failed: %@", 
+                            [error localizedDescription]]];
     // Present error as a sheet
     [self presentError:error 
         modalForWindow:[self window] 
@@ -129,9 +139,13 @@
     
     // Check for success status codes (200-299)
     if (statusCode < 200 || statusCode > 299) {
-      NSString *errorMsg = [NSString stringWithFormat:@"Server returned status code: %ld", (long)statusCode];
-      NSDictionary *userInfo = [NSDictionary dictionaryWithObject:errorMsg forKey:NSLocalizedDescriptionKey];
-      NSError *statusError = [NSError errorWithDomain:@"AICDownloadErrorDomain" code:statusCode userInfo:userInfo];
+      NSString *errorMsg = [NSString stringWithFormat:@"Server returned status code: %ld", 
+                            (long)statusCode];
+      NSDictionary *userInfo = [NSDictionary dictionaryWithObject:errorMsg 
+                                                           forKey:NSLocalizedDescriptionKey];
+      NSError *statusError = [NSError errorWithDomain:@"AICDownloadErrorDomain" 
+                                                 code:statusCode 
+                                             userInfo:userInfo];
       
       [status setStringValue:[NSString stringWithFormat:@"Failed: %ld", (long)statusCode]];
       [self presentError:statusError 
@@ -158,9 +172,10 @@
   }
 }
 
-- (void)dealloc {
-  [_curlView release];
-  [_systemView release];
+- (void)dealloc;
+{
+  [curlView_ release];
+  [systemView_ release];
   [super dealloc];
 }
 
