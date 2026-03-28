@@ -95,6 +95,7 @@
 
 - (void)connection:(id)connection didFailWithError:(NSError *)error;
 {
+  NSLog(@"[DownloadManager connection:didFailWithError:] error: %@", error);
   [[view_ progressIndicator] stopAnimation:nil];
   [[view_ downloadButton] setEnabled:YES];
   
@@ -107,6 +108,7 @@
 
 - (void)connectionDidFinishLoading:(id)connection;
 {
+  NSLog(@"[DownloadManager connectionDidFinishLoading:] success!");
   [[view_ progressIndicator] stopAnimation:nil];
   [[view_ downloadButton] setEnabled:YES];
   

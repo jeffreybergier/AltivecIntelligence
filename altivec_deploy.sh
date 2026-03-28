@@ -57,7 +57,7 @@ fi
 # 1. Connection & OS Info
 if [ "$IS_REMOTE" = true ]; then
   set +e
-  REMOTE_INFO=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$TARGET_DEVICE" "uname -sm; [ -d /var/mobile ] && echo 'iOS' || echo 'macOS'" 2>/dev/null)
+  REMOTE_INFO=$(ssh "$TARGET_DEVICE" "uname -sm; [ -d /var/mobile ] && echo 'iOS' || echo 'macOS'")
   SSH_EXIT_CODE=$?
   set -e
   
