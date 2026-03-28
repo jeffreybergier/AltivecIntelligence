@@ -3,6 +3,7 @@
 #import <openssl/opensslv.h>
 #import <openssl/crypto.h>
 #import <zlib.h>
+#import <objc/runtime.h>
 
 @implementation AIHTTPURLResponse
 
@@ -61,12 +62,14 @@ static size_t AIWriteCallback(void *contents,
                               void *userp) {
   size_t realsize = size * nmemb;
   AICURLConnection *connection = (AICURLConnection *)userp;
+  
+  // Create an autoreleased copy of the data
   NSData *data = [NSData dataWithBytes:contents length:realsize];
   
-  [connection performSelector:@selector(__didReceiveData:) 
-                     onThread:[connection __originThread] 
-                   withObject:data 
-                waitUntilDone:YES];
+  // Use Tiger-compatible main thread dispatch (10.2+)
+  [connection performSelectorOnMainThread:@selector(__didReceiveData:) 
+                               withObject:data 
+                            waitUntilDone:NO];
                 
   return realsize;
 }
@@ -81,10 +84,11 @@ static size_t AIHeaderCallback(void *contents,
                                                    length:realsize 
                                                  encoding:NSUTF8StringEncoding] autorelease];
   
-  [connection performSelector:@selector(__didReceiveHeaderLine:) 
-                     onThread:[connection __originThread] 
-                   withObject:headerLine 
-                waitUntilDone:YES];
+  if (headerLine) {
+    [connection performSelectorOnMainThread:@selector(__didReceiveHeaderLine:) 
+                                 withObject:headerLine 
+                              waitUntilDone:NO];
+  }
                 
   return realsize;
 }
@@ -93,7 +97,8 @@ static size_t AIHeaderCallback(void *contents,
 - (void)__workerThread:(id)unused;
 - (void)__didReceiveData:(NSData *)data;
 - (void)__didReceiveHeaderLine:(NSString *)headerLine;
-- (NSThread *)__originThread;
+- (void)__didFailWithError:(NSError *)error;
+- (void)__didFinishLoading;
 @end
 
 @implementation AICURLConnection
@@ -160,7 +165,6 @@ static size_t AIHeaderCallback(void *contents,
   if ((self = [super init])) {
     request_ = [request retain];
     delegate_ = [delegate retain];
-    originThread_ = [[NSThread currentThread] retain];
     curl_ = curl_easy_init();
     
     if (!curl_) {
@@ -181,11 +185,6 @@ static size_t AIHeaderCallback(void *contents,
 {
   [request_ release];
   [delegate_ release];
-  [originThread_ release];
-  if (thread_) {
-    [thread_ cancel];
-    [thread_ release];
-  }
   if (curl_) {
     [self __releaseCURLHandle:curl_];
     curl_ = NULL;
@@ -202,12 +201,13 @@ static size_t AIHeaderCallback(void *contents,
                 format:@"[AICURLConnection start] Cannot start an asynchronous "
                        @"request without a delegate."];
   }
-  if (thread_ || cancelled_) return;
+  if (cancelled_) return;
   
-  thread_ = [[NSThread alloc] initWithTarget:self 
-                                    selector:@selector(__workerThread:) 
-                                      object:nil];
-  [thread_ start];
+  // Use Tiger-compatible thread creation (10.0+)
+  [self retain];
+  [NSThread detachNewThreadSelector:@selector(__workerThread:) 
+                           toTarget:self 
+                         withObject:nil];
 }
 
 - (void)cancel;
@@ -234,6 +234,7 @@ static size_t AIHeaderCallback(void *contents,
   curl_easy_setopt(curl, CURLOPT_URL, [[[request URL] absoluteString] UTF8String]);
   NSString *certPath = [self certPath];
   curl_easy_setopt(curl, CURLOPT_CAINFO, [certPath UTF8String]);
+  curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 
   NSMutableData *receivedData = [NSMutableData data];
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AISyncWriteCallback);
@@ -268,43 +269,52 @@ static size_t AIHeaderCallback(void *contents,
 
 #pragma mark - Private Internal Methods
 
-- (NSThread *)__originThread; { return originThread_; }
-
 - (void)__workerThread:(id)unused;
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   
+  NSLog(@"[AICURLConnection __workerThread:] Starting transfer for: %@", 
+        [request_ URL]);
+
   curl_easy_setopt(curl_, CURLOPT_URL, [[[request_ URL] absoluteString] UTF8String]);
   curl_easy_setopt(curl_, CURLOPT_WRITEFUNCTION, AIWriteCallback);
   curl_easy_setopt(curl_, CURLOPT_WRITEDATA, self);
   curl_easy_setopt(curl_, CURLOPT_HEADERFUNCTION, AIHeaderCallback);
   curl_easy_setopt(curl_, CURLOPT_HEADERDATA, self);
+  curl_easy_setopt(curl_, CURLOPT_NOSIGNAL, 1L);
   
   CURLcode res = curl_easy_perform(curl_);
   
+  NSLog(@"[AICURLConnection __workerThread:] Transfer finished with code: %d", res);
+
   if (!cancelled_) {
     if (res != CURLE_OK) {
+      NSString *errorMsg = [NSString stringWithUTF8String:curl_easy_strerror(res)];
+      NSDictionary *userInfo = [NSDictionary dictionaryWithObject:errorMsg 
+                                                           forKey:NSLocalizedDescriptionKey];
       NSError *error = [NSError errorWithDomain:@"AICURLConnectionErrorDomain" 
                                            code:res 
-                                       userInfo:nil];
-      [self performSelector:@selector(__didFailWithError:) 
-                   onThread:originThread_ 
-                 withObject:error 
-              waitUntilDone:YES];
+                                       userInfo:userInfo];
+      [self performSelectorOnMainThread:@selector(__didFailWithError:) 
+                             withObject:error 
+                          waitUntilDone:NO];
     } else {
-      [self performSelector:@selector(__didFinishLoading) 
-                   onThread:originThread_ 
-                 withObject:nil 
-              waitUntilDone:YES];
+      [self performSelectorOnMainThread:@selector(__didFinishLoading) 
+                             withObject:nil 
+                          waitUntilDone:NO];
     }
   }
   
   [pool release];
+  // Match the retain in -start. We use release here to ensure 
+  // cleanup happens exactly when the thread finishes.
+  [self release];
 }
 
 - (void)__didReceiveHeaderLine:(NSString *)headerLine;
 {
-  if ([headerLine hasPrefix:@"HTTP/1.1 "] || [headerLine hasPrefix:@"HTTP/1.0 "]) {
+  if ([headerLine length] >= 12 && 
+      ([headerLine hasPrefix:@"HTTP/1.1 "] || [headerLine hasPrefix:@"HTTP/1.0 "])) {
     int code = [[headerLine substringWithRange:NSMakeRange(9, 3)] intValue];
     AIHTTPURLResponse *resp = [[[AIHTTPURLResponse alloc] initWithURL:[request_ URL] 
                                                            statusCode:code 

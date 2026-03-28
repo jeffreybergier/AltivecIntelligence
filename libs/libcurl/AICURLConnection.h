@@ -30,7 +30,6 @@
 
   // Async Support
   NSThread *thread_;
-  NSThread *originThread_;
   BOOL cancelled_;
 }
 

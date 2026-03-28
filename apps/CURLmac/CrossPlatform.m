@@ -6,8 +6,6 @@
 {
   SEL selector = @selector(setContentBorderThickness:forEdge:);
   if ([self respondsToSelector:selector]) {
-    // We use NSInvocation or a direct cast to avoid compiler warnings 
-    // about the selector not being found on 10.4.
     typedef void (*MethodPtr)(id, SEL, float, NSRectEdge);
     MethodPtr method = (MethodPtr)[self methodForSelector:selector];
     method(self, selector, thickness, edge);

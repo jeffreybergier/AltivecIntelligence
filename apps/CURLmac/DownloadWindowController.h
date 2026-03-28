@@ -13,6 +13,8 @@
   
   NSTextField *statusLabel_;
   NSProgressIndicator *progressIndicator_;
+  
+  NSMutableData *receivedData_;
 }
 
 @end
