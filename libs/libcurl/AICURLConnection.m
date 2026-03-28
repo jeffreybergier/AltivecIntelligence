@@ -4,6 +4,45 @@
 #import <openssl/crypto.h>
 #import <zlib.h>
 
+@implementation AIHTTPURLResponse
+
+- (id)initWithURL:(NSURL *)url
+       statusCode:(NSInteger)statusCode
+     headerFields:(NSDictionary *)headerFields;
+{
+  // We call the base NSURLResponse initializer to stay safe on Tiger.
+  if ((self = [super initWithURL:url 
+                        MIMEType:nil 
+           expectedContentLength:-1 
+                textEncodingName:nil])) {
+    statusCode_ = statusCode;
+    headerFields_ = [headerFields retain];
+  }
+  return self;
+}
+
++ (NSString *)localizedStringForStatusCode:(NSInteger)statusCode;
+{
+  return [NSHTTPURLResponse localizedStringForStatusCode:statusCode];
+}
+
+- (void)dealloc;
+{
+  [headerFields_ release];
+  [super dealloc];
+}
+
+- (NSInteger)statusCode;
+{
+  return statusCode_;
+}
+
+- (NSDictionary *)allHeaderFields;
+{
+  return headerFields_;
+}
+
+@end
 
 static size_t AIWriteCallback(void *contents, 
                               size_t size, 
@@ -14,46 +53,6 @@ static size_t AIWriteCallback(void *contents,
   [data appendBytes:contents length:realsize];
   return realsize;
 }
-
-#pragma mark - NSHTTPURLResponse (CrossPlatform)
-
-@implementation NSHTTPURLResponse (CrossPlatform)
-
-- (id)XP_initWithURL:(NSURL *)url
-          statusCode:(NSInteger)statusCode
-         HTTPVersion:(NSString *)HTTPVersion
-        headerFields:(NSDictionary *)headerFields;
-{
-    // 1. Check for modern 10.7+ API
-    SEL modernSelector = @selector(initWithURL:statusCode:HTTPVersion:headerFields:);
-    if ([NSHTTPURLResponse instancesRespondToSelector:modernSelector]) {
-        NSLog(@"[NSHTTPURLResponse XP_initWithURL:] Using modern 10.7+ initializer.");
-        return [self initWithURL:url
-                      statusCode:statusCode
-                     HTTPVersion:HTTPVersion
-                    headerFields:headerFields];
-    }
-    
-    // 2. Check for legacy private API used in 10.4/10.5
-    SEL legacySelector = NSSelectorFromString(@"_initWithURL:statusCode:headerFields:mapping:");
-    if ([NSHTTPURLResponse instancesRespondToSelector:legacySelector]) {
-        NSLog(@"[NSHTTPURLResponse XP_initWithURL:] Using legacy private 10.4/10.5 initializer.");
-        return [self performSelector:legacySelector
-                          withObject:url
-                          withObject:(id)statusCode
-                          withObject:headerFields
-                          withObject:nil];
-    }
-    
-    // 3. Absolute fallback to base NSURLResponse if all else fails
-    NSLog(@"[NSHTTPURLResponse XP_initWithURL:] WARNING: Falling back to base NSURLResponse.");
-    return (id)[self initWithURL:url
-                        MIMEType:nil
-           expectedContentLength:-1
-                textEncodingName:nil];
-}
-
-@end
 
 @implementation AICURLConnection
 
@@ -85,7 +84,8 @@ static size_t AIWriteCallback(void *contents,
 
 + (NSString *)certPath;
 {
-  NSString *certPath = [[NSBundle mainBundle] pathForResource:@"cacert" ofType:@"pem"];
+  NSString *certPath = [[NSBundle mainBundle] pathForResource:@"cacert" 
+                                                       ofType:@"pem"];
   NSParameterAssert(certPath);
   return certPath;
 }
@@ -129,7 +129,8 @@ static size_t AIWriteCallback(void *contents,
       return nil;
     }
     [self __newCURLHandle:curl_];
-    NSLog(@"[AICURLConnection initWithRequest:...] initialized with request: %@", request);
+    NSLog(@"[AICURLConnection initWithRequest:...] initialized with request: %@", 
+          request);
   }
   return self;
 }
@@ -194,10 +195,10 @@ static size_t AIWriteCallback(void *contents,
     long responseCode;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
     
-    *response = [[[NSHTTPURLResponse alloc] XP_initWithURL:[request URL]
-                                                statusCode:responseCode
-                                               HTTPVersion:@"HTTP/1.1"
-                                              headerFields:nil] autorelease];
+    // Use our custom subclass to guarantee status code storage on Tiger.
+    *response = [[[AIHTTPURLResponse alloc] initWithURL:[request URL]
+                                             statusCode:responseCode
+                                           headerFields:nil] autorelease];
   }
 
   curl_easy_cleanup(curl);

@@ -46,4 +46,10 @@
   #define XPEventModifierFlagOption       NSAlternateKeyMask
 #endif
 
+/* Cross-Version NSWindow category for Content Border (10.5+) */
+@interface NSWindow (CrossPlatform)
+- (void)XP_setContentBorderThickness:(float)thickness forEdge:(NSRectEdge)edge;
+- (void)XP_setAutorecalculatesContentBorderThickness:(BOOL)flag forEdge:(NSRectEdge)edge;
+@end
+
 #endif /* CROSS_PLATFORM_H */

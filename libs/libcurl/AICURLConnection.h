@@ -1,5 +1,24 @@
 #import <Foundation/Foundation.h>
 
+// A subclass of NSHTTPURLResponse that provides a reliable way to 
+// initialize and store HTTP metadata on legacy systems like Tiger (10.4).
+@interface AIHTTPURLResponse : NSHTTPURLResponse {
+ @private
+  NSInteger statusCode_;
+  NSDictionary *headerFields_;
+}
+
+- (id)initWithURL:(NSURL *)url
+       statusCode:(NSInteger)statusCode
+     headerFields:(NSDictionary *)headerFields;
+
++ (NSString *)localizedStringForStatusCode:(NSInteger)statusCode;
+
+- (NSInteger)statusCode;
+- (NSDictionary *)allHeaderFields;
+
+@end
+
 // A wrapper for libcurl providing synchronous and asynchronous network 
 // request capabilities. Designed for compatibility with legacy systems 
 // from Tiger (10.4) through modern macOS.
@@ -48,17 +67,5 @@
 
 - (void)__newCURLHandle:(void *)handle;
 - (void)__releaseCURLHandle:(void *)handle;
-
-@end
-
-#pragma mark - NSHTTPURLResponse (CrossPlatform)
-
-// Category to provide cross-version initialization for NSHTTPURLResponse.
-@interface NSHTTPURLResponse (CrossPlatform)
-
-- (id)XP_initWithURL:(NSURL *)url
-          statusCode:(NSInteger)statusCode
-         HTTPVersion:(NSString *)HTTPVersion
-        headerFields:(NSDictionary *)headerFields;
 
 @end

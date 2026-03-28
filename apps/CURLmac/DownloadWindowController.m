@@ -18,18 +18,19 @@
                     | XPWindowStyleMaskMiniaturizable 
                     | XPWindowStyleMaskResizable;
   
-  NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 600)
-                                                 styleMask:mask
-                                                   backing:NSBackingStoreBuffered
-                                                     defer:YES];
+  NSWindow *window = [[[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 600)
+                                                  styleMask:mask
+                                                    backing:NSBackingStoreBuffered
+                                                      defer:YES] autorelease];
   [window setTitle:@"CURLmac Downloader"];
   [window setReleasedWhenClosed:NO];
   [window setMinSize:NSMakeSize(800, 600)];
+  [window XP_setContentBorderThickness:24.0 forEdge:NSMinYEdge];
+  [window XP_setAutorecalculatesContentBorderThickness:NO forEdge:NSMinYEdge];
   
   if ((self = [super initWithWindow:window])) {
     [self setupUI];
   }
-  [window release];
   return self;
 }
 
@@ -38,10 +39,40 @@
   NSWindow *window = [self window];
   NSView *contentView = [window contentView];
   
-  NSTabView *tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(8, 
-                                                                   8, 
-                                                                   784, 
-                                                                   584)];
+  CGFloat width = [contentView bounds].size.width;
+  CGFloat height = [contentView bounds].size.height;
+  CGFloat padding = 8;
+  CGFloat statusBarHeight = 24;
+
+  // 1. Status Bar at the very bottom
+  statusLabel_ = [[NSTextField alloc] initWithFrame:NSMakeRect(padding, 
+                                                                2, 
+                                                                width - (padding * 2), 
+                                                                20)];
+  [statusLabel_ setStringValue:@"Ready"];
+  [statusLabel_ setBezeled:NO];
+  [statusLabel_ setDrawsBackground:NO];
+  [statusLabel_ setEditable:NO];
+  [statusLabel_ setSelectable:YES];
+  [statusLabel_ setFont:[NSFont systemFontOfSize:11]];
+  [statusLabel_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+  [contentView addSubview:statusLabel_];
+
+  progressIndicator_ = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(padding, 
+                                                                             2, 
+                                                                             width - (padding * 2), 
+                                                                             20)];
+  [progressIndicator_ setStyle:XPProgressIndicatorStyleBar];
+  [progressIndicator_ setIndeterminate:YES];
+  [progressIndicator_ setDisplayedWhenStopped:NO];
+  [progressIndicator_ setAutoresizingMask:NSViewWidthSizable | NSViewMaxYMargin];
+  [contentView addSubview:progressIndicator_];
+
+  // 2. Tab View: Fills the rest, leaving room for status bar
+  NSTabView *tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(padding, 
+                                                                   statusBarHeight + 4, 
+                                                                   width - (padding * 2), 
+                                                                   height - statusBarHeight - padding - 4)];
   [tabView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
   
   // --- Tab 0: CURL ---
@@ -90,19 +121,17 @@
   DownloadView *view = (DownloadView *)[button superview];
   NSString *identifier = [view identifier];
   NSString *urlStr = [[view urlField] stringValue];
-  NSTextField *status = [view statusLabel];
-  NSProgressIndicator *progress = [view progressIndicator];
 
   NSURL *url = [NSURL URLWithString:urlStr];
   if (!url) {
-    [status setStringValue:@"Error: Invalid URL"];
+    [statusLabel_ setStringValue:@"Error: Invalid URL"];
     return;
   }
 
   [button setEnabled:NO];
-  [progress startAnimation:nil];
-  [status setStringValue:@""]; // Clear text while progress bar is on top
-  [[view imageView] setImage:nil]; // Clear old image data
+  [progressIndicator_ startAnimation:nil];
+  [statusLabel_ setStringValue:@""]; 
+  [[view imageView] setImage:nil];
 
   NSURLRequest *request = [NSURLRequest requestWithURL:url];
   NSURLResponse *response = nil;
@@ -119,13 +148,12 @@
                                              error:&error];
   }
 
-  [progress stopAnimation:nil];
+  [progressIndicator_ stopAnimation:nil];
   [button setEnabled:YES];
 
   if (error) {
-    [status setStringValue:[NSString stringWithFormat:@"Failed: %@", 
-                            [error localizedDescription]]];
-    // Present error as a sheet
+    [statusLabel_ setStringValue:[NSString stringWithFormat:@"Failed: %@", 
+                                  [error localizedDescription]]];
     [self presentError:error 
         modalForWindow:[self window] 
               delegate:nil 
@@ -136,18 +164,19 @@
     if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
       statusCode = [(NSHTTPURLResponse *)response statusCode];
     }
-    
     // Check for success status codes (200-299)
     if (statusCode < 200 || statusCode > 299) {
-      NSString *errorMsg = [NSString stringWithFormat:@"Server returned status code: %ld", 
-                            (long)statusCode];
-      NSDictionary *userInfo = [NSDictionary dictionaryWithObject:errorMsg 
+      NSString *statusText = [AIHTTPURLResponse localizedStringForStatusCode:statusCode];
+      NSString *fullError = [NSString stringWithFormat:@"Failed: %ld (%@)", 
+                             (long)statusCode, statusText];
+
+      NSDictionary *userInfo = [NSDictionary dictionaryWithObject:fullError 
                                                            forKey:NSLocalizedDescriptionKey];
       NSError *statusError = [NSError errorWithDomain:@"AICDownloadErrorDomain" 
                                                  code:statusCode 
                                              userInfo:userInfo];
-      
-      [status setStringValue:[NSString stringWithFormat:@"Failed: %ld", (long)statusCode]];
+
+      [statusLabel_ setStringValue:fullError];
       [self presentError:statusError 
           modalForWindow:[self window] 
                 delegate:nil 
@@ -155,20 +184,19 @@
              contextInfo:NULL];
       return;
     }
+    NSString *statusText = [AIHTTPURLResponse localizedStringForStatusCode:statusCode];
+    [statusLabel_ setStringValue:[NSString stringWithFormat:@"Status: %ld (%@) | Size: %lu bytes", 
+                                  (long)statusCode, statusText, (unsigned long)[data length]]];
 
-    [status setStringValue:[NSString stringWithFormat:@"Status: %ld | Size: %lu bytes", 
-                            (long)statusCode, (unsigned long)[data length]]];
-
-    // Populate the well (Image View)
     NSImage *image = [[NSImage alloc] initWithData:data];
     if (image) {
       [[view imageView] setImage:image];
       [image release];
     } else {
-      [status setStringValue:@"Data received is not a valid image."];
+      [statusLabel_ setStringValue:@"Data received is not a valid image."];
     }
   } else {
-    [status setStringValue:@"Finished with no data."];
+    [statusLabel_ setStringValue:@"Finished with no data."];
   }
 }
 
@@ -176,6 +204,8 @@
 {
   [curlView_ release];
   [systemView_ release];
+  [statusLabel_ release];
+  [progressIndicator_ release];
   [super dealloc];
 }
 
