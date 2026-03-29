@@ -99,7 +99,7 @@ See the table below to understand the compilers and SDKs used:
 | :--- | :--- | :--- | :--- | :--- |
 | **Mac (Legacy)** | Apple GCC 4.2.1 | 10.5 | ppc, x86 | 10.4 Tiger+ |
 | **Mac (Modern Intel)**| Clang 14 | 10.11 | x64 | 10.6 Snow Leopard+ |
-| **Mac (Apple Silicon)**| Clang 14 | 11.3 | arm64 | 11.0 Big Sur |
+| **Mac (Apple Silicon)**| Clang 14 | 11.3 | arm64 | 11.0 Big Sur+ |
 | **iPhone** | Clang 14 | 8.4 | armv7, arm64 | iPhone 3GS+ iOS 4.3+ |
 
 Even though the Mac version uses 2 compilers and 3 SDKs, it combines them into

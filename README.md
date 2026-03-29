@@ -82,6 +82,92 @@ Outputs in `apps/SingleScreen/build-release/`:
 
 Note you can also run `make debug` to build a debug version of the sample apps
 
+#### CURL Networking Apps (Modern TLS for Legacy Devices)
+
+These apps use the **`AICURLConnection`** library (built on `libcurl` and 
+`OpenSSL`) to allow legacy devices to connect to modern HTTPS websites.
+
+**Note:** Building the full `libcurl` suite for all architectures is a heavy 
+task and may take between **5 to 60 minutes** depending on your computer's 
+performance.
+
+##### Mac Build (CURLmac)
+```bash
+# 1. Build libcurl suite for Mac (PPC, i386, x64, arm64)
+docker compose run --rm altivec "cd libs/libcurl && make mac"
+
+# 2. Build the CURLmac app
+docker compose run --rm altivec "cd apps/CURLmac && make"
+```
+
+##### iPhone Build (CURLphone)
+```bash
+# 1. Build libcurl suite for iPhone (armv7, arm64)
+docker compose run --rm altivec "cd libs/libcurl && make phone"
+
+# 2. Build the CURLphone app
+docker compose run --rm altivec "cd apps/CURLphone && make"
+```
+
+#### Deploying to Hardware
+
+Use the `altivec_deploy.sh` script to quickly push and debug your apps on 
+actual hardware.
+
+**1. Run on your local Mac**:
+```bash
+./altivec_deploy.sh apps/SingleWindow
+```
+
+**2. Run on a remote Mac (via SSH)**:
+```bash
+./altivec_deploy.sh apps/SingleWindow -d <mac_ip_or_hostname>
+```
+
+**3. Run on a jailbroken iPhone (via SSH)**:
+```bash
+./altivec_deploy.sh apps/SingleScreen -d <iphone_ip_or_hostname>
+```
+
+**Note on Deploying to iPhone**
+This requires common jailbreak tools like:
+- AppSync (Unified)
+- appinst (App Installer)
+- OpenSSH
+- Core Utilities
+
+Jailbreaking and using a jailbroken iPhone is beyond the scope of this tutorial,
+but I highly recommend checking out 
+[Legacy-iOS-Kit](https://github.com/LukeZGD/Legacy-iOS-Kit) for help. Its an
+excellent utility that is THE EASIEST way to downgrade / jailbreak your retro
+iPhone. It can also be used to deploy the apps built with Altivec Intelligence
+to the iPhone via the USB cable.
+
+**Note on SSH Authentication:**
+The deployment script is designed for automated use and **requires SSH key 
+authentication**. If you do not have keys set up, the script will repeatedly 
+prompt for your password and likely fail. 
+
+To connect to vintage hardware from a modern Mac, you often need to explicitly 
+allow older algorithms in your `~/.ssh/config` file. Here is a recommended 
+configuration:
+
+```text
+Host iphone5-ios6
+    HostName 192.168.0.93
+    User root
+    IdentityFile ~/.ssh/id_rsa
+    PubkeyAcceptedAlgorithms +ssh-rsa
+    HostKeyAlgorithms +ssh-rsa
+
+Host imacg4-tiger
+    HostName my-imac.local 
+    User myuser
+    IdentityFile ~/.ssh/id_rsa
+    PubkeyAcceptedAlgorithms +ssh-rsa
+    HostKeyAlgorithms +ssh-rsa
+```
+
 ### 5. Use Gemini AI to Build Your Own Apps
 
 Launch Gemini CLI and login with your Google Account. Even the free account 
@@ -125,7 +211,7 @@ app for my favorite retro device.
 ## 🚧 To-Do List
 1. [X] Build `libcurl` for modern networking on old platforms
 1. [ ] Build Dynamic Framework for `libcurl`
-1. [ ] Update Deploy Script for Mac to deploy entire build folder for better debugging in GDB
+1. [X] Update Deploy Script for Mac to deploy entire build folder for better debugging in GDB
 1. [ ] Setup Github Actions
    1. [ ] Build release apps and save in artifact storage
    1. [ ] Execute tests on Mac runners
@@ -135,6 +221,7 @@ app for my favorite retro device.
 1. [ ] Enable on-device debugging for iOS
 1. [ ] Enable Gemini to debug apps directly on the host Mac
 1. [ ] Include [`PLBlocks` \(Plausible Blocks\)](https://plausible.coop/blog/2009/07/02/blocks-for-iphone-3.0-and-mac-os-x-10/) for use in the 10.4u SDK slices to enable block usage for all toolchains 
+ 
 
 ## 😍 Contributing
 

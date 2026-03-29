@@ -43,18 +43,16 @@ Located in /osxcross/target/SDK/:
 
 | Target | Compiler | SDK | Architectures | Optimization |
 | :--- | :--- | :--- | :--- | :--- |
-| **Mac (PPC)** | `oppc32-gcc` (4.2.1) | 10.5 | ppc (32-bit) | -O3 / -O0 |
-| **Mac (i386)** | `o32-gcc` (4.2.1) | 10.5 | i386 (32-bit) | -O3 / -O0 |
-| **Mac (x64)** | `o64-clang` (14.0) | 10.11 | x86_64 (64-bit) | -O3 / -O0 |
-| **Mac (ARM)** | `clang-14` (14.0) | 11.3 | arm64 (64-bit) | -O3 / -O0 |
+| **Mac (Legacy)** | `oppc32-gcc` / `o32-gcc` | 10.5 | ppc, i386 (32-bit) | -O3 / -O0 |
+| **Mac (Modern Intel)**| `x86_64...-clang` | 10.11 | x86_64 (64-bit) | -O3 / -O0 |
+| **Mac (Apple Silicon)**| `clang-14` | 11.3 | arm64 (64-bit) | -O3 / -O0 |
 | **iPhone** | `clang-14` | 8.4 | armv7, arm64 | -O3 / -O0 |
 
 ## 🔗 Library Build System (libcurl)
 Libraries (libcurl, openssl, zlib) are built as "Quad-Fat" static binaries (`.a`).
 - **Orchestration:** `libs/libcurl/Makefile` manages separate `Makefile-mac` and `Makefile-phone` builds.
-- **Deployment Targets:** PPC (10.4), i386 (10.4), x86_64 (10.6), arm64 (11.0).
-- **Linking:** Each architecture is compiled into its own prefix before being merged with `lipo`.
-- **Legacy Tools:** Use `i386-apple-darwin9-ar` and `i386-apple-darwin9-ranlib` for legacy slices to ensure compatibility.
+- **AICURLConnection**: A robust `libcurl` wrapper with full `NSURLConnection` parity for asynchronous transfers and header parsing.
+- **Certificate Handling**: `cacert.pem` is automatically bundled with apps to ensure SSL verification works.
 
 ## 🚀 How to Build
 
@@ -100,6 +98,46 @@ When creating an `NSWindowController` programmatically without a NIB/XIB file, f
 2. **loadWindow**: Override `loadWindow` but **DO NOT** call `[super loadWindow]`. Manually create the `NSWindow` with `defer:NO`.
 3. **setWindow**: At the end of `loadWindow`, call `[self setWindow:window]`. This will automatically trigger `windowDidLoad`.
 4. **Memory Management**: Ensure `[window setReleasedWhenClosed:NO]` is set so the controller can safely manage the window's lifecycle.
+5. **Controllers**: Consolidate UI and networking logic into specialized controllers (e.g. `DownloadViewController`) that subclass `NSResponder` for Tiger compatibility.
+
+## 🛠 Cross-Platform Development Standards
+
+To build software that spans 20 years of Apple APIs, always follow these verified patterns:
+
+### 1. Runtime vs. Build-Time Checks
+- **Build-Time (#if)**: Use for macros, constant definitions, and protocol conformance that the compiler needs to know about. 
+  - *Example*: Checking `MAC_OS_X_VERSION_MAX_ALLOWED` to define a macro.
+- **Runtime (respondsToSelector)**: Use for calling methods that may not exist on older systems. 
+  - *Crucial*: When calling a newer method on an older system, **ALWAYS** use a function pointer (`MethodPtr`) to bypass compile-time availability warnings and ensure safe execution.
+
+### 2. The "Dummy Protocol" Pattern
+When a formal protocol (like `NSApplicationDelegate`) is not available in an older SDK, define a dummy protocol to satisfy the compiler while maintaining modern conformance:
+```objectivec
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+  #define XPApplicationDelegate NSApplicationDelegate
+#else
+  @protocol XPApplicationDelegate @end
+#endif
+```
+
+### 3. Bypassing Enum/Availability Warnings
+When assigning an enum value that is marked as unavailable or has been renamed (e.g. `NSTextAlignmentCenter`), use an explicit **`(NSInteger)`** cast. This bypasses the compiler's strict conversion and availability guards.
+
+### 4. The "XP_" Category Pattern
+When a method is completely missing from an older SDK (e.g. `setContentBorderThickness:`), do not call it directly. Instead, implement a category on that class with an `XP_` prefix. Use the **Runtime Check** and **Function Pointer** patterns within this category to safely bridge the gap:
+```objectivec
+- (void)XP_methodName:(id)arg {
+  SEL sel = @selector(methodName:);
+  if ([self respondsToSelector:sel]) {
+    typedef void (*MethodPtr)(id, SEL, id);
+    MethodPtr m = (MethodPtr)[self methodForSelector:sel];
+    m(self, sel, arg);
+  }
+}
+```
+
+### 5. Consolidated Controllers
+Avoid creating complex `NSView` subclasses for layout. Instead, use a "Controller" (subclassing `NSResponder` for Mac or `UIViewController` for iPhone) to create and manage a plain container view. This keeps logic centralized and makes it easier to port between platforms.
 
 ## Google's Objective-C style guide from April 18th, 2009
 
