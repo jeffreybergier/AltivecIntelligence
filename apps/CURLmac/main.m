@@ -4,7 +4,6 @@
 //
 
 #import <AppKit/AppKit.h>
-#import "CrossPlatform.h"
 #import "DownloadWindowController.h"
 
 // --- MainMenu Interface ---
