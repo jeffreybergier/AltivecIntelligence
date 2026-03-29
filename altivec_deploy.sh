@@ -12,7 +12,6 @@ REMOTE_ROOT=""
 
 # --- Cleanup Logic ---
 cleanup() {
-  # This runs on exit, including Ctrl+C
   if [ "$IS_REMOTE" = true ] && [ -n "$REMOTE_ROOT" ]; then
     echo ""
     echo "Cleaning up remote Altivec folder ($REMOTE_ROOT)..."
@@ -148,6 +147,7 @@ fi
 echo ""
 echo "--- DEPLOYMENT STARTING ---"
 BUILD_DIR_NAME=$(basename "$BUILD_DIR")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ "$DEVICE_TYPE" == "iphone" ]]; then
   if [ "$IS_REMOTE" = true ]; then
@@ -163,7 +163,7 @@ if [[ "$DEVICE_TYPE" == "iphone" ]]; then
   fi
   
   echo "Installing package: $(basename "$PACKAGE_PATH")..."
-  set +e # Be resilient to installer exit codes
+  set +e
   if [ "$IS_REMOTE" = true ]; then
     ssh "$TARGET_DEVICE" "ipainstaller \"$INSTALL_PATH\""
   else
@@ -195,9 +195,14 @@ elif [[ "$DEVICE_TYPE" == "mac" ]]; then
     ssh "$TARGET_DEVICE" "mkdir -p \"$REMOTE_ROOT\""
     echo "Copying build to Mac..."
     scp -O -r "$BUILD_DIR" "$TARGET_DEVICE:\"$REMOTE_ROOT/\""
-    if [ -f "altivec_build/gdbinit" ]; then
-      scp -O "altivec_build/gdbinit" "$TARGET_DEVICE:\"$REMOTE_ROOT/gdbinit\""
+    
+    # Upload appropriate debugger init
+    if [ "$HAS_LLDB" = true ] && [ -f "$SCRIPT_DIR/altivec_build/lldbinit" ]; then
+      scp -O -q "$SCRIPT_DIR/altivec_build/lldbinit" "$TARGET_DEVICE:\"$REMOTE_ROOT/lldbinit\""
+    elif [ "$HAS_GDB" = true ] && [ -f "$SCRIPT_DIR/altivec_build/gdbinit" ]; then
+      scp -O -q "$SCRIPT_DIR/altivec_build/gdbinit" "$TARGET_DEVICE:\"$REMOTE_ROOT/gdbinit\""
     fi
+    
     APP_PATH="$REMOTE_BUILD_DIR/$(basename "$PACKAGE_PATH")"
   else
     APP_PATH="$(pwd)/$BUILD_DIR/$(basename "$PACKAGE_PATH")"
@@ -209,20 +214,27 @@ elif [[ "$DEVICE_TYPE" == "mac" ]]; then
 
   DEBUG_CMD=""
   if [[ "$HAS_LLDB" == true ]]; then
-    DEBUG_CMD="lldb \"$BIN_PATH\""
+    if [ "$IS_REMOTE" = true ]; then
+      [ -f "$SCRIPT_DIR/altivec_build/lldbinit" ] && DBG_INIT="-s \"$REMOTE_ROOT/lldbinit\"" || DBG_INIT=""
+    else
+      [ -f "$SCRIPT_DIR/altivec_build/lldbinit" ] && DBG_INIT="-s \"$SCRIPT_DIR/altivec_build/lldbinit\"" || DBG_INIT=""
+    fi
+    DEBUG_CMD="lldb $DBG_INIT \"$BIN_PATH\""
+    DEBUG_NAME="LLDB"
   elif [[ "$HAS_GDB" == true ]]; then
     if [ "$IS_REMOTE" = true ]; then
-      DEBUG_CMD="gdb -x \"$REMOTE_ROOT/gdbinit\" \"$BIN_PATH\""
+      [ -f "$SCRIPT_DIR/altivec_build/gdbinit" ] && DBG_INIT="-x \"$REMOTE_ROOT/gdbinit\"" || DBG_INIT=""
     else
-      [ -f "altivec_build/gdbinit" ] && GDB_INIT="-x altivec_build/gdbinit" || GDB_INIT=""
-      DEBUG_CMD="gdb $GDB_INIT \"$BIN_PATH\""
+      [ -f "$SCRIPT_DIR/altivec_build/gdbinit" ] && DBG_INIT="-x \"$SCRIPT_DIR/altivec_build/gdbinit\"" || DBG_INIT=""
     fi
+    DEBUG_NAME="GDB"
+    DEBUG_CMD="gdb $DBG_INIT \"$BIN_PATH\""
   fi
 
   if [ -n "$DEBUG_CMD" ]; then
     echo ""
     echo "***************************************************"
-    echo "  LAUNCHING DEBUGGER"
+    echo "  LAUNCHING $DEBUG_NAME"
     echo "  - Type 'run' to start."
     echo "  - Press Ctrl+C to pause."
     echo "  - Type 'quit' to exit."
@@ -231,7 +243,7 @@ elif [[ "$DEVICE_TYPE" == "mac" ]]; then
     if [ "$IS_REMOTE" = true ]; then
       ssh -t "$TARGET_DEVICE" "$DEBUG_CMD"
     else
-      $DEBUG_CMD
+      eval "$DEBUG_CMD"
     fi
   else
     if [ "$IS_REMOTE" = true ]; then
