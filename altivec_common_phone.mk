@@ -22,7 +22,7 @@ ALL_SOURCES = $(SOURCES) $(EXTRA_SOURCES)
 OBJS = $(addprefix $(INT_DIR)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) $(EXTRA_SOURCES:.m=.o) $(EXTRA_SOURCES:.c=.o)))
 
 # --- Flags ---
-IOS_FLAGS = $(OPT_FLAGS) -g -Wall \
+IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -Wall \
             -Wimplicit-function-declaration -Wobjc-method-access \
             -Wno-unused-command-line-argument -Wunguarded-availability \
             -isysroot $(IOS_SDK_PATH) \
@@ -76,6 +76,10 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin
 		echo "  > copying resources" ; \
 		cp -R $(RES_DIR)/* $@/ ; \
 	fi
+	@if [ -f "$(CURL_DIR)/lib/cacert.pem" ]; then \
+		echo "  > copying cacert.pem" ; \
+		cp "$(CURL_DIR)/lib/cacert.pem" $@/ ; \
+	fi
 	@echo "  > extracting symbols"
 	@$(DSYMUTIL) $< -o $(BUILD_DIR)/$(APP_NAME).dSYM
 	@echo -n "APPL????" > $@/PkgInfo
@@ -85,7 +89,7 @@ $(INT_DIR)/$(APP_NAME)-bin: $(OBJS)
 	@echo " [2/4] Linking Phone universal binary (armv7, arm64)..."
 	@export PATH=$(BIN_DIR):$(PATH); \
 	$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
-	           $(IOS_FLAGS) $(IOS_FRAMEWORKS) $^ -o $@
+	           $(IOS_FLAGS) $(IOS_FRAMEWORKS) $(LIBS_IPHONE) $^ -o $@
 
 $(INT_DIR)/%.o: %.m
 	@mkdir -p $(INT_DIR)
