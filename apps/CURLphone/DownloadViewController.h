@@ -1,14 +1,15 @@
 #import <UIKit/UIKit.h>
 
 // A view controller that manages the download interface on iPhone.
-// Named DownloadViewController to follow standard iOS naming conventions.
-@interface DownloadViewController : UITableViewController <NSURLConnectionDelegate, UITextFieldDelegate> {
+// Uses a grouped UITableView to organize the URL input, action, progress, and result.
+@interface DownloadViewController : UITableViewController <NSURLConnectionDelegate, UITextViewDelegate> {
  @private
   Class _connectionClass;
   NSMutableData *_receivedData;
+  long long _expectedContentLength;
   
   // UI Components (Managed within the table)
-  UITextField *_urlField;
+  UITextView *_urlTextView;
   UIButton *_downloadButton;
   UIProgressView *_progressView;
   UILabel *_statusLabel;
