@@ -1,4 +1,5 @@
 #import "KeyValueTableViewController.h"
+#import "CrossPlatform.h"
 #import <AICURLConnection.h>
 
 @implementation KeyValueTableViewController
