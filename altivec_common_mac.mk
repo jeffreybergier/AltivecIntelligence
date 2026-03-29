@@ -148,11 +148,10 @@ $(INT_DIR)/x86/%.o: %.c
 
 # --- x64 slice (10.6 target, 10.11 sdk) ---
 $(INT_DIR)/x64.bin: $(X64_OBJS)
-	@echo "  > linking x64 binary (ld64.lld)"
-	@$(LD64_LLD) -demangle -dynamic -arch x86_64 -platform_version macos $(MAC_MIN_MID).0 $(MAC_MIN_MID).0 \
-		-syslibroot $(SDK_MAC_MID_PATH) -o $@ \
-		-L$(SDK_MAC_MID_PATH)/usr/lib \
-		$^ $(MAC_LIBS) -lSystem -framework AppKit -lobjc $(SDK_MAC_MID_PATH)/usr/lib/crt1.10.6.o
+	@echo "  > linking x64 binary"
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) \
+	    -isysroot $(SDK_MAC_MID_PATH) -mmacosx-version-min=$(MAC_MIN_MID) \
+	    $^ $(MAC_LIBS) -o $@
 
 $(INT_DIR)/x64/%.o: %.m
 	@mkdir -p $(dir $@)
