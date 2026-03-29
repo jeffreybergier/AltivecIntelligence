@@ -4,56 +4,52 @@
 
 @implementation KeyValueTableViewController
 
-- (void)viewDidLoad;
-{
+- (void)viewDidLoad {
   [super viewDidLoad];
-  self.navigationItem.title = @"Linked Libraries";
+  [[self navigationItem] setTitle:@"Linked Libraries"];
   
   // Fetch versions from AICURLConnection
-  _versions = [[NSDictionary alloc] initWithObjectsAndKeys:
+  versions_ = [[NSDictionary alloc] initWithObjectsAndKeys:
     [AICURLConnection zlibVersion], @"libz",
     [AICURLConnection sslVersion], @"libssl",
     [AICURLConnection curlVersion], @"libcurl",
     [AICURLConnection cryptoVersion], @"libcrypto",
     nil];
   
-  _sortedKeys = [[[_versions allKeys] sortedArrayUsingSelector:@selector(compare:)] 
-                 retain];
+  sortedKeys_ = [[[versions_ allKeys] 
+    sortedArrayUsingSelector:@selector(compare:)] retain];
 }
 
-- (void)dealloc;
-{
-  [_versions release];
-  [_sortedKeys release];
+- (void)dealloc {
+  [versions_ release];
+  [sortedKeys_ release];
   [super dealloc];
 }
 
 #pragma mark - Table view data source
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView;
-{
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
   return 1;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView 
-    numberOfRowsInSection:(NSInteger)section;
-{
-  return [_sortedKeys count];
+    numberOfRowsInSection:(NSInteger)section {
+  return [sortedKeys_ count];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView 
-         cellForRowAtIndexPath:(NSIndexPath *)indexPath;
-{
+         cellForRowAtIndexPath:(NSIndexPath *)indexPath {
   static NSString *CellIdentifier = @"InfoCell";
-  UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+  UITableViewCell *cell = [tableView 
+    dequeueReusableCellWithIdentifier:CellIdentifier];
   if (cell == nil) {
     cell = [[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 
                                    reuseIdentifier:CellIdentifier] autorelease];
   }
   
-  NSString *key = [_sortedKeys objectAtIndex:indexPath.row];
-  cell.textLabel.text = key;
-  cell.detailTextLabel.text = [_versions objectForKey:key];
+  NSString *key = [sortedKeys_ objectAtIndex:[indexPath row]];
+  [[cell textLabel] setText:key];
+  [[cell detailTextLabel] setText:[versions_ objectForKey:key]];
   
   return cell;
 }
