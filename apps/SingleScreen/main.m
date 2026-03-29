@@ -3,6 +3,9 @@
 
 int main(int argc, char * argv[]) {
   @autoreleasepool {
-    return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));
+    const char *delegateClass = [NSStringFromClass([AppDelegate class]) 
+      UTF8String];
+    return UIApplicationMain(argc, argv, nil, 
+      [NSString stringWithUTF8String:delegateClass]);
   }
 }
