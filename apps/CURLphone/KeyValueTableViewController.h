@@ -4,8 +4,8 @@
 // libraries (libcurl, openssl, etc.) in a grouped style.
 @interface KeyValueTableViewController : UITableViewController {
  @private
-  NSDictionary *_versions;
-  NSArray *_sortedKeys;
+  NSDictionary *versions_;
+  NSArray *sortedKeys_;
 }
 
 @end
