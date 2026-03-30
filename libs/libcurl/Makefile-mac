@@ -19,8 +19,8 @@ CURL_URL=https://curl.se/download/curl-$(CURL_VER).tar.gz
 # Architecture Specific Flags
 PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(PPC_COMPAT_FLAGS)
 X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH)
-X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -mmacosx-version-min=$(MAC_MIN_X64) -march=core2
-X64_LDFLAGS=
+X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -mmacosx-version-min=$(MAC_MIN_X64) -march=core2 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
+X64_LDFLAGS=-Wl,-platform_version,macos,$(MAC_MIN_X64),10.11 -Wl,-syslibroot,$(SDK_X64_PATH) -nostartfiles $(SDK_X64_PATH)/usr/lib/crt1.10.6.o
 ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
 
 all: static aicc
@@ -61,8 +61,8 @@ $(PREFIX)/lib/libAICURLConnection.a: AICURLConnection.m AICURLConnection.h
 	$(RANLIB_LEGACY) $(PREFIX)/x86/lib/libAICURLConnection.a
 	@echo "--- Building AICURLConnection (x64) ---"
 	$(COMPILER_X64) $(X64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x64.o
-	$(AR_MID) rc $(PREFIX)/x64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x64.o
-	$(RANLIB_MID) $(PREFIX)/x64/lib/libAICURLConnection.a
+	$(AR_MODERN) rc $(PREFIX)/x64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x64.o
+	$(RANLIB_MODERN) $(PREFIX)/x64/lib/libAICURLConnection.a
 	@echo "--- Building AICURLConnection (arm64) ---"
 	$(COMPILER_ARM64) $(ARM64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/arm64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-arm64.o
 	$(AR_MODERN) rc $(PREFIX)/arm64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-arm64.o
@@ -95,8 +95,8 @@ $(PREFIX)/lib/libz.a: $(INTERMEDIATE)/zlib-$(ZLIB_VER)
 	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
 	./configure --static --prefix=$(PREFIX)/x64 && \
 	sed -i 's|^CC=.*|CC=$(COMPILER_X64) $(X64_FLAGS) $(X64_LDFLAGS)|g' Makefile && \
-	sed -i 's|^AR=.*|AR=$(AR_MID)|g' Makefile && \
-	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MID)|g' Makefile && \
+	sed -i 's|^AR=.*|AR=$(AR_MODERN)|g' Makefile && \
+	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MODERN)|g' Makefile && \
 	make clean && make -j$(JOBS) ARFLAGS="rc" install
 	@echo "--- Building zlib (arm64) ---"
 	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
@@ -132,7 +132,7 @@ $(PREFIX)/lib/libcrypto.a: $(INTERMEDIATE)/openssl-$(OPENSSL_VER) $(PREFIX)/lib/
 	@echo "--- Building OpenSSL (x64) ---"
 	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
 	./Configure darwin64-x86_64-cc no-shared no-tests no-zlib --prefix=$(PREFIX)/x64 \
-	CC="$(COMPILER_X64)" AR="$(AR_MID)" RANLIB="$(RANLIB_MID)" \
+	CC="$(COMPILER_X64)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(X64_FLAGS) $(X64_LDFLAGS) $(OPT_FLAGS)" && \
 	make clean && make -j$(JOBS) build_libs && make install_dev
 	@echo "--- Building OpenSSL (arm64) ---"
@@ -183,7 +183,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	@echo "--- Building curl (x64) ---"
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
-	CC="$(COMPILER_X64) $(X64_FLAGS)" AR="$(AR_MID)" RANLIB="$(RANLIB_MID)" \
+	CC="$(COMPILER_X64) $(X64_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
 	CPPFLAGS="-I$(PREFIX)/x64/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/x64/lib $(X64_LDFLAGS)" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \

@@ -25,11 +25,7 @@ SDK_IOS_PATH=$(SDK_DIR)/iPhoneOS8.4.sdk
 AR_LEGACY=$(BIN_DIR)/i386-apple-darwin9-ar
 RANLIB_LEGACY=$(BIN_DIR)/i386-apple-darwin9-ranlib
 
-# Use darwin9 x64 tools for middle slice (X64)
-AR_MID=$(BIN_DIR)/x86_64-apple-darwin9-ar
-RANLIB_MID=$(BIN_DIR)/x86_64-apple-darwin9-ranlib
-
-# Use modern LLVM 14 tools for modern slices (ARM64, iOS)
+# Use modern LLVM 14 tools for modern slices (X64, ARM64, iOS)
 AR_MODERN=/usr/bin/llvm-ar-14
 RANLIB_MODERN=/usr/bin/llvm-ranlib-14
 LIPO_MODERN=/usr/bin/llvm-lipo-14
