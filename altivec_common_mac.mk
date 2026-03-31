@@ -1,6 +1,6 @@
 # Altivec Intelligence Common Makefile
 # This file contains the standard logic for quad-fat mac apps
-# Targets: ppc (10.4), x86 (10.4), x64 (10.6), arm (11.0)
+# Targets: ppc (10.4), x86 (10.4), x64 (10.9), arm (11.0)
 
 # --- Versions ---
 SDK_MAC_OLD = 10.5
