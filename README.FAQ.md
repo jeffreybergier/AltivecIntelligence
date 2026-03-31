@@ -98,11 +98,10 @@ See the table below to understand the compilers and SDKs used:
 | Target | Compiler | SDK | Architectures | Compatibility |
 | :--- | :--- | :--- | :--- | :--- |
 | **Mac (Legacy)** | Apple GCC 4.2.1 | 10.5 | ppc, x86 | 10.4 Tiger+ |
-| **Mac (Modern Intel)**| Clang 14 | 10.11 | x64 | 10.6 Snow Leopard+ |
-| **Mac (Apple Silicon)**| Clang 14 | 11.3 | arm64 | 11.0 Big Sur+ |
+| **Mac (Modern)** | Clang 14 | 11.3 | x64, arm64 | 10.9 Mavericks+ |
 | **iPhone** | Clang 14 | 8.4 | armv7, arm64 | iPhone 3GS+ iOS 4.3+ |
 
-Even though the Mac version uses 2 compilers and 3 SDKs, it combines them into
+Even though the Mac version uses 2 compilers and 2 SDKs, it combines them into
 one Universal Binary with the lipo command.
 
 ## Project Origins

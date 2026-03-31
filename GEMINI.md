@@ -9,7 +9,7 @@ Hi, you are an AI programming assistant helping the user develop and deploy apps
 
 ## 📜 Development Rules
 - **MRC Mandatory:** For Mac apps targeting 10.4/10.5, always use `retain`, `release`, and `autorelease`. Use manual getters and setters.
-- **Legacy APIs:** Always verify API compatibility against the 10.5/10.11 headers. Warn the user if they attempt to use symbols that break Tiger/Leopard compatibility.
+- **Legacy APIs:** Always verify API compatibility against the 10.5 headers. Warn the user if they attempt to use symbols that break Tiger/Leopard compatibility.
 - **Modern Features:** iPhone apps (iOS 4.3+) can use properties and modern features, but be cautious with code shared between Mac and iPhone targets.
 - **Warnings** Make sure you always tell the user when there are warnings as
 this likely indicates the app will crash on older systems. The exception is 
@@ -34,9 +34,8 @@ deprecation warnings as those will be common when dealing with these old API's.
 ## 📦 Installed SDKs
 Located in /osxcross/target/SDK/:
 1. MacOSX10.5.sdk: Legacy SDK used for PowerPC and 32-bit Intel slices (Tiger/Leopard compatibility).
-2. MacOSX10.11.sdk: Modern Intel SDK used for 64-bit Intel (x86_64) slices targeting El Capitan.
-3. MacOSX11.3.sdk: Modern SDK used for Apple Silicon (arm64) slices.
-4. iPhoneOS8.4.sdk: Comprehensive SDK for legacy and modern iPhone devices.
+2. MacOSX11.3.sdk: Modern SDK used for both 64-bit Intel (x86_64) and Apple Silicon (arm64) slices.
+3. iPhoneOS8.4.sdk: Comprehensive SDK for legacy and modern iPhone devices.
 
 
 ## ⚔️ Build Matrix
@@ -44,8 +43,7 @@ Located in /osxcross/target/SDK/:
 | Target | Compiler | SDK | Architectures | Optimization |
 | :--- | :--- | :--- | :--- | :--- |
 | **Mac (Legacy)** | `oppc32-gcc` / `o32-gcc` | 10.5 | ppc, i386 (32-bit) | -O3 / -O0 |
-| **Mac (Modern Intel)**| `x86_64...-clang` | 10.11 | x86_64 (64-bit) | -O3 / -O0 |
-| **Mac (Apple Silicon)**| `clang-14` | 11.3 | arm64 (64-bit) | -O3 / -O0 |
+| **Mac (Modern)**| `clang-14` | 11.3 | x86_64, arm64 (64-bit) | -O3 / -O0 |
 | **iPhone** | `clang-14` | 8.4 | armv7, arm64 | -O3 / -O0 |
 
 ## 🔗 Library Build System (libcurl)
