@@ -9,14 +9,14 @@ SDK_DIR=$(OSXCROSS_ROOT)/SDK
 # --- Compilers ---
 COMPILER_PPC=oppc32-gcc
 COMPILER_X86=o32-gcc
-COMPILER_X64=x86_64-apple-darwin15-clang
+COMPILER_X64=/usr/bin/clang
 COMPILER_ARM64=/usr/bin/clang
 COMPILER_IOS=/usr/bin/clang
 
 # --- SDK Paths ---
 SDK_PPC_PATH=$(SDK_DIR)/MacOSX10.5.sdk
 SDK_X86_PATH=$(SDK_DIR)/MacOSX10.5.sdk
-SDK_X64_PATH=$(SDK_DIR)/MacOSX10.11.sdk
+SDK_X64_PATH=$(SDK_DIR)/MacOSX11.3.sdk
 SDK_ARM64_PATH=$(SDK_DIR)/MacOSX11.3.sdk
 SDK_IOS_PATH=$(SDK_DIR)/iPhoneOS8.4.sdk
 
@@ -42,7 +42,7 @@ COMMON_WARN_FLAGS=-Wall -Wimplicit-function-declaration
 # --- Deployment Targets ---
 MAC_MIN_PPC=10.4
 MAC_MIN_X86=10.4
-MAC_MIN_X64=10.6
+MAC_MIN_X64=10.9
 MAC_MIN_ARM64=11.0
 IOS_MIN_VER=4.3
 
