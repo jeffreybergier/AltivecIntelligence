@@ -146,7 +146,7 @@ $(INT_DIR)/x86/%.o: %.c
 # --- x64 slice (10.9 target, 11.3 sdk) ---
 $(INT_DIR)/x64.bin: $(X64_OBJS)
 	@echo "  > linking x64 binary"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_NEW_PATH) \
+	@$(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_NEW_PATH) \
 		-fuse-ld=$(LD64_LLD) -Wl,-platform_version,macos,$(MAC_MIN_MID),$(SDK_MAC_NEW) \
 	    $^ $(MAC_LIBS) -o $@
 
@@ -156,19 +156,19 @@ $(INT_DIR)/x64/%.o: %.m
 		echo " [3/7] Compiling x64 (sdk: $(SDK_MAC_NEW), min: $(MAC_MIN_MID))..."; \
 	fi
 	@echo "  > x64: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
+	@$(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
 	    $(MAC_FLAGS) -c $< -o $@
 
 $(INT_DIR)/x64/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo "  > x64: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
+	@$(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
 	    $(MAC_FLAGS) -c $< -o $@
 
 # --- arm slice (11.0 target, 11.3 sdk) ---
 $(INT_DIR)/arm.bin: $(ARM_OBJS)
 	@echo "  > linking arm64 binary"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_NEW) $(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -isysroot $(SDK_MAC_NEW_PATH) \
+	@$(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -isysroot $(SDK_MAC_NEW_PATH) \
 		-fuse-ld=$(LD64_LLD) -Wl,-platform_version,macos,$(MAC_MIN_NEW),$(SDK_MAC_NEW) \
 	    $^ $(MAC_LIBS) -o $@
 
@@ -178,13 +178,13 @@ $(INT_DIR)/arm/%.o: %.m
 		echo " [4/7] Compiling arm64 (sdk: $(SDK_MAC_NEW), min: $(MAC_MIN_NEW))..."; \
 	fi
 	@echo "  > arm64: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_NEW) $(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
+	@$(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
 	    $(MAC_FLAGS) -c $< -o $@
 
 $(INT_DIR)/arm/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo "  > arm64: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_NEW) $(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
+	@$(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
 	    $(MAC_FLAGS) -c $< -o $@
 
 .PHONY: release debug clean validate
