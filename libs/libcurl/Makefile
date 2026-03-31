@@ -21,7 +21,9 @@ phone: phone-static
 mac: mac-static
 
 # --- AICURLConnection Only Targets ---
-aicc:
+aicc: aicc-mac
+
+aicc-mac:
 	@echo "==========================================================="
 	@echo "BUILDING MAC AICURLConnection (ppc, x86, x64, arm64)"
 	@echo "==========================================================="
@@ -37,4 +39,4 @@ clean:
 	$(MAKE) -f Makefile-phone clean
 	$(MAKE) -f Makefile-mac clean
 
-.PHONY: all phone-static mac-static phone mac aicc aicc-phone clean
+.PHONY: all phone-static mac-static phone mac aicc aicc-mac aicc-phone clean
