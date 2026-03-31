@@ -4,22 +4,20 @@
 
 # --- Versions ---
 SDK_MAC_OLD = 10.5
-SDK_MAC_MID = 10.11
 SDK_MAC_NEW = 11.3
 MAC_MIN_OLD = 10.4
-MAC_MIN_MID = 10.8
+MAC_MIN_MID = 10.9
 MAC_MIN_NEW = 11.0
 
 # --- Compilers ---
 COMPILER_PPC=oppc32-gcc
 COMPILER_X86=o32-gcc
-COMPILER_X64=x86_64-apple-darwin15-clang
+COMPILER_X64=/usr/bin/clang
 COMPILER_ARM=/usr/bin/clang
 DSYMUTIL=/usr/bin/dsymutil-14
 
 # --- SDK Paths ---
 SDK_MAC_OLD_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_OLD).sdk
-SDK_MAC_MID_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_MID).sdk
 SDK_MAC_NEW_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_NEW).sdk
 LD64_LLD=/osxcross/target/bin/ld64.lld
 export OSXCROSS_NO_DSYMUTIL=1
@@ -68,7 +66,6 @@ clean:
 
 validate:
 	@if [ ! -d "$(SDK_MAC_OLD_PATH)" ]; then echo " [!] ERROR: Mac SDK 10.5 missing at $(SDK_MAC_OLD_PATH)"; exit 1; fi
-	@if [ ! -d "$(SDK_MAC_MID_PATH)" ]; then echo " [!] ERROR: Mac SDK 10.11 missing at $(SDK_MAC_MID_PATH)"; exit 1; fi
 	@if [ ! -d "$(SDK_MAC_NEW_PATH)" ]; then echo " [!] ERROR: Mac SDK 11.3 missing at $(SDK_MAC_NEW_PATH)"; exit 1; fi
 	@for dir in $(patsubst -I%,%,$(filter -I%,$(MAC_FLAGS))) $(patsubst -L%,%,$(filter -L%,$(MAC_LIBS))); do \
 		if [ ! -d "$$dir" ]; then \
@@ -146,28 +143,27 @@ $(INT_DIR)/x86/%.o: %.c
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) $(MAC_FLAGS) -arch i386 -isysroot $(SDK_MAC_OLD_PATH) \
 	    -c $< -o $@
 
-# --- x64 slice (10.6 target, 10.11 sdk) ---
+# --- x64 slice (10.9 target, 11.3 sdk) ---
 $(INT_DIR)/x64.bin: $(X64_OBJS)
-	@echo "  > linking x64 binary (ld64.lld)"
-	@$(LD64_LLD) -demangle -dynamic -arch x86_64 -platform_version macos $(MAC_MIN_MID).0 $(MAC_MIN_MID).0 \
-		-syslibroot $(SDK_MAC_MID_PATH) -o $@ \
-		-L$(SDK_MAC_MID_PATH)/usr/lib \
-		$^ $(MAC_LIBS) -lSystem -framework AppKit -lobjc $(SDK_MAC_MID_PATH)/usr/lib/crt1.10.6.o
+	@echo "  > linking x64 binary"
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_NEW_PATH) \
+		-fuse-ld=$(LD64_LLD) -Wl,-platform_version,macos,$(MAC_MIN_MID),$(SDK_MAC_NEW) \
+	    $^ $(MAC_LIBS) -o $@
 
 $(INT_DIR)/x64/%.o: %.m
 	@mkdir -p $(dir $@)
 	@if [ "$(notdir $<)" = "$(firstword $(notdir $(SOURCES)))" ]; then \
-		echo " [3/7] Compiling x64 (sdk: $(SDK_MAC_MID), min: $(MAC_MIN_MID))..."; \
+		echo " [3/7] Compiling x64 (sdk: $(SDK_MAC_NEW), min: $(MAC_MIN_MID))..."; \
 	fi
 	@echo "  > x64: $(notdir $<)"
-	@(MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_MID_PATH) \
-		-mmacosx-version-min=$(MAC_MIN_MID) -march=core2 $(MAC_FLAGS) -c $< -o $@ 2>&1) | (grep -v "built for target 'darwin9'" || true)
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
+	    $(MAC_FLAGS) -c $< -o $@
 
 $(INT_DIR)/x64/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo "  > x64: $(notdir $<)"
-	@(MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_MID_PATH) \
-		-mmacosx-version-min=$(MAC_MIN_MID) -march=core2 $(MAC_FLAGS) -c $< -o $@ 2>&1) | (grep -v "built for target 'darwin9'" || true)
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_MID) $(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
+	    $(MAC_FLAGS) -c $< -o $@
 
 # --- arm slice (11.0 target, 11.3 sdk) ---
 $(INT_DIR)/arm.bin: $(ARM_OBJS)
