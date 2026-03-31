@@ -66,7 +66,7 @@ ENV OSX_VERSION_MIN=10.5
 ENV UNATTENDED=1
 ENV OSXCROSS_NO_DSYMUTIL=1
 ENV INSTALLPREFIX=/osxcross/target
-ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib"
 
 # 3. Copy OSXCross and build base toolchain
 WORKDIR /osxcross
