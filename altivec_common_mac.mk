@@ -97,6 +97,7 @@ $(BUNDLE): $(UNIVERSAL_BIN)
 	@if [ -f "$(INT_DIR)/x64.bin" ]; then $(DSYMUTIL) $(INT_DIR)/x64.bin -o $(BUILD_DIR)/$(APP_NAME).x64.dSYM; fi
 	@if [ -f "$(INT_DIR)/arm.bin" ]; then $(DSYMUTIL) $(INT_DIR)/arm.bin -o $(BUILD_DIR)/$(APP_NAME).arm.dSYM; fi
 	@echo -n "APPL????" > $@/Contents/PkgInfo
+	$(EXTRA_BUNDLE_STEPS)
 
 $(INT_DIR)/$(APP_NAME)-universal: $(INT_DIR)/ppc.bin $(INT_DIR)/x86.bin $(INT_DIR)/x64.bin $(INT_DIR)/arm.bin
 	@echo " [5/7] Merging quad-fat binary (ppc, x86, x64, arm)..."
