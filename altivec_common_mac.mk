@@ -31,6 +31,7 @@ UNIVERSAL_BIN ?= $(INT_DIR)/$(APP_NAME)-universal
 # --- Flags (Decoupled from SDK) ---
 MAC_FLAGS = $(OPT_FLAGS) -g -Wall
 MAC_LIBS = -framework AppKit -lobjc
+LEGACY_GCC_FLAGS = -fno-stack-protector -fno-common -fno-zero-initialized-in-bss
 
 # --- Target Paths ---
 BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
@@ -113,20 +114,20 @@ $(INT_DIR)/ppc/%.o: %.m
 		echo " [1/7] Compiling ppc (sdk: $(SDK_MAC_OLD), min: $(MAC_MIN_OLD))..."; \
 	fi
 	@echo "  > ppc: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_PPC) $(MAC_FLAGS) -arch ppc -isysroot $(SDK_MAC_OLD_PATH) \
-	    -fno-stack-protector -fno-common -fno-zero-initialized-in-bss -c $< -o $@
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_PPC) $(MAC_FLAGS) $(LEGACY_GCC_FLAGS) \
+	    -arch ppc -isysroot $(SDK_MAC_OLD_PATH) -c $< -o $@
 
 $(INT_DIR)/ppc/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo "  > ppc: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_PPC) $(MAC_FLAGS) -arch ppc -isysroot $(SDK_MAC_OLD_PATH) \
-	    -fno-stack-protector -fno-common -fno-zero-initialized-in-bss -c $< -o $@
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_PPC) $(MAC_FLAGS) $(LEGACY_GCC_FLAGS) \
+	    -arch ppc -isysroot $(SDK_MAC_OLD_PATH) -c $< -o $@
 
 # --- x86 slice (10.4, 10.5 sdk) ---
 $(INT_DIR)/x86.bin: $(X86_OBJS)
 	@echo "  > linking x86 binary"
 	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) -arch i386 -isysroot $(SDK_MAC_OLD_PATH) \
-	    $^ $(MAC_LIBS) -o $@
+	    $^ $(MAC_LIBS) -lgcc_s.10.4 -o $@
 
 $(INT_DIR)/x86/%.o: %.m
 	@mkdir -p $(dir $@)
@@ -134,14 +135,14 @@ $(INT_DIR)/x86/%.o: %.m
 		echo " [2/7] Compiling x86 (sdk: $(SDK_MAC_OLD), min: $(MAC_MIN_OLD))..."; \
 	fi
 	@echo "  > x86: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) $(MAC_FLAGS) -arch i386 -isysroot $(SDK_MAC_OLD_PATH) \
-	    -c $< -o $@
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) $(MAC_FLAGS) $(LEGACY_GCC_FLAGS) \
+	    -arch i386 -isysroot $(SDK_MAC_OLD_PATH) -c $< -o $@
 
 $(INT_DIR)/x86/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo "  > x86: $(notdir $<)"
-	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) $(MAC_FLAGS) -arch i386 -isysroot $(SDK_MAC_OLD_PATH) \
-	    -c $< -o $@
+	@MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_OLD) $(COMPILER_X86) $(MAC_FLAGS) $(LEGACY_GCC_FLAGS) \
+	    -arch i386 -isysroot $(SDK_MAC_OLD_PATH) -c $< -o $@
 
 # --- x64 slice (10.9 target, 11.3 sdk) ---
 $(INT_DIR)/x64.bin: $(X64_OBJS)
