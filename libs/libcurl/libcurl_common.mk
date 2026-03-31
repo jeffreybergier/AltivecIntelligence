@@ -47,7 +47,8 @@ MAC_MIN_ARM64=11.0
 IOS_MIN_VER=4.3
 
 # PPC specific flags from altivec_common_mac.mk
-PPC_COMPAT_FLAGS=-fno-stack-protector -fno-common -fno-zero-initialized-in-bss
+LEGACY_GCC_FLAGS=-fno-stack-protector -fno-common -fno-zero-initialized-in-bss
+PPC_COMPAT_FLAGS=$(LEGACY_GCC_FLAGS)
 
 # Jobs for parallel make
 JOBS=$(shell getconf _NPROCESSORS_ONLN)

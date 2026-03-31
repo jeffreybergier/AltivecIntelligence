@@ -17,10 +17,9 @@ OPENSSL_URL=https://www.openssl.org/source/openssl-$(OPENSSL_VER).tar.gz
 CURL_URL=https://curl.se/download/curl-$(CURL_VER).tar.gz
 
 # Architecture Specific Flags
-PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(PPC_COMPAT_FLAGS)
-X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH)
+PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(LEGACY_GCC_FLAGS)
+X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH) $(LEGACY_GCC_FLAGS)
 X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_X64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
-X64_LDFLAGS=
 ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
 
 all: static aicc
@@ -52,11 +51,11 @@ $(BUILD_ROOT)/lib/cacert.pem:
 # --- AICURLConnection ---
 $(PREFIX)/lib/libAICURLConnection.a: AICURLConnection.m AICURLConnection.h $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libcrypto.a $(PREFIX)/lib/libz.a
 	@echo "--- Building AICURLConnection (ppc) ---"
-	$(COMPILER_PPC) $(PPC_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/ppc/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-ppc.o
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) $(PPC_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/ppc/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-ppc.o
 	$(AR_LEGACY) rc $(PREFIX)/ppc/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-ppc.o
 	$(RANLIB_LEGACY) $(PREFIX)/ppc/lib/libAICURLConnection.a
 	@echo "--- Building AICURLConnection (x86) ---"
-	$(COMPILER_X86) $(X86_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x86/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x86.o
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) $(X86_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x86/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x86.o
 	$(AR_LEGACY) rc $(PREFIX)/x86/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x86.o
 	$(RANLIB_LEGACY) $(PREFIX)/x86/lib/libAICURLConnection.a
 	@echo "--- Building AICURLConnection (x64) ---"
