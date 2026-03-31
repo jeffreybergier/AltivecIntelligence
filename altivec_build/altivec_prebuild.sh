@@ -59,9 +59,6 @@ echo "--- Downloading SDKs ---"
 echo "> Mac OS X 10.5  SDK"
 curl -sL https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.5.sdk.tar.xz -o "$TARBALLS_DIR/MacOSX10.5.sdk.tar.xz"
 
-echo ">     OS X 10.11 SDK"
-curl -sL https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.11.sdk.tar.xz -o "$TARBALLS_DIR/MacOSX10.11.sdk.tar.xz"
-
 echo ">    macOS 11.3  SDK"
 curl -sL https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz -o "$TARBALLS_DIR/MacOSX11.3.sdk.tar.xz"
 
