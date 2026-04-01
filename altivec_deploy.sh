@@ -109,6 +109,7 @@ echo "[OK] Found package: $(basename "$PACKAGE_PATH")"
 # --- Utility Checks ---
 echo ""
 echo "--- UTILITY CHECK ---"
+HAS_APPINST=false
 HAS_IPAINSTALLER=false
 HAS_LLDB=false
 HAS_GDB=false
@@ -123,13 +124,20 @@ check_util() {
 }
 
 if [[ "$DEVICE_TYPE" == "iphone" ]]; then
+  if check_util "which appinst"; then
+    echo "[OK] found 'appinst'."
+    HAS_APPINST=true
+  fi
   if check_util "which ipainstaller"; then
     echo "[OK] found 'ipainstaller'."
     HAS_IPAINSTALLER=true
-  else
-    echo "[FAIL] 'ipainstaller' NOT found."
+  fi
+
+  if [ "$HAS_APPINST" = false ] && [ "$HAS_IPAINSTALLER" = false ]; then
+    echo "[FAIL] Neither 'appinst' nor 'ipainstaller' found."
     exit 1
   fi
+
   if check_util "[ -f /var/log/syslog ]"; then
     echo "[OK] found '/var/log/syslog'."
     HAS_SYSLOG=true
@@ -152,37 +160,45 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ "$DEVICE_TYPE" == "iphone" ]]; then
   if [ "$IS_REMOTE" = true ]; then
     REMOTE_ROOT="/var/mobile/tmp_altivec"
-    REMOTE_BUILD_DIR="$REMOTE_ROOT/$BUILD_DIR_NAME"
     echo "Preparing remote directory: $REMOTE_ROOT"
     ssh "$TARGET_DEVICE" "mkdir -p \"$REMOTE_ROOT\""
-    echo "Copying build to iPhone..."
-    scp -O -r "$BUILD_DIR" "$TARGET_DEVICE:\"$REMOTE_ROOT/\""
-    INSTALL_PATH="$REMOTE_BUILD_DIR/$(basename "$PACKAGE_PATH")"
+    echo "Copying $(basename "$PACKAGE_PATH") to iPhone..."
+    scp "$PACKAGE_PATH" "$TARGET_DEVICE:\"$REMOTE_ROOT/\""
+    INSTALL_PATH="$REMOTE_ROOT/$(basename "$PACKAGE_PATH")"
   else
     INSTALL_PATH="$BUILD_DIR/$(basename "$PACKAGE_PATH")"
   fi
   
   echo "Installing package: $(basename "$PACKAGE_PATH")..."
   set +e
-  if [ "$IS_REMOTE" = true ]; then
-    ssh "$TARGET_DEVICE" "ipainstaller \"$INSTALL_PATH\""
+  INSTALL_CMD=""
+  if [ "$HAS_APPINST" = true ]; then
+    INSTALL_CMD="appinst \"$INSTALL_PATH\""
   else
-    ipainstaller "$INSTALL_PATH"
+    INSTALL_CMD="ipainstaller \"$INSTALL_PATH\""
+  fi
+
+  if [ "$IS_REMOTE" = true ]; then
+    ssh "$TARGET_DEVICE" "$INSTALL_CMD"
+  else
+    eval "$INSTALL_CMD"
   fi
   set -e
   echo "Deployment complete!"
 
   if [ "$HAS_SYSLOG" = true ]; then
+    APP_NAME=$(echo "$(basename "$PACKAGE_PATH")" | sed 's/\.ipa$//')
     echo ""
     echo "***************************************************"
     echo "  PLEASE OPEN THE APP ON YOUR IPHONE NOW"
-    echo "  Tailing /var/log/syslog (Press Ctrl+C to stop)..."
+    echo "  Filtering syslog for: $APP_NAME"
+    echo "  (Press Ctrl+C to stop)..."
     echo "***************************************************"
     echo ""
     if [ "$IS_REMOTE" = true ]; then
-      ssh "$TARGET_DEVICE" "tail -f /var/log/syslog"
+      ssh "$TARGET_DEVICE" "tail -f /var/log/syslog | grep --line-buffered \"$APP_NAME\""
     else
-      tail -f /var/log/syslog
+      tail -f /var/log/syslog | grep --line-buffered "$APP_NAME"
     fi
   fi
 
@@ -194,13 +210,13 @@ elif [[ "$DEVICE_TYPE" == "mac" ]]; then
     echo "Preparing remote directory: $REMOTE_ROOT"
     ssh "$TARGET_DEVICE" "mkdir -p \"$REMOTE_ROOT\""
     echo "Copying build to Mac..."
-    scp -O -r "$BUILD_DIR" "$TARGET_DEVICE:\"$REMOTE_ROOT/\""
+    scp -r "$BUILD_DIR" "$TARGET_DEVICE:\"$REMOTE_ROOT/\""
     
     # Upload appropriate debugger init
     if [ "$HAS_LLDB" = true ] && [ -f "$SCRIPT_DIR/altivec_build/lldbinit" ]; then
-      scp -O -q "$SCRIPT_DIR/altivec_build/lldbinit" "$TARGET_DEVICE:\"$REMOTE_ROOT/lldbinit\""
+      scp -q "$SCRIPT_DIR/altivec_build/lldbinit" "$TARGET_DEVICE:\"$REMOTE_ROOT/lldbinit\""
     elif [ "$HAS_GDB" = true ] && [ -f "$SCRIPT_DIR/altivec_build/gdbinit" ]; then
-      scp -O -q "$SCRIPT_DIR/altivec_build/gdbinit" "$TARGET_DEVICE:\"$REMOTE_ROOT/gdbinit\""
+      scp -q "$SCRIPT_DIR/altivec_build/gdbinit" "$TARGET_DEVICE:\"$REMOTE_ROOT/gdbinit\""
     fi
     
     APP_PATH="$REMOTE_BUILD_DIR/$(basename "$PACKAGE_PATH")"
