@@ -15,6 +15,9 @@ Hi, you are an AI programming assistant helping the user develop and deploy apps
 this likely indicates the app will crash on older systems. The exception is 
 deprecation warnings as those will be common when dealing with these old API's.
 - **Surgical Changes:** Focus on small, incremental improvements. Accomplish tasks in the fewest lines of code possible.
+- **Method Implementation Style:** To facilitate easy copy-pasting of method signatures from headers, all method implementations must end with a semicolon followed by the opening brace on a new line. 
+  - *Example:* `- (void)dealloc; \n { [super dealloc]; }`
+  - *Note:* This is a mandatory project-specific exception to the Google Objective-C style guide.
 - **SSH Safety:** When SSH'd into a Mac, stay within `~/Desktop`. When on an iPhone, stay within `~/tmp_altivec`.
 
 ## 💡 Mentorship & Accessibility Tips

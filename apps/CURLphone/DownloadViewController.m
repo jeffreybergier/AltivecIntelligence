@@ -4,14 +4,16 @@
 
 @implementation DownloadViewController
 
-- (id)initWithConnectionClass:(Class)connectionClass {
+- (id)initWithConnectionClass:(Class)connectionClass;
+{
   if ((self = [super initWithStyle:UITableViewStyleGrouped])) {
     connectionClass_ = connectionClass;
   }
   return self;
 }
 
-- (void)viewDidLoad {
+- (void)viewDidLoad;
+{
   [super viewDidLoad];
   
   CGRect bounds = [[self view] bounds];
@@ -58,7 +60,8 @@
   [resultImageView_ setAutoresizingMask:UIViewAutoresizingFlexibleWidth];
 }
 
-- (void)dealloc {
+- (void)dealloc;
+{
   [urlTextView_ release];
   [downloadButton_ release];
   [progressView_ release];
@@ -70,7 +73,8 @@
 
 #pragma mark - Actions
 
-- (void)downloadButtonClicked:(id)sender {
+- (void)downloadButtonClicked:(id)sender;
+{
   [urlTextView_ resignFirstResponder];
   
   NSURL *url = [NSURL URLWithString:[urlTextView_ text]];
@@ -93,19 +97,22 @@
 
 #pragma mark - Table View Data Source
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { 
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView;
+{ 
   return 3; 
 }
 
 - (NSInteger)tableView:(UITableView *)tableView 
-    numberOfRowsInSection:(NSInteger)section {
+    numberOfRowsInSection:(NSInteger)section;
+{
   if (section == 0) return 1;
   if (section == 1) return 1;
   return 2;
 }
 
 - (NSString *)tableView:(UITableView *)tableView 
-    titleForHeaderInSection:(NSInteger)section {
+    titleForHeaderInSection:(NSInteger)section;
+{
   if (section == 0) return @"Transfer";
   if (section == 1) return @"";
   if (section == 2) return @"Result";
@@ -113,7 +120,8 @@
 }
 
 - (CGFloat)tableView:(UITableView *)tableView 
-    heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    heightForRowAtIndexPath:(NSIndexPath *)indexPath;
+{
   if ([indexPath section] == 0) return 88;
   if ([indexPath section] == 1) return 44;
   if ([indexPath section] == 2 && [indexPath row] == 0) return 52;
@@ -122,7 +130,8 @@
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView 
-         cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+         cellForRowAtIndexPath:(NSIndexPath *)indexPath;
+{
   NSString *CellIdentifier = [NSString stringWithFormat:@"Cell_%ld_%ld", 
     (long)[indexPath section], (long)[indexPath row]];
   UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
@@ -157,13 +166,15 @@
 #pragma mark - Table View Delegate
 
 - (BOOL)tableView:(UITableView *)tableView 
-    shouldHighlightRowAtIndexPath:(NSIndexPath *)indexPath {
+    shouldHighlightRowAtIndexPath:(NSIndexPath *)indexPath;
+{
   return NO;
 }
 
 #pragma mark - NSURLConnectionDelegate
 
-- (void)connection:(id)connection didReceiveResponse:(NSURLResponse *)response {
+- (void)connection:(id)connection didReceiveResponse:(NSURLResponse *)response;
+{
   if (![response isKindOfClass:[NSHTTPURLResponse class]]) return;
   expectedContentLength_ = [response expectedContentLength];
   NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
@@ -178,7 +189,8 @@
   }
 }
 
-- (void)connection:(id)connection didReceiveData:(NSData *)data {
+- (void)connection:(id)connection didReceiveData:(NSData *)data;
+{
   [receivedData_ appendData:data];
   if (expectedContentLength_ > 0) {
     float progress = (float)[receivedData_ length] / (float)expectedContentLength_;
@@ -188,7 +200,8 @@
   [statusLabel_ setText:[NSString stringWithFormat:@"Receiving: %@...", sizeStr]];
 }
 
-- (void)connection:(id)connection didFailWithError:(NSError *)error {
+- (void)connection:(id)connection didFailWithError:(NSError *)error;
+{
   [downloadButton_ setEnabled:YES];
   [progressView_ XP_setProgress:1.0 animated:YES];
   [statusLabel_ setText:[NSString stringWithFormat:@"Failed: %@", 
@@ -202,7 +215,8 @@
   [alert release];
 }
 
-- (void)connectionDidFinishLoading:(id)connection {
+- (void)connectionDidFinishLoading:(id)connection;
+{
   [downloadButton_ setEnabled:YES];
   [progressView_ XP_setProgress:1.0 animated:YES];
   NSString *sizeStr = [NSString XP_stringFromByteCount:[receivedData_ length]];
@@ -215,7 +229,8 @@
 
 - (BOOL)textView:(UITextView *)textView 
     shouldChangeTextInRange:(NSRange)range 
-            replacementText:(NSString *)text {
+            replacementText:(NSString *)text;
+{
   if ([text isEqualToString:@"\n"]) {
     [textView resignFirstResponder];
     return NO;

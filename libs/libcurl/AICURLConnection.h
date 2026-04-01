@@ -60,9 +60,6 @@ expectedContentLength:(long long)expectedContentLength;
 // Returns the version string for the linked curl library.
 + (NSString *)curlVersion;
 
-// Returns the version string for the crypto component of OpenSSL.
-+ (NSString *)cryptoVersion;
-
 // Returns the path to the bundled CA certificates file.
 + (NSString *)certPath;
 

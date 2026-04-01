@@ -15,7 +15,7 @@ cleanup() {
   if [ "$IS_REMOTE" = true ] && [ -n "$REMOTE_ROOT" ]; then
     echo ""
     echo "Cleaning up remote Altivec folder ($REMOTE_ROOT)..."
-    ssh -o ConnectTimeout=5 "$TARGET_DEVICE" "rm -rf \"$REMOTE_ROOT\""
+    ssh -o ConnectTimeout=5 "$TARGET_DEVICE" "rm -rf '$REMOTE_ROOT'"
     echo "Cleanup complete."
   fi
 }
@@ -163,7 +163,7 @@ if [[ "$DEVICE_TYPE" == "iphone" ]]; then
     echo "Preparing remote directory: $REMOTE_ROOT"
     ssh "$TARGET_DEVICE" "mkdir -p \"$REMOTE_ROOT\""
     echo "Copying $(basename "$PACKAGE_PATH") to iPhone..."
-    scp "$PACKAGE_PATH" "$TARGET_DEVICE:\"$REMOTE_ROOT/\""
+    scp "$PACKAGE_PATH" "$TARGET_DEVICE:$REMOTE_ROOT/"
     INSTALL_PATH="$REMOTE_ROOT/$(basename "$PACKAGE_PATH")"
   else
     INSTALL_PATH="$BUILD_DIR/$(basename "$PACKAGE_PATH")"
@@ -210,13 +210,13 @@ elif [[ "$DEVICE_TYPE" == "mac" ]]; then
     echo "Preparing remote directory: $REMOTE_ROOT"
     ssh "$TARGET_DEVICE" "mkdir -p \"$REMOTE_ROOT\""
     echo "Copying build to Mac..."
-    scp -r "$BUILD_DIR" "$TARGET_DEVICE:\"$REMOTE_ROOT/\""
+    scp -r "$BUILD_DIR" "$TARGET_DEVICE:$REMOTE_ROOT/"
     
     # Upload appropriate debugger init
     if [ "$HAS_LLDB" = true ] && [ -f "$SCRIPT_DIR/altivec_build/lldbinit" ]; then
-      scp -q "$SCRIPT_DIR/altivec_build/lldbinit" "$TARGET_DEVICE:\"$REMOTE_ROOT/lldbinit\""
+      scp -q "$SCRIPT_DIR/altivec_build/lldbinit" "$TARGET_DEVICE:$REMOTE_ROOT/lldbinit"
     elif [ "$HAS_GDB" = true ] && [ -f "$SCRIPT_DIR/altivec_build/gdbinit" ]; then
-      scp -q "$SCRIPT_DIR/altivec_build/gdbinit" "$TARGET_DEVICE:\"$REMOTE_ROOT/gdbinit\""
+      scp -q "$SCRIPT_DIR/altivec_build/gdbinit" "$TARGET_DEVICE:$REMOTE_ROOT/gdbinit"
     fi
     
     APP_PATH="$REMOTE_BUILD_DIR/$(basename "$PACKAGE_PATH")"
