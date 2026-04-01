@@ -3,32 +3,10 @@
 
 #pragma mark - Cross-Platform Implementations
 
-@implementation NSWindow (CrossPlatform)
-
-- (void)XP_setContentBorderThickness:(float)thickness forEdge:(NSRectEdge)edge {
-  SEL selector = @selector(setContentBorderThickness:forEdge:);
-  if ([self respondsToSelector:selector]) {
-    typedef void (*MethodPtr)(id, SEL, float, NSRectEdge);
-    MethodPtr method = (MethodPtr)[self methodForSelector:selector];
-    method(self, selector, thickness, edge);
-  }
-}
-
-- (void)XP_setAutorecalculatesContentBorderThickness:(BOOL)flag 
-                                             forEdge:(NSRectEdge)edge {
-  SEL selector = @selector(setAutorecalculatesContentBorderThickness:forEdge:);
-  if ([self respondsToSelector:selector]) {
-    typedef void (*MethodPtr)(id, SEL, BOOL, NSRectEdge);
-    MethodPtr method = (MethodPtr)[self methodForSelector:selector];
-    method(self, selector, flag, edge);
-  }
-}
-
-@end
-
 @implementation NSString (CrossPlatform)
 
-+ (NSString *)XP_stringFromByteCount:(long long)bytes {
++ (NSString *)XP_stringFromByteCount:(long long)bytes;
+{
   if (bytes < 1024) return [NSString stringWithFormat:@"%lld B", bytes];
   double count = (double)bytes;
   NSArray *units = [NSArray arrayWithObjects:@"B", @"KB", @"MB", @"GB", nil];
@@ -46,7 +24,8 @@
 
 @implementation KeyValueTableView
 
-- (id)initWithFrame:(NSRect)frame {
+- (id)initWithFrame:(NSRect)frame;
+{
   if ((self = [super initWithFrame:frame])) {
     [self setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
     scrollView_ = [[NSScrollView alloc] initWithFrame:[self bounds]];
@@ -58,17 +37,15 @@
     tableView_ = [[NSTableView alloc] 
       initWithFrame:[[scrollView_ contentView] bounds]];
     
-    NSTableColumn *keyCol = [[NSTableColumn alloc] initWithIdentifier:@"Key"];
+    NSTableColumn *keyCol = [[[NSTableColumn alloc] initWithIdentifier:@"Key"] autorelease];
     [[keyCol headerCell] setStringValue:@"Key"];
     [keyCol setWidth:152.0];
     [tableView_ addTableColumn:keyCol];
-    [keyCol release];
 
-    NSTableColumn *valCol = [[NSTableColumn alloc] initWithIdentifier:@"Value"];
+    NSTableColumn *valCol = [[[NSTableColumn alloc] initWithIdentifier:@"Value"] autorelease];
     [[valCol headerCell] setStringValue:@"Value"];
     [valCol setWidth:252.0];
     [tableView_ addTableColumn:valCol];
-    [valCol release];
 
     [tableView_ setDataSource:self];
     [tableView_ setDelegate:self];
@@ -81,32 +58,34 @@
   return self;
 }
 
-- (void)setData:(NSDictionary *)data {
-  if (data_ != data) {
-    [data_ release];
-    data_ = [data retain];
-    [sortedKeys_ release];
-    sortedKeys_ = [[[data_ allKeys] 
-      sortedArrayUsingSelector:@selector(compare:)] retain];
-    [tableView_ reloadData];
-  }
+- (void)setData:(NSDictionary *)data;
+{
+  [data_ autorelease];
+  data_ = [data retain];
+  [sortedKeys_ autorelease];
+  sortedKeys_ = [[[data_ allKeys] 
+    sortedArrayUsingSelector:@selector(compare:)] retain];
+  [tableView_ reloadData];
 }
 
 - (NSDictionary *)data { return data_; }
 
-- (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView { 
+- (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView;
+{ 
   return (NSInteger)[sortedKeys_ count]; 
 }
 
 - (id)tableView:(NSTableView *)tableView 
     objectValueForTableColumn:(NSTableColumn *)tableColumn 
-                          row:(NSInteger)row {
+                          row:(NSInteger)row;
+{
   NSString *key = [sortedKeys_ objectAtIndex:row];
   if ([[tableColumn identifier] isEqualToString:@"Key"]) return key;
   return [data_ objectForKey:key];
 }
 
-- (void)dealloc {
+- (void)dealloc;
+{
   [scrollView_ release];
   [tableView_ release];
   [data_ release];
@@ -120,7 +99,8 @@
 
 @implementation DownloadViewController
 
-- (id)initWithConnectionClass:(Class)connectionClass frame:(NSRect)frame {
+- (id)initWithConnectionClass:(Class)connectionClass frame:(NSRect)frame;
+{
   if ((self = [super init])) {
     connectionClass_ = connectionClass;
     
@@ -184,7 +164,8 @@
   return self;
 }
 
-- (void)dealloc {
+- (void)dealloc;
+{
   [view_ release];
   [urlField_ release];
   [downloadButton_ release];
@@ -195,9 +176,8 @@
   [super dealloc];
 }
 
-- (BOOL)acceptsFirstResponder { return YES; }
-
-- (void)downloadButtonClicked:(id)sender {
+- (void)downloadButtonClicked:(id)sender;
+{
   NSString *urlStr = [urlField_ stringValue];
   NSURL *url = [NSURL URLWithString:urlStr];
   if (!url) return;
@@ -217,7 +197,8 @@
 
 #pragma mark - NSURLConnectionDelegate
 
-- (void)connection:(id)connection didReceiveResponse:(NSURLResponse *)response {
+- (void)connection:(id)connection didReceiveResponse:(NSURLResponse *)response;
+{
   if (![response isKindOfClass:[NSHTTPURLResponse class]]) return;
   NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
   NSInteger code = [httpResponse statusCode];
@@ -243,7 +224,8 @@
   }
 }
 
-- (void)connection:(id)connection didReceiveData:(NSData *)data {
+- (void)connection:(id)connection didReceiveData:(NSData *)data;
+{
   [receivedData_ appendData:data];
   if (![progressIndicator_ isIndeterminate]) {
     [progressIndicator_ incrementBy:(double)[data length]];
@@ -252,20 +234,22 @@
   [statusLabel_ setStringValue:[NSString stringWithFormat:@"Recv: %@", size]];
 }
 
-- (void)connection:(id)connection didFailWithError:(NSError *)error {
+- (void)connection:(id)connection didFailWithError:(NSError *)error;
+{
   [progressIndicator_ setIndeterminate:NO];
   [progressIndicator_ setMaxValue:1.0];
   [progressIndicator_ setDoubleValue:1.0];
   [downloadButton_ setEnabled:YES];
   [statusLabel_ setStringValue:[error localizedDescription]];
-  [self.nextResponder presentError:error];
+  [self presentError:error];
 }
 
-- (void)connectionDidFinishLoading:(id)connection {
+- (void)connectionDidFinishLoading:(id)connection;
+{
   [progressIndicator_ setDoubleValue:[progressIndicator_ maxValue]];
   [downloadButton_ setEnabled:YES];
-  NSImage *img = [[NSImage alloc] initWithData:receivedData_];
-  if (img) { [imageView_ setImage:img]; [img release]; }
+  NSImage *img = [[[NSImage alloc] initWithData:receivedData_] autorelease];
+  if (img) { [imageView_ setImage:img]; }
 }
 
 @end
@@ -276,7 +260,8 @@
 
 - (id)init { return [super initWithWindowNibName:@"ignored"]; }
 
-- (void)loadWindow {
+- (void)loadWindow;
+{
   XPWindowStyleMask mask = XPWindowStyleMaskTitled 
                          | XPWindowStyleMaskMiniaturizable
                          | XPWindowStyleMaskResizable;
@@ -291,18 +276,19 @@
   [self setWindow:window];
 }
 
-- (void)windowDidLoad {
+- (void)windowDidLoad;
+{
   [super windowDidLoad];
   NSView *contentView = [[self window] contentView];
   NSRect tabFrame = NSInsetRect([contentView bounds], 8, 8);
-  NSTabView *tabView = [[NSTabView alloc] initWithFrame:tabFrame];
+  NSTabView *tabView = [[[NSTabView alloc] initWithFrame:tabFrame] autorelease];
   [tabView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
   
   NSRect subFrame = [tabView contentRect];
   
   // CURL
   curlController_ = [[DownloadViewController alloc] 
-    initWithConnectionClass:NSClassFromString(@"AICURLConnection") frame:subFrame];
+    initWithConnectionClass:[AICURLConnection class] frame:subFrame];
   [curlController_ setNextResponder:self];
   NSTabViewItem *curlItem = [[[NSTabViewItem alloc] initWithIdentifier:@"C"] autorelease];
   [curlItem setLabel:@"CURL"];
@@ -325,23 +311,23 @@
   NSDictionary *v = [NSDictionary dictionaryWithObjectsAndKeys:
     [AICURLConnection zlibVersion], @"libz",
     [AICURLConnection sslVersion], @"libssl",
-    [AICURLConnection curlVersion], @"libcurl",
-    [AICURLConnection cryptoVersion], @"libcrypto", nil];
+    [AICURLConnection curlVersion], @"libcurl", nil];
   [kv setData:v];
   [infoItem setView:kv];
   [tabView addTabViewItem:infoItem];
 
   [contentView addSubview:tabView];
-  [tabView release];
 }
 
-- (BOOL)presentError:(NSError *)error {
+- (BOOL)presentError:(NSError *)error;
+{
   [self presentError:error modalForWindow:[self window] delegate:nil 
     didPresentSelector:NULL contextInfo:NULL];
   return YES;
 }
 
-- (void)dealloc {
+- (void)dealloc;
+{
   [curlController_ release];
   [systemController_ release];
   [super dealloc];

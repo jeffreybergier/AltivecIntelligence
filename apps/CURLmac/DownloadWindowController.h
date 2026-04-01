@@ -17,21 +17,17 @@
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
   #define XPWindowStyleMask               NSWindowStyleMask
   #define XPWindowStyleMaskTitled         NSWindowStyleMaskTitled
-  #define XPWindowStyleMaskClosable       NSWindowStyleMaskClosable
   #define XPWindowStyleMaskResizable      NSWindowStyleMaskResizable
   #define XPWindowStyleMaskMiniaturizable NSWindowStyleMaskMiniaturizable
   #define XPEventModifierFlagCommand      NSEventModifierFlagCommand
   #define XPEventModifierFlagOption       NSEventModifierFlagOption
-  #define XPTextAlignmentCenter           NSTextAlignmentCenter
 #else
   #define XPWindowStyleMask               NSUInteger
   #define XPWindowStyleMaskTitled         NSTitledWindowMask
-  #define XPWindowStyleMaskClosable       NSClosableWindowMask
   #define XPWindowStyleMaskResizable      NSResizableWindowMask
   #define XPWindowStyleMaskMiniaturizable NSMiniaturizableWindowMask
   #define XPEventModifierFlagCommand      NSCommandKeyMask
   #define XPEventModifierFlagOption       NSAlternateKeyMask
-  #define XPTextAlignmentCenter           NSCenterTextAlignment
 #endif
 
 /* 10.14 Mojave (Bezel and Progress Styles) */
@@ -42,12 +38,6 @@
   #define XPBezelStyleRounded             NSRoundedBezelStyle
   #define XPProgressIndicatorStyleBar     NSProgressIndicatorBarStyle
 #endif
-
-/* NSWindow category for Content Border (10.5+) */
-@interface NSWindow (CrossPlatform)
-- (void)XP_setContentBorderThickness:(float)thickness forEdge:(NSRectEdge)edge;
-- (void)XP_setAutorecalculatesContentBorderThickness:(BOOL)flag forEdge:(NSRectEdge)edge;
-@end
 
 /* String Helpers for Human-Readable sizes */
 @interface NSString (XPByteCount)

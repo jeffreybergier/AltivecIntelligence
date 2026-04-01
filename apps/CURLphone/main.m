@@ -21,7 +21,8 @@
 // --- KeyValueTableViewController Implementation ---
 @implementation KeyValueTableViewController
 
-- (void)viewDidLoad {
+- (void)viewDidLoad;
+{
   [super viewDidLoad];
   [[self navigationItem] setTitle:@"Linked Libraries"];
   
@@ -30,14 +31,14 @@
     [AICURLConnection zlibVersion], @"libz",
     [AICURLConnection sslVersion], @"libssl",
     [AICURLConnection curlVersion], @"libcurl",
-    [AICURLConnection cryptoVersion], @"libcrypto",
     nil];
   
   sortedKeys_ = [[[versions_ allKeys] 
     sortedArrayUsingSelector:@selector(compare:)] retain];
 }
 
-- (void)dealloc {
+- (void)dealloc;
+{
   [versions_ release];
   [sortedKeys_ release];
   [super dealloc];
@@ -45,17 +46,20 @@
 
 #pragma mark - Table view data source
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView;
+{
   return 1;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView 
-    numberOfRowsInSection:(NSInteger)section {
+    numberOfRowsInSection:(NSInteger)section;
+{
   return [sortedKeys_ count];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView 
-         cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+         cellForRowAtIndexPath:(NSIndexPath *)indexPath;
+{
   static NSString *CellIdentifier = @"InfoCell";
   UITableViewCell *cell = [tableView 
     dequeueReusableCellWithIdentifier:CellIdentifier];
@@ -88,13 +92,14 @@
 @synthesize window = window_;
 
 - (BOOL)application:(UIApplication *)application 
-    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions;
+{
   CGRect screenBounds = [[UIScreen mainScreen] bounds];
   [self setWindow:[[[UIWindow alloc] initWithFrame:screenBounds] autorelease]];
   
   // 1. CURL Tab (AICURLConnection)
   DownloadViewController *curlVC = [[[DownloadViewController alloc] 
-    initWithConnectionClass:NSClassFromString(@"AICURLConnection")] autorelease];
+    initWithConnectionClass:[AICURLConnection class]] autorelease];
   [curlVC setTitle:@"CURL"];
   UINavigationController *curlNav = [[[UINavigationController alloc] 
     initWithRootViewController:curlVC] autorelease];
@@ -124,7 +129,8 @@
   return YES;
 }
 
-- (void)dealloc {
+- (void)dealloc;
+{
   [window_ release];
   [tabBarController_ release];
   [super dealloc];
@@ -135,9 +141,6 @@
 // --- Main ---
 int main(int argc, char * argv[]) {
   @autoreleasepool {
-    const char *appDelegateClass = [NSStringFromClass([AppDelegate class]) 
-      UTF8String];
-    return UIApplicationMain(argc, argv, nil, 
-      [NSString stringWithUTF8String:appDelegateClass]);
+    return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));
   }
 }

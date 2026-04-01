@@ -27,7 +27,8 @@
 
 @implementation MainMenu
 
-+ (void)setupMenu {
++ (void)setupMenu;
+{
     NSApplication *app = [NSApplication sharedApplication];
     NSMenu *mainMenu = [[[NSMenu alloc] initWithTitle:@"MainMenu"] autorelease];
     
@@ -38,7 +39,8 @@
     [app setMainMenu:mainMenu];
 }
 
-+ (void)buildAppMenu:(NSMenu *)mainMenu {
++ (void)buildAppMenu:(NSMenu *)mainMenu;
+{
     NSApplication *app = [NSApplication sharedApplication];
     NSMenuItem *appMenuItem = [mainMenu addItemWithTitle:@"" action:NULL keyEquivalent:@""];
     NSMenu *appMenu = [[[NSMenu alloc] initWithTitle:@""] autorelease];
@@ -60,7 +62,8 @@
     [appMenu addItemWithTitle:@"Quit CURLmac" action:@selector(terminate:) keyEquivalent:@"q"];
 }
 
-+ (void)buildEditMenu:(NSMenu *)mainMenu {
++ (void)buildEditMenu:(NSMenu *)mainMenu;
+{
     NSMenuItem *editMenuItem = [mainMenu addItemWithTitle:@"Edit" action:NULL keyEquivalent:@""];
     NSMenu *editMenu = [[[NSMenu alloc] initWithTitle:@"Edit"] autorelease];
     [mainMenu setSubmenu:editMenu forItem:editMenuItem];
@@ -74,7 +77,8 @@
     [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
 }
 
-+ (void)buildWindowMenu:(NSMenu *)mainMenu {
++ (void)buildWindowMenu:(NSMenu *)mainMenu;
+{
     NSApplication *app = [NSApplication sharedApplication];
     NSMenuItem *windowMenuItem = [mainMenu addItemWithTitle:@"Window" action:NULL keyEquivalent:@""];
     NSMenu *windowMenu = [[[NSMenu alloc] initWithTitle:@"Window"] autorelease];

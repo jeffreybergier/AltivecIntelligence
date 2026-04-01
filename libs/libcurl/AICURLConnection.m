@@ -143,12 +143,6 @@ static size_t AIHeaderCallback(void *contents,
     return [NSString stringWithUTF8String:ver];
 }
 
-+ (NSString *)cryptoVersion;
-{
-    const char *ver = OpenSSL_version(OPENSSL_VERSION);
-    return [NSString stringWithUTF8String:ver];
-}
-
 + (NSString *)certPath;
 {
   NSString *certPath = [[NSBundle mainBundle] pathForResource:@"cacert" 
@@ -163,6 +157,8 @@ static size_t AIHeaderCallback(void *contents,
 {
   if (self == [AICURLConnection class]) {
     curl_global_init(CURL_GLOBAL_ALL);
+    // Ensure cert path exists early to catch bundling errors
+    [self certPath];
   }
 }
 

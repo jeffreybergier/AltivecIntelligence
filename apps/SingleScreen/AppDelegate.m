@@ -5,7 +5,8 @@
 @synthesize window = window_;
 
 - (BOOL)application:(UIApplication *)application 
-    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions;
+{
   CGRect screenBounds = [[UIScreen mainScreen] bounds];
   [self setWindow:[[[UIWindow alloc] initWithFrame:screenBounds] autorelease]];
   
@@ -23,7 +24,8 @@
   return YES;
 }
 
-- (void)dealloc {
+- (void)dealloc;
+{
   [window_ release];
   [super dealloc];
 }

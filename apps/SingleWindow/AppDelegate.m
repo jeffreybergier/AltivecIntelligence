@@ -15,7 +15,8 @@
 
 @implementation MainMenu
 
-+ (void)setupMenu {
++ (void)setupMenu;
+{
   NSApplication *app = [NSApplication sharedApplication];
   NSMenu *mainMenu = [[[NSMenu alloc] initWithTitle:@"MainMenu"] autorelease];
   
@@ -26,7 +27,8 @@
   [app setMainMenu:mainMenu];
 }
 
-+ (void)buildAppMenu:(NSMenu *)mainMenu {
++ (void)buildAppMenu:(NSMenu *)mainMenu;
+{
   NSApplication *app = [NSApplication sharedApplication];
   NSMenuItem *appMenuItem = [mainMenu addItemWithTitle:@"" 
                                                 action:NULL 
@@ -61,7 +63,8 @@
               keyEquivalent:@"q"];
 }
 
-+ (void)buildEditMenu:(NSMenu *)mainMenu {
++ (void)buildEditMenu:(NSMenu *)mainMenu;
+{
   NSMenuItem *editMenuItem = [mainMenu addItemWithTitle:@"Edit" 
                                                  action:NULL 
                                           keyEquivalent:@""];
@@ -77,7 +80,8 @@
   [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
 }
 
-+ (void)buildWindowMenu:(NSMenu *)mainMenu {
++ (void)buildWindowMenu:(NSMenu *)mainMenu;
+{
   NSApplication *app = [NSApplication sharedApplication];
   NSMenuItem *windowMenuItem = [mainMenu addItemWithTitle:@"Window" 
                                                    action:NULL 
@@ -104,11 +108,13 @@
 
 @implementation AppDelegate
 
-- (void)applicationWillFinishLaunching:(NSNotification *)aNotification {
+- (void)applicationWillFinishLaunching:(NSNotification *)aNotification;
+{
   [MainMenu setupMenu];
 }
 
-- (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
+- (void)applicationDidFinishLaunching:(NSNotification *)aNotification;
+{
   NSRect frame = NSMakeRect(0, 0, 400, 400);
   XPWindowStyleMask styleMask = XPWindowStyleMaskTitled 
                               | XPWindowStyleMaskMiniaturizable 
@@ -125,7 +131,8 @@
   [window_ makeKeyAndOrderFront:self];
 }
 
-- (void)dealloc {
+- (void)dealloc;
+{
   [window_ release];
   [super dealloc];
 }
