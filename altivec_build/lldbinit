@@ -1,4 +1,1 @@
-
 breakpoint set -n "-[NSException raise]"
-
-run

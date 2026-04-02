@@ -4,5 +4,5 @@ set confirm off
 ## Stop on Exception
 fb -[NSException raise]
 
-## Run automatically
-run
+## Uncomment to run automatically
+## run

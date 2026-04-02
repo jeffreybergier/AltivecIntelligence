@@ -1,332 +1,413 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-# AltivecIntelligence Deployment Script
-# Usage: ./altivec_deploy.sh <app_dir_or_package> [-d <ssh_host>]
+# --- CONSTANTS ---
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly ALTIVEC_BUILD_DIR="$SCRIPT_DIR/altivec_build"
+readonly GDBINIT_FILE="$ALTIVEC_BUILD_DIR/gdbinit"
+readonly LLDBINIT_FILE="$ALTIVEC_BUILD_DIR/lldbinit"
+readonly REMOTE_MAC_BASE="~/Desktop/Altivec"
+readonly REMOTE_IOS_BASE="~/tmp_altivec"
 
-set -e
-
-# --- Constants: Paths and Commands ---
-IPHONE_REMOTE_DEST="~/Altivec"
-MAC_REMOTE_DEST="~/Desktop/Altivec"
-
-CMD_UNAME="uname -sm"
-CMD_IOS_HINT="[ -d /var/mobile ] && echo 'iOS' || echo 'macOS'"
-CMD_WHICH_APPINST="which appinst"
-CMD_WHICH_IPAINSTALLER="which ipainstaller"
-CMD_CHECK_SYSLOG="[ -f /var/log/syslog ]"
-CMD_LLDB_VERSION="lldb --version"
-CMD_GDB_VERSION="gdb --version"
-
-# --- Variables: State and Arguments ---
-TARGET_DEVICE=""
+# --- VARIABLES ---
+# Arguments
 INPUT_PATH=""
-REMOTE_ROOT=""
-IS_REMOTE=false
-DEVICE_TYPE="unknown" # "iphone" or "mac"
-APP_TYPE="unknown"    # "ipa" or "zip"
-APP_PATH=""           # Path to the .ipa or .zip file
-FILES_TO_COPY=()
+DEVICE_SSH_STR=""
 
-HAS_APPINST=false
-HAS_IPAINSTALLER=false
-HAS_LLDB=false
-HAS_GDB=false
-HAS_SYSLOG=false
+# Application Preflight
+APP_BUNDLE_PATH=""
+APP_DIR=""
+APP_IPA_PATH=""
+APP_ZIP_PATH=""
+APP_DSYM_PATHS=()
+APP_NAME=""
+APP_GDBINIT=""
+APP_LLDBINIT=""
 
-# --- Cleanup Logic ---
+# Device Preflight
+DEV_IS_REMOTE=false
+DEV_SSH_CMD=""
+DEV_OS=""      # Darwin
+DEV_TYPE=""    # mac || ios
+DEV_GDB=""     # path to gdb
+DEV_LLDB=""    # path to lldb
+DEV_LOG=""     # path to system log for tailing
+DEV_LOG_MAC="" # path to /var/log/system.log
+DEV_LOG_IOS="" # path to /var/log/syslog
+DEV_APPINST="" # path to appinst
+DEV_IPAINST="" # path to ipainstaller
+DEV_NEEDS_CLEANUP=false # Flag to track if we've touched the remote device
+
+# --- FUNCTIONS ---
+
+log_header() {
+  echo ""
+  echo "=== $1 ==="
+}
+
+log_item() {
+  echo " > $1"
+}
+
+log_fail() {
+  echo "[FAIL] $1"
+}
+
+log_instructions() {
+  local type="$1"
+  local is_remote="$2"
+  echo ""
+  echo "***************************************************"
+  if [ "$type" = "debugger" ]; then
+    echo "  DEBUGGER INSTRUCTIONS:"
+    echo "  - Type 'run' to launch the app."
+    echo "  - Press CTRL+C to pause the app."
+    echo "  - Type 'kill' to kill the app."
+    echo "  - Type 'quit' to exit the debugger."
+    if [ "$is_remote" = "true" ]; then
+      if [ "$DEV_TYPE" = "ios" ]; then
+        echo "  Note: Temporary files have been deleted, but"
+        echo "        the app will remain on the homescreen."
+      else
+        echo "  Note: Remote files will be deleted"
+        echo "        automatically after quitting."
+      fi
+    fi
+  elif [ "$type" = "logs" ]; then
+    echo "  LOG INSTRUCTIONS:"
+    echo "  - Press CTRL+C to stop tailing logs."
+    if [ "$is_remote" = "true" ]; then
+      if [ "$DEV_TYPE" = "ios" ]; then
+        echo "  Note: Temporary files have been deleted, but"
+        echo "        the app will remain on the homescreen."
+      else
+        echo "  Note: Remote files will be deleted"
+        echo "        automatically after stopping."
+      fi
+    fi
+  fi
+  echo "***************************************************"
+  echo ""
+}
+
+# Robust utility check that respects exit codes and handles noisy 'which'
+check_util_path() {
+  local cmd="$1"
+  local path=""
+  if [ "$DEV_IS_REMOTE" = true ]; then
+    # Use 'command -v' which is POSIX and more reliable than 'which'
+    path=$($DEV_SSH_CMD "command -v $cmd" 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "$path" ]; then
+      echo "$path"
+      return 0
+    fi
+  else
+    path=$(command -v "$cmd" 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "$path" ]; then
+      echo "$path"
+      return 0
+    fi
+  fi
+  return 1
+}
+
 cleanup() {
-  if [ "$IS_REMOTE" = true ] && [ -n "$REMOTE_ROOT" ]; then
-    echo ""
-    echo "Cleaning up remote Altivec folder ($REMOTE_ROOT)..."
-    ssh -o ConnectTimeout=5 "$TARGET_DEVICE" "rm -rf '$REMOTE_ROOT'"
-    echo "Cleanup complete."
+  if [ "$DEV_NEEDS_CLEANUP" = true ]; then
+    if [ "$DEV_TYPE" = "mac" ]; then
+      echo "Cleaning up remote Mac directory..."
+      $DEV_SSH_CMD "rm -rf $REMOTE_MAC_BASE"
+    elif [ "$DEV_TYPE" = "ios" ]; then
+      echo "Cleaning up remote iPhone directory..."
+      $DEV_SSH_CMD "rm -rf $REMOTE_IOS_BASE"
+    fi
   fi
 }
+
+preflight_app() {
+  log_header "Application Preflight"
+  
+  # Search for .app bundle
+  if [ -d "$INPUT_PATH" ] && [[ "$INPUT_PATH" == *.app ]]; then
+    APP_BUNDLE_PATH="$INPUT_PATH"
+  else
+    APP_BUNDLE_PATH=$(find "$INPUT_PATH" -maxdepth 2 -name "*.app" -type d -print -quit)
+  fi
+
+  if [ -z "$APP_BUNDLE_PATH" ]; then
+    log_fail "Could not find .app bundle in $INPUT_PATH"
+    return 1
+  fi
+  log_item "Found App: $APP_BUNDLE_PATH"
+
+  APP_DIR=$(dirname "$APP_BUNDLE_PATH")
+  APP_NAME=$(basename "$APP_BUNDLE_PATH" .app)
+  
+  # Search for payload
+  APP_IPA_PATH=$(find "$APP_DIR" -maxdepth 1 -name "*.ipa" -print -quit)
+  APP_ZIP_PATH=$(find "$APP_DIR" -maxdepth 1 -name "*.zip" -print -quit)
+  
+  if [ -n "$APP_IPA_PATH" ]; then log_item "Found IPA: $(basename "$APP_IPA_PATH")"; fi
+  if [ -n "$APP_ZIP_PATH" ]; then log_item "Found ZIP: $(basename "$APP_ZIP_PATH")"; fi
+  
+  # Search for dSYMs
+  while IFS= read -r dsym; do
+    if [ -n "$dsym" ]; then
+      APP_DSYM_PATHS+=("$dsym")
+      log_item "Found dSYM: $(basename "$dsym")"
+    fi
+  done < <(find "$APP_DIR" -maxdepth 1 -name "*.dSYM")
+
+  # Debugger inits
+  if [ -f "$GDBINIT_FILE" ]; then APP_GDBINIT="$GDBINIT_FILE"; log_item "Found gdbinit"; fi
+  if [ -f "$LLDBINIT_FILE" ]; then APP_LLDBINIT="$LLDBINIT_FILE"; log_item "Found lldbinit"; fi
+
+  return 0
+}
+
+preflight_device() {
+  local uname_out=""
+  local mobile_check=""
+  
+  log_header "Device Preflight"
+
+  if [ -n "$DEVICE_SSH_STR" ]; then
+    DEV_IS_REMOTE=true
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$DEVICE_SSH_STR" "exit" 2>/dev/null; then
+      log_fail "SSH connection to '$DEVICE_SSH_STR' failed"
+      echo "       Run 'ssh $DEVICE_SSH_STR' to debug the errors"
+      echo "       Note: Key authentication is required for this script"
+      return 1
+    fi
+    DEV_SSH_CMD="ssh $DEVICE_SSH_STR"
+    log_item "SSH Connection: OK"
+  else
+    DEV_IS_REMOTE=false
+    log_item "Local Deployment"
+  fi
+
+  # Determine OS
+  if [ "$DEV_IS_REMOTE" = true ]; then
+    uname_out=$($DEV_SSH_CMD "uname")
+  else
+    uname_out=$(uname)
+  fi
+  DEV_OS="$uname_out"
+  log_item "OS: $DEV_OS"
+
+  # Determine Device Type
+  if [ "$DEV_OS" = "Darwin" ]; then
+    if [ "$DEV_IS_REMOTE" = true ]; then
+      mobile_check=$($DEV_SSH_CMD "[ -d /var/mobile ] && echo 'ios' || echo 'mac'")
+    else
+      [ -d /var/mobile ] && mobile_check="ios" || mobile_check="mac"
+    fi
+  else
+    mobile_check="$DEV_OS"
+  fi
+  DEV_TYPE="$mobile_check"
+  log_item "Type: $DEV_TYPE"
+
+  # Find Utilities Robustly
+  DEV_GDB=$(check_util_path "gdb")
+  DEV_LLDB=$(check_util_path "lldb")
+  DEV_APPINST=$(check_util_path "appinst")
+  DEV_IPAINST=$(check_util_path "ipainstaller")
+
+  [ -n "$DEV_GDB" ] && log_item "GDB: $DEV_GDB" || log_item "GDB: Not found"
+  [ -n "$DEV_LLDB" ] && log_item "LLDB: $DEV_LLDB" || log_item "LLDB: Not found"
+  [ -n "$DEV_APPINST" ] && log_item "appinst: $DEV_APPINST" || log_item "appinst: Not found"
+  [ -n "$DEV_IPAINST" ] && log_item "ipainstaller: $DEV_IPAINST" || log_item "ipainstaller: Not found"
+  
+  # Find Logs
+  if [ "$DEV_IS_REMOTE" = true ]; then
+    DEV_LOG_MAC=$($DEV_SSH_CMD "[ -f /var/log/system.log ] && echo '/var/log/system.log'")
+    DEV_LOG_IOS=$($DEV_SSH_CMD "[ -f /var/log/syslog ] && echo '/var/log/syslog'")
+  else
+    [ -f /var/log/system.log ] && DEV_LOG_MAC="/var/log/system.log"
+    [ -f /var/log/syslog ] && DEV_LOG_IOS="/var/log/syslog"
+  fi
+
+  [ -n "$DEV_LOG_MAC" ] && log_item "Syslog (Mac): $DEV_LOG_MAC" || log_item "Syslog (Mac): Not found"
+  [ -n "$DEV_LOG_IOS" ] && log_item "Syslog (iOS): $DEV_LOG_IOS" || log_item "Syslog (iOS): Not found"
+
+  # Pick best log for tailing (Prefer Mac log)
+  DEV_LOG="${DEV_LOG_MAC:-$DEV_LOG_IOS}"
+
+  return 0
+  }
+preflight_go_nogo() {
+  # 1. Check OS/Type
+  if [[ "$DEV_TYPE" != "mac" && "$DEV_TYPE" != "ios" ]]; then
+    log_fail "Unable to deploy Mac or iOS app to Linux"
+    echo "       Use -d to specify a remote device deployment with ssh"
+    return 1
+  fi
+
+  # 2. Match App to Device
+  if [ "$DEV_TYPE" = "mac" ]; then
+    if [ -n "$APP_IPA_PATH" ]; then
+      log_fail "Unable to deploy iOS app (ipa) to a Mac"
+      echo "       Use -d to specify a remote device deployment with ssh"
+      return 1
+    fi
+    if [ "$DEV_IS_REMOTE" = true ] && [ -z "$APP_ZIP_PATH" ]; then
+      log_fail "Remote Mac deployment requires a .zip payload. None found in $APP_DIR"
+      return 1
+    fi
+  fi
+
+  if [ "$DEV_TYPE" = "ios" ]; then
+    if [ -z "$APP_IPA_PATH" ]; then
+      log_fail "iPhone deployment requires an .ipa payload. None found in $APP_DIR"
+      return 1
+    fi
+    if [ -z "$DEV_APPINST" ] && [ -z "$DEV_IPAINST" ]; then
+      log_fail "No iPhone installer found (appinst or ipainstaller)."
+      echo "       Please install one of these utilities on your device."
+      return 1
+    fi
+  fi
+
+  return 0
+}
+
+preflight_summary() {
+  local choice=""
+  log_header "Deployment Summary"
+  
+  if ! preflight_go_nogo; then
+    return 1
+  fi
+  
+  if [ "$DEV_IS_REMOTE" = false ]; then
+    log_item "Action: Local launch of $APP_NAME"
+  elif [ "$DEV_TYPE" = "mac" ]; then
+    log_item "Action: Deploy $APP_NAME to Remote Mac ($DEVICE_SSH_STR)"
+    log_item "Transfer: $(basename "$APP_ZIP_PATH"), ${#APP_DSYM_PATHS[@]} dSYMs, and debugger inits"
+  elif [ "$DEV_TYPE" = "ios" ]; then
+    log_item "Action: Deploy $APP_NAME to Remote iPhone ($DEVICE_SSH_STR)"
+    log_item "Transfer: $(basename "$APP_IPA_PATH")"
+  fi
+
+  echo ""
+  read -p "Continue with deployment? (Y/n): " choice
+  if [[ ! "$choice" =~ ^[Yy]$ ]] && [ -n "$choice" ]; then
+    echo "Aborted."
+    exit 0
+  fi
+}
+
+execute_local() {
+  local bin_path="$APP_BUNDLE_PATH/Contents/MacOS/$APP_NAME"
+  
+  if [ -n "$DEV_LLDB" ]; then
+    log_instructions "debugger"
+    # Use exec to replace the shell process with the debugger.
+    # This ensures that signals (like Ctrl+C) are handled directly by LLDB.
+    exec lldb -s "$APP_LLDBINIT" "$bin_path"
+  elif [ -n "$DEV_GDB" ]; then
+    log_instructions "debugger"
+    exec gdb -x "$APP_GDBINIT" "$bin_path"
+  else
+    open "$APP_BUNDLE_PATH"
+    if [ -n "$DEV_LOG" ]; then
+      log_instructions "logs"
+      tail -f "$DEV_LOG" | grep --line-buffered "$APP_NAME"
+    fi
+  fi
+}
+
+execute_remote_mac() {
+  local remote_app_path="$REMOTE_MAC_BASE/$APP_NAME.app"
+  local remote_bin_path="$remote_app_path/Contents/MacOS/$APP_NAME"
+  local transfer_list=()
+  
+  $DEV_SSH_CMD "mkdir -p $REMOTE_MAC_BASE"
+  DEV_NEEDS_CLEANUP=true
+  
+  # Prepare transfer list
+  transfer_list+=("$APP_ZIP_PATH")
+  for dsym in "${APP_DSYM_PATHS[@]}"; do
+    transfer_list+=("$dsym")
+  done
+  [ -f "$APP_GDBINIT" ] && transfer_list+=("$APP_GDBINIT")
+  [ -f "$APP_LLDBINIT" ] && transfer_list+=("$APP_LLDBINIT")
+
+  # Perform a single transfer
+  echo "Transferring files to remote Mac..."
+  scp -r "${transfer_list[@]}" "$DEVICE_SSH_STR:$REMOTE_MAC_BASE/"
+  
+  # Unzip on remote
+  $DEV_SSH_CMD "cd $REMOTE_MAC_BASE && unzip -o $(basename "$APP_ZIP_PATH")"
+  
+  if [ -n "$DEV_LLDB" ]; then
+    log_instructions "debugger" "true"
+    $DEV_SSH_CMD -t "lldb -s $REMOTE_MAC_BASE/lldbinit $remote_bin_path"
+  elif [ -n "$DEV_GDB" ]; then
+    log_instructions "debugger" "true"
+    $DEV_SSH_CMD -t "gdb -x $REMOTE_MAC_BASE/gdbinit $remote_bin_path"
+  else
+    $DEV_SSH_CMD "open $remote_app_path"
+    if [ -n "$DEV_LOG" ]; then
+      log_instructions "logs" "true"
+      $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
+    fi
+  fi
+}
+
+execute_remote_iphone() {
+  local ipa_name=$(basename "$APP_IPA_PATH")
+  local install_cmd=""
+  
+  $DEV_SSH_CMD "mkdir -p $REMOTE_IOS_BASE"
+  DEV_NEEDS_CLEANUP=true
+  scp "$APP_IPA_PATH" "$DEVICE_SSH_STR:$REMOTE_IOS_BASE/"
+  
+  if [ -n "$DEV_APPINST" ]; then
+    install_cmd="appinst $REMOTE_IOS_BASE/$ipa_name"
+  else
+    install_cmd="ipainstaller $REMOTE_IOS_BASE/$ipa_name"
+  fi
+  
+  $DEV_SSH_CMD "$install_cmd"
+  $DEV_SSH_CMD "rm $REMOTE_IOS_BASE/$ipa_name"
+  
+  if [ -n "$DEV_LOG" ]; then
+    log_instructions "logs" "true"
+    echo "Tailing logs for $APP_NAME..."
+    $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
+  fi
+}
+
+# --- MAIN ---
+
 trap cleanup EXIT
 
-# --- Argument Parsing ---
-if [[ "$#" -gt 0 ]] && [[ ! "$1" == -* ]]; then
-  INPUT_PATH="$1"
-  shift
+if [ "$#" -lt 1 ]; then
+  echo "Usage: $0 <path_to_app_or_build_dir> [-d <user@host>]"
+  exit 1
 fi
+
+INPUT_PATH="$1"
+shift
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
-    -d|--device) TARGET_DEVICE="$2"; shift ;;
-    *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    -d|--device) DEVICE_SSH_STR="$2"; shift ;;
+    *) log_fail "Unknown argument: $1"; exit 1 ;;
   esac
   shift
 done
 
-if [ -z "$INPUT_PATH" ]; then
-  echo "[FAIL] Missing required <app_dir_or_package> argument."
-  exit 1
+if ! preflight_app; then exit 1; fi
+if ! preflight_device; then exit 1; fi
+if ! preflight_summary; then exit 1; fi
+
+if [ "$DEV_IS_REMOTE" = false ]; then
+  execute_local
+elif [ "$DEV_TYPE" = "mac" ]; then
+  execute_remote_mac
+elif [ "$DEV_TYPE" = "ios" ]; then
+  execute_remote_iphone
 fi
 
-# --- Discover Package and dSYMs ---
-echo "--- DISCOVERING PACKAGE ---"
-
-find_package_in_dir() {
-  local dir="$1"
-  # Priority: .ipa then .zip
-  find "$dir" -maxdepth 1 \( -name "*.ipa" -o -name "*.zip" \) | head -n 1
-}
-
-if [ -f "$INPUT_PATH" ]; then
-  APP_PATH="$INPUT_PATH"
-elif [ -d "$INPUT_PATH" ]; then
-  if [[ "$INPUT_PATH" == *.app ]]; then
-     echo "[FAIL] Path is a .app bundle. Please pass the folder containing it or a .zip/.ipa."
-     exit 1
-  fi
-  
-  # 1. Check directly in folder
-  APP_PATH=$(find_package_in_dir "$INPUT_PATH")
-  
-  # 2. Check in build* folders
-  if [ -z "$APP_PATH" ]; then
-    FIRST_BUILD_DIR=$(find "$INPUT_PATH" -maxdepth 1 -type d -name "build*" | head -n 1)
-    if [ -n "$FIRST_BUILD_DIR" ]; then
-      echo "[OK] Found build directory: $FIRST_BUILD_DIR"
-      APP_PATH=$(find_package_in_dir "$FIRST_BUILD_DIR")
-    fi
-  fi
-else
-  echo "[FAIL] Input path '$INPUT_PATH' not found."
-  exit 1
-fi
-
-if [ -z "$APP_PATH" ]; then
-  echo "[FAIL] Could not find any .zip or .ipa in '$INPUT_PATH' or its build subdirectories."
-  exit 1
-fi
-
-# Determine APP_TYPE
-if [[ "$APP_PATH" == *.ipa ]]; then
-  APP_TYPE="ipa"
-elif [[ "$APP_PATH" == *.zip ]]; then
-  APP_TYPE="zip"
-else
-  echo "[FAIL] Found file '$APP_PATH' but it is not a .zip or .ipa."
-  exit 1
-fi
-
-echo "[OK] Found package ($APP_TYPE): $APP_PATH"
-FILES_TO_COPY+=("$APP_PATH")
-
-# Find dSYMs in the same directory
-PACKAGE_DIR=$(dirname "$APP_PATH")
-while IFS= read -r dsym; do
-  if [ -n "$dsym" ]; then
-    echo "[OK] Found dSYM: $(basename "$dsym")"
-    FILES_TO_COPY+=("$dsym")
-  fi
-done < <(find "$PACKAGE_DIR" -maxdepth 1 -name "*.dSYM")
-
-# --- Determine Mode (Remote vs Local) ---
-if [ -n "$TARGET_DEVICE" ]; then
-  IS_REMOTE=true
-  echo ""
-  echo "--- REMOTE CONNECTION CHECK ($TARGET_DEVICE) ---"
-else
-  echo ""
-  echo "--- LOCAL MODE CHECK ---"
-fi
-
-# 1. Connection & OS Info
-if [ "$IS_REMOTE" = true ]; then
-  set +e
-  REMOTE_INFO=$(ssh "$TARGET_DEVICE" "$CMD_UNAME; $CMD_IOS_HINT")
-  SSH_EXIT_CODE=$?
-  set -e
-  if [ $SSH_EXIT_CODE -ne 0 ]; then
-    echo "[FAIL] Could not connect to '$TARGET_DEVICE' via SSH."
-    exit 1
-  fi
-  echo "[OK] SSH Connection established."
-  UNAME_OUTPUT=$(echo "$REMOTE_INFO" | head -n 1)
-  TYPE_HINT=$(echo "$REMOTE_INFO" | tail -n 1)
-else
-  UNAME_OUTPUT=$($CMD_UNAME)
-  if [ -d /var/mobile ]; then TYPE_HINT="iOS"; else TYPE_HINT="macOS"; fi
-fi
-
-if [[ "$UNAME_OUTPUT" == Darwin* ]]; then
-  if [[ "$TYPE_HINT" == "iOS" ]]; then
-    DEVICE_TYPE="iphone"
-  else
-    DEVICE_TYPE="mac"
-  fi
-fi
-echo "[OK] Detected Device Type: $DEVICE_TYPE ($UNAME_OUTPUT)"
-
-# --- Final Validation: App Type vs Device Type ---
-if [[ "$DEVICE_TYPE" == "iphone" ]] && [[ "$APP_TYPE" != "ipa" ]]; then
-  echo "[FAIL] iPhone requires an .ipa package, but found '$APP_TYPE'."
-  exit 1
-fi
-
-if [[ "$DEVICE_TYPE" == "mac" ]] && [[ "$APP_TYPE" != "zip" ]]; then
-  echo "[FAIL] Mac requires a .zip package, but found '$APP_TYPE'."
-  exit 1
-fi
-
-# --- Utility Checks ---
-echo ""
-echo "--- UTILITY CHECK ---"
-
-check_util() {
-  if [ "$IS_REMOTE" = true ]; then
-    ssh "$TARGET_DEVICE" "$1" &>/dev/null
-  else
-    eval "$1" &>/dev/null
-  fi
-}
-
-if [[ "$DEVICE_TYPE" == "iphone" ]]; then
-  if check_util "$CMD_WHICH_APPINST"; then
-    echo "[OK] found 'appinst'."
-    HAS_APPINST=true
-  fi
-  if check_util "$CMD_WHICH_IPAINSTALLER"; then
-    echo "[OK] found 'ipainstaller'."
-    HAS_IPAINSTALLER=true
-  fi
-
-  if [ "$HAS_APPINST" = false ] && [ "$HAS_IPAINSTALLER" = false ]; then
-    echo "[FAIL] Neither 'appinst' nor 'ipainstaller' found."
-    exit 1
-  fi
-
-  if check_util "$CMD_CHECK_SYSLOG"; then
-    echo "[OK] found '/var/log/syslog'."
-    HAS_SYSLOG=true
-  fi
-elif [[ "$DEVICE_TYPE" == "mac" ]]; then
-  if check_util "$CMD_LLDB_VERSION"; then
-    echo "[OK] found 'lldb'."
-    HAS_LLDB=true
-  elif check_util "$CMD_GDB_VERSION"; then
-    echo "[OK] found 'gdb'."
-    HAS_GDB=true
-  fi
-fi
-
-echo ""
-echo "--- DEPLOYMENT STARTING ---"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-if [[ "$DEVICE_TYPE" == "iphone" ]]; then
-  if [ "$IS_REMOTE" = true ]; then
-    REMOTE_ROOT="$IPHONE_REMOTE_DEST"
-    echo "Preparing remote directory: $REMOTE_ROOT"
-    ssh "$TARGET_DEVICE" "mkdir -p \"$REMOTE_ROOT\""
-    echo "Copying files to iPhone..."
-    scp -r "${FILES_TO_COPY[@]}" "$TARGET_DEVICE:$REMOTE_ROOT/"
-    INSTALL_PATH="$REMOTE_ROOT/$(basename "$APP_PATH")"
-  else
-    INSTALL_PATH="$APP_PATH"
-  fi
-  
-  echo "Installing package: $(basename "$APP_PATH")..."
-  set +e
-  INSTALL_CMD=""
-  if [ "$HAS_APPINST" = true ]; then
-    INSTALL_CMD="appinst \"$INSTALL_PATH\""
-  else
-    INSTALL_CMD="ipainstaller \"$INSTALL_PATH\""
-  fi
-
-  if [ "$IS_REMOTE" = true ]; then
-    ssh "$TARGET_DEVICE" "$INSTALL_CMD"
-  else
-    eval "$INSTALL_CMD"
-  fi
-  set -e
-  echo "Deployment complete!"
-
-  if [ "$HAS_SYSLOG" = true ]; then
-    APP_NAME=$(basename "$APP_PATH" | sed 's/\.ipa$//')
-    echo ""
-    echo "***************************************************"
-    echo "  PLEASE OPEN THE APP ON YOUR IPHONE NOW"
-    echo "  Filtering syslog for: $APP_NAME"
-    echo "  (Press Ctrl+C to stop)..."
-    echo "***************************************************"
-    echo ""
-    if [ "$IS_REMOTE" = true ]; then
-      ssh "$TARGET_DEVICE" "tail -f /var/log/syslog | grep --line-buffered \"$APP_NAME\""
-    else
-      tail -f /var/log/syslog | grep --line-buffered "$APP_NAME"
-    fi
-  fi
-
-elif [[ "$DEVICE_TYPE" == "mac" ]]; then
-  if [ "$IS_REMOTE" = true ]; then
-    REMOTE_ROOT="$MAC_REMOTE_DEST"
-    echo "Preparing remote directory: $REMOTE_ROOT"
-    ssh "$TARGET_DEVICE" "mkdir -p \"$REMOTE_ROOT\""
-    echo "Copying files to Mac..."
-    scp -r "${FILES_TO_COPY[@]}" "$TARGET_DEVICE:$REMOTE_ROOT/"
-    
-    # Upload appropriate debugger init
-    if [ "$HAS_LLDB" = true ] && [ -f "$SCRIPT_DIR/altivec_build/lldbinit" ]; then
-      scp -q "$SCRIPT_DIR/altivec_build/lldbinit" "$TARGET_DEVICE:$REMOTE_ROOT/lldbinit"
-    elif [ "$HAS_GDB" = true ] && [ -f "$SCRIPT_DIR/altivec_build/gdbinit" ]; then
-      scp -q "$SCRIPT_DIR/altivec_build/gdbinit" "$TARGET_DEVICE:$REMOTE_ROOT/gdbinit"
-    fi
-    
-    echo "Unzipping package on remote..."
-    ssh "$TARGET_DEVICE" "cd \"$REMOTE_ROOT\" && unzip -o \"$(basename "$APP_PATH")\""
-    UNZIPPED_APP_PATH=$(ssh "$TARGET_DEVICE" "find \"$REMOTE_ROOT\" -name \"*.app\" -type d -maxdepth 2 | head -n 1")
-  else
-    # Local mode logic
-    APP_DIR=$(dirname "$APP_PATH")
-    unzip -o "$APP_PATH" -d "$APP_DIR"
-    UNZIPPED_APP_PATH=$(find "$APP_DIR" -name "*.app" -type d -maxdepth 2 | head -n 1)
-  fi
-  
-  EXECUTABLE_NAME=$(basename "$UNZIPPED_APP_PATH" | sed 's/\.app$//')
-  BIN_PATH="$UNZIPPED_APP_PATH/Contents/MacOS/$EXECUTABLE_NAME"
-  echo "Deployment complete!"
-
-  DEBUG_CMD=""
-  if [[ "$HAS_LLDB" == true ]]; then
-    if [ "$IS_REMOTE" = true ]; then
-      [ -f "$SCRIPT_DIR/altivec_build/lldbinit" ] && DBG_INIT="-s \"$REMOTE_ROOT/lldbinit\"" || DBG_INIT=""
-    else
-      [ -f "$SCRIPT_DIR/altivec_build/lldbinit" ] && DBG_INIT="-s \"$SCRIPT_DIR/altivec_build/lldbinit\"" || DBG_INIT=""
-    fi
-    DEBUG_CMD="lldb $DBG_INIT \"$BIN_PATH\""
-    DEBUG_NAME="LLDB"
-  elif [[ "$HAS_GDB" == true ]]; then
-    if [ "$IS_REMOTE" = true ]; then
-      [ -f "$SCRIPT_DIR/altivec_build/gdbinit" ] && DBG_INIT="-x \"$REMOTE_ROOT/gdbinit\"" || DBG_INIT=""
-    else
-      [ -f "$SCRIPT_DIR/altivec_build/gdbinit" ] && DBG_INIT="-x \"$SCRIPT_DIR/altivec_build/gdbinit\"" || DBG_INIT=""
-    fi
-    DEBUG_NAME="GDB"
-    DEBUG_CMD="gdb $DBG_INIT \"$BIN_PATH\""
-  fi
-
-  if [ -n "$DEBUG_CMD" ]; then
-    echo ""
-    echo "***************************************************"
-    echo "  LAUNCHING $DEBUG_NAME"
-    echo "  - Type 'run' to start."
-    echo "  - Press Ctrl+C to pause."
-    echo "  - Type 'quit' to exit."
-    echo "***************************************************"
-    echo ""
-    if [ "$IS_REMOTE" = true ]; then
-      ssh -t "$TARGET_DEVICE" "$DEBUG_CMD"
-    else
-      eval "$DEBUG_CMD"
-    fi
-  else
-    if [ "$IS_REMOTE" = true ]; then
-      echo "No debugger found. Tailing /var/log/system.log..."
-      ssh "$TARGET_DEVICE" "tail -f /var/log/system.log"
-    fi
-  fi
-fi
+exit 0
