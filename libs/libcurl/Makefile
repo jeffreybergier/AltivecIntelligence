@@ -35,8 +35,14 @@ aicc-phone:
 	@echo "==========================================================="
 	$(MAKE) -f Makefile-phone aicc
 
+aicc-analyze:
+	@echo "==========================================================="
+	@echo "ANALYZING AICURLConnection (x64)"
+	@echo "==========================================================="
+	$(MAKE) -f Makefile-mac aicc-analyze
+
 clean:
 	$(MAKE) -f Makefile-phone clean
 	$(MAKE) -f Makefile-mac clean
 
-.PHONY: all phone-static mac-static phone mac aicc aicc-mac aicc-phone clean
+.PHONY: all phone-static mac-static phone mac aicc aicc-mac aicc-phone aicc-analyze clean
