@@ -2,18 +2,32 @@
 
 @implementation AppDelegate
 
-- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-  self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
-  UIViewController *vc = [[UIViewController alloc] init];
-  vc.view.backgroundColor = [UIColor redColor];
-  vc.title = @"SingleScreen-iOS";
+@synthesize window = window_;
+
+- (BOOL)application:(UIApplication *)application 
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions;
+{
+  CGRect screenBounds = [[UIScreen mainScreen] bounds];
+  [self setWindow:[[[UIWindow alloc] initWithFrame:screenBounds] autorelease]];
   
-  UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
-  nav.toolbarHidden = NO;
+  UIViewController *vc = [[[UIViewController alloc] init] autorelease];
+  [[vc view] setBackgroundColor:[UIColor redColor]];
+  [vc setTitle:@"SingleScreen-iOS"];
   
-  self.window.rootViewController = nav;
-  [self.window makeKeyAndVisible];
+  UINavigationController *nav = [[[UINavigationController alloc] 
+    initWithRootViewController:vc] autorelease];
+  [nav setToolbarHidden:NO];
+  
+  [[self window] setRootViewController:nav];
+  [[self window] makeKeyAndVisible];
+  
   return YES;
+}
+
+- (void)dealloc;
+{
+  [window_ release];
+  [super dealloc];
 }
 
 @end

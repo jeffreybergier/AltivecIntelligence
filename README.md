@@ -82,6 +82,92 @@ Outputs in `apps/SingleScreen/build-release/`:
 
 Note you can also run `make debug` to build a debug version of the sample apps
 
+#### CURL Networking Apps (Modern TLS for Legacy Devices)
+
+These apps use the **`AICURLConnection`** library (built on `libcurl` and 
+`OpenSSL`) to allow legacy devices to connect to modern HTTPS websites.
+
+**Note:** Building the full `libcurl` suite for all architectures is a heavy 
+task and may take between **5 to 60 minutes** depending on your computer's 
+performance.
+
+##### Mac Build (CURLmac)
+```bash
+# 1. Build libcurl suite for Mac (PPC, i386, x64, arm64)
+docker compose run --rm altivec "cd libs/libcurl && make mac"
+
+# 2. Build the CURLmac app
+docker compose run --rm altivec "cd apps/CURLmac && make"
+```
+
+##### iPhone Build (CURLphone)
+```bash
+# 1. Build libcurl suite for iPhone (armv7, arm64)
+docker compose run --rm altivec "cd libs/libcurl && make phone"
+
+# 2. Build the CURLphone app
+docker compose run --rm altivec "cd apps/CURLphone && make"
+```
+
+#### Deploying to Hardware
+
+Use the `altivec_deploy.sh` script to quickly push and debug your apps on 
+actual hardware.
+
+**1. Run on your local Mac**:
+```bash
+./altivec_deploy.sh apps/SingleWindow
+```
+
+**2. Run on a remote Mac (via SSH)**:
+```bash
+./altivec_deploy.sh apps/SingleWindow -d <mac_ip_or_hostname>
+```
+
+**3. Run on a jailbroken iPhone (via SSH)**:
+```bash
+./altivec_deploy.sh apps/SingleScreen -d <iphone_ip_or_hostname>
+```
+
+**Note on Deploying to iPhone**
+This requires common jailbreak tools like:
+- AppSync (Unified)
+- appinst (App Installer)
+- OpenSSH
+- Core Utilities
+
+Jailbreaking and using a jailbroken iPhone is beyond the scope of this tutorial,
+but I highly recommend checking out 
+[Legacy-iOS-Kit](https://github.com/LukeZGD/Legacy-iOS-Kit) for help. Its an
+excellent utility that is THE EASIEST way to downgrade / jailbreak your retro
+iPhone. It can also be used to deploy the apps built with Altivec Intelligence
+to the iPhone via the USB cable.
+
+**Note on SSH Authentication:**
+The deployment script is designed for automated use and **requires SSH key 
+authentication**. If you do not have keys set up, the script will repeatedly 
+prompt for your password and likely fail. 
+
+To connect to vintage hardware from a modern Mac, you often need to explicitly 
+allow older algorithms in your `~/.ssh/config` file. Here is a recommended 
+configuration:
+
+```text
+Host iphone5-ios6
+    HostName 192.168.0.93
+    User root
+    IdentityFile ~/.ssh/id_rsa
+    PubkeyAcceptedAlgorithms +ssh-rsa
+    HostKeyAlgorithms +ssh-rsa
+
+Host imacg4-tiger
+    HostName my-imac.local 
+    User myuser
+    IdentityFile ~/.ssh/id_rsa
+    PubkeyAcceptedAlgorithms +ssh-rsa
+    HostKeyAlgorithms +ssh-rsa
+```
+
 ### 5. Use Gemini AI to Build Your Own Apps
 
 Launch Gemini CLI and login with your Google Account. Even the free account 
@@ -93,19 +179,24 @@ for more info on how to use Gemini CLI.
 docker compose run --rm altivec-intelligence
 ```
 
-I always recommend starting your session by either resuming the previous session
-with `/resume` so it can reload its context OR by asking it to pre-populate its
-context so that it knows about its own environment
+#### Using as a Submodule
+If you want to use Altivec Intelligence as an engine for your own app 
+repository, we recommend adding this project as a git submodule. Please see 
+[altivec_compose.yml](altivec_compose.yml) for exact instructions and a template 
+`compose.yml` for your parent repository.
 
-```
-Hello, can you start off by reading the README.md file as well as your
-GEMINI.md file. Then explore the docker container you are in, especially
-/osxcross and the apps folder in the current working directory. After that, let
-me know what you can do and what you can help me with. 
-```
+#### Example Prompt
+Try starting your session by explaining the environment to the AI:
+
+> Hello, I want to build a simple 'Hello World' app for my favorite retro 
+> device. My app code is in `/repo/app`. The Altivec engine and examples are in 
+> `/repo/altivec`. The cross-compiler toolchain is in `/osxcross`. 
+> Please start by reading the README.md and GEMINI.md files in the engine 
+> folder. Please always try create makefiles for my app using the altive_common
+> .mk files in the `/repo/altivec` folder so I can ensure my makefiles are
+> small and compatible with many retro Apple devices.
 
 ### 6. Make Your Own App with Gemini
-
 Decide whether you want to make an iPhone App or a Mac App, and then ask Gemini
 to make you a new app.
 
@@ -123,21 +214,21 @@ app for my favorite retro device.
 - `GEMINI.md`: AI mandates and technical constraints.
 
 ## 🚧 To-Do List
-1. [X] Build `libcurl` for modern networking on old platforms
-1. [ ] Build Dynamic Framework for `libcurl`
-1. [ ] Update Deploy Script for Mac to deploy entire build folder for better debugging in GDB
+1. [ ] Enable on-device debugging for iOS
+1. [ ] Learn how to add libraries as dynamic frameworks (not static libs)
+1. [ ] Add `libgit` as a dependency for file syncing
 1. [ ] Setup Github Actions
    1. [ ] Build release apps and save in artifact storage
    1. [ ] Execute tests on Mac runners
+1. [X] Build `libcurl` for modern networking on old platforms
+1. [X] Improve Deploy Script
+1.    [X] Enable Gemini to debug apps directly on the host Mac
 1. [X] Remove Custom-Built 10.5/10.6 Hybrid SDK 
-   1. [X] Change x64 Build to use Clang-14 and macOS 10.11 SDK
+   1. [X] Change x64 Build to use Clang-14 and macOS 11.3 SDK
    1. [X] Change PPC and x86 Build to use Apple GCC 4.2.1 and Mac OS X 10.5 SDK
-1. [ ] Enable on-device debugging for iOS
-1. [ ] Enable Gemini to debug apps directly on the host Mac
-1. [ ] Include [`PLBlocks` \(Plausible Blocks\)](https://plausible.coop/blog/2009/07/02/blocks-for-iphone-3.0-and-mac-os-x-10/) for use in the 10.4u SDK slices to enable block usage for all toolchains 
+ 
 
 ## 😍 Contributing
-
 This was a small project for me so I could work on my own hobby apps for my 
 iPhone 5 and my iMac G4. I am not a compiler, cmake, SDK, or build-system 
 engineer. I would not have been able to do this without Gemini. That said,
@@ -147,7 +238,6 @@ can I learn more. If you know, I want to know. So please file an issue and let's
 talk about it ❤️
 
 ## ⚖️ License & Credit
-
 This project is built on top of [OSXCross](https://github.com/tpoechtrager/osxcross). 
 You should check out this project because it could make it much easier and
 cheaper for you to automatically build and release your apps because it allows

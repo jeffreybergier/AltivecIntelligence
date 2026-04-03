@@ -9,24 +9,27 @@ SDK_DIR=$(OSXCROSS_ROOT)/SDK
 # --- Compilers ---
 COMPILER_PPC=oppc32-gcc
 COMPILER_X86=o32-gcc
-COMPILER_X64=x86_64-apple-darwin15-clang
+COMPILER_X64=/usr/bin/clang
 COMPILER_ARM64=/usr/bin/clang
 COMPILER_IOS=/usr/bin/clang
 
 # --- SDK Paths ---
 SDK_PPC_PATH=$(SDK_DIR)/MacOSX10.5.sdk
 SDK_X86_PATH=$(SDK_DIR)/MacOSX10.5.sdk
-SDK_X64_PATH=$(SDK_DIR)/MacOSX10.11.sdk
+SDK_X64_PATH=$(SDK_DIR)/MacOSX11.3.sdk
 SDK_ARM64_PATH=$(SDK_DIR)/MacOSX11.3.sdk
 SDK_IOS_PATH=$(SDK_DIR)/iPhoneOS8.4.sdk
 
 # --- Cross Tools ---
-# Use darwin9 tools for legacy slices (PPC, X86, i8-armv7)
+# Use darwin9 tools for legacy slices (PPC, X86)
 AR_LEGACY=$(BIN_DIR)/i386-apple-darwin9-ar
 RANLIB_LEGACY=$(BIN_DIR)/i386-apple-darwin9-ranlib
-# Use modern tools for modern slices (X64, ARM64 Mac, i8-arm64)
-AR_MODERN=/usr/bin/llvm-ar
-RANLIB_MODERN=/usr/bin/llvm-ranlib
+
+# Use modern LLVM 14 tools for modern slices (X64, ARM64, iOS)
+AR_MODERN=/usr/bin/llvm-ar-14
+RANLIB_MODERN=/usr/bin/llvm-ranlib-14
+LIPO_MODERN=/usr/bin/llvm-lipo-14
+LIBTOOL_MODERN=/usr/bin/llvm-libtool-darwin-14
 
 LIPO=$(BIN_DIR)/i386-apple-darwin9-lipo
 LIBTOOL=$(BIN_DIR)/i386-apple-darwin9-libtool
@@ -39,12 +42,13 @@ COMMON_WARN_FLAGS=-Wall -Wimplicit-function-declaration
 # --- Deployment Targets ---
 MAC_MIN_PPC=10.4
 MAC_MIN_X86=10.4
-MAC_MIN_X64=10.6
+MAC_MIN_X64=10.9
 MAC_MIN_ARM64=11.0
 IOS_MIN_VER=4.3
 
 # PPC specific flags from altivec_common_mac.mk
-PPC_COMPAT_FLAGS=-fno-stack-protector -fno-common -fno-zero-initialized-in-bss
+LEGACY_GCC_FLAGS=-fno-stack-protector -fno-common -fno-zero-initialized-in-bss
+PPC_COMPAT_FLAGS=$(LEGACY_GCC_FLAGS)
 
 # Jobs for parallel make
 JOBS=$(shell getconf _NPROCESSORS_ONLN)

@@ -12,17 +12,24 @@ services:
     build:
       context: .
       dockerfile: Containerfile
-      target: altivec-gemini
+      target: altivec-base
     image: altivec-intelligence-image
+    environment:
+      - FORCE_COLOR=1
+    working_dir: /repo/altivec
     volumes:
       - .:/repo/altivec
       - ~/.gemini:/root/.gemini
-      # Uncomment the following line to allow the AI to use your local SSH keys 
-      # for deploying applications to your vintage Macs and iPhones.
-      # The :ro flag ensures the container cannot modify your host keys.
-      # - ~/.ssh:/root/.ssh:ro
     stdin_open: true
     tty: true
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+        apt-get install -y nodejs && \
+        npm install -g @google/gemini-cli && \
+        gemini --yolo
 
   altivec:
     build:
@@ -30,7 +37,8 @@ services:
       dockerfile: Containerfile
       target: altivec-base
     image: altivec-base-image
+    working_dir: /repo/altivec
     volumes:
-      - .:/opt/osxcross
+      - .:/repo/altivec
     stdin_open: true
     tty: true

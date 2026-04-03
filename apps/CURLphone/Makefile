@@ -1,15 +1,13 @@
 # Altivec Intelligence - CURLphone (iPhone)
 APP_NAME = CURLphone
-SOURCES = main.m AppDelegate.m
+SOURCES = main.m DownloadViewController.m CrossPlatform.m
 INFO_PLIST = Info.plist
 
 CURL_DIR = ../../libs/libcurl/build-phone
 EXTRA_FLAGS = -I$(CURL_DIR)/include
-EXTRA_LIBS = -L$(CURL_DIR)/lib -lcurl -lssl -lcrypto -lz -lresolv
+LIBS_IPHONE = $(CURL_DIR)/lib/libAICURLConnection.a $(CURL_DIR)/lib/libcurl.a $(CURL_DIR)/lib/libssl.a $(CURL_DIR)/lib/libcrypto.a $(CURL_DIR)/lib/libz.a
 
-# Import common iPhone build engine
+# Resource files
+RESOURCES = $(wildcard Resources/*.png)
+
 include ../../altivec_common_phone.mk
-
-# Override/Append
-IOS_FLAGS += $(EXTRA_FLAGS)
-IOS_FRAMEWORKS += $(EXTRA_LIBS)
