@@ -65,6 +65,12 @@ clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf build-release build-debug
 
+analyze: validate
+	@echo "--- Running Clang Static Analyzer (x86_64) ---"
+	@$(COMPILER_X64) --analyze -Xanalyzer -analyzer-output=text \
+		-target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
+		$(MAC_FLAGS) $(ALL_SOURCES)
+
 validate:
 	@if [ ! -d "$(SDK_MAC_OLD_PATH)" ]; then echo " [!] ERROR: Mac SDK 10.5 missing at $(SDK_MAC_OLD_PATH)"; exit 1; fi
 	@if [ ! -d "$(SDK_MAC_NEW_PATH)" ]; then echo " [!] ERROR: Mac SDK 11.3 missing at $(SDK_MAC_NEW_PATH)"; exit 1; fi
@@ -189,4 +195,4 @@ $(INT_DIR)/arm/%.o: %.c
 	@$(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
 	    $(MAC_FLAGS) -c $< -o $@
 
-.PHONY: release debug clean validate
+.PHONY: release debug clean analyze validate

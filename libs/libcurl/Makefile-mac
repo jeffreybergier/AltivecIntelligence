@@ -31,6 +31,11 @@ aicc: static $(PREFIX)/lib/libAICURLConnection.a
 	cp AICURLConnection.h $(BUILD_ROOT)/include/
 	@echo "AICURLConnection build successful."
 
+aicc-analyze:
+	@echo "--- Analyzing AICURLConnection (x64) ---"
+	@$(COMPILER_X64) --analyze -Xanalyzer -analyzer-output=text \
+		$(X64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x64/include AICURLConnection.m
+
 static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/cacert.pem
 	@echo "Organizing final Mac output..."
 	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
@@ -215,4 +220,4 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: mac static aicc clean
+.PHONY: mac static aicc aicc-analyze clean

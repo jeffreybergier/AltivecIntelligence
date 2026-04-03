@@ -45,6 +45,12 @@ clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf build-release build-debug
 
+analyze: validate
+	@echo "--- Running Clang Static Analyzer (arm64) ---"
+	@$(CLANG14) --analyze -Xanalyzer -analyzer-output=text \
+		-target arm64-apple-ios4.3 -arch arm64 -isysroot $(IOS_SDK_PATH) \
+		$(IOS_FLAGS) $(ALL_SOURCES)
+
 validate:
 	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi
 	@for dir in $(patsubst -I%,%,$(filter -I%,$(IOS_FLAGS))) $(patsubst -L%,%,$(filter -L%,$(IOS_FRAMEWORKS))); do \
@@ -109,4 +115,4 @@ $(INT_DIR)/%.o: %.c
 	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
 	           $(IOS_FLAGS) -c $< -o $@
 
-.PHONY: release debug clean validate
+.PHONY: release debug clean analyze validate
