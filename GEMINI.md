@@ -61,7 +61,7 @@ Libraries (libcurl, openssl, zlib) are built as "Quad-Fat" static binaries (`.a`
 Projects use a modular Makefile system. App-specific Makefiles include a "Common" engine from the root.
 
 ```bash
-cd apps/SingleWindow # or SingleScreen
+cd /repo/altivec/apps/SingleWindow # or SingleScreen
 
 # Standard Release Build (-O3)
 make
@@ -71,7 +71,16 @@ make debug
 
 # Clean build artifacts
 make clean
+
+# Run Clang Static Analyzer (Modern targets only)
+make analyze
 ```
+
+## 🔍 Static Analysis
+You can run the Clang Static Analyzer on modern targets (X64, ARM64, and iPhone) to find potential bugs, memory leaks, or logic errors.
+- **Usage:** Run `make analyze` from the app directory.
+- **Output:** The analyzer outputs textual reports directly to the console.
+- **Scope:** Analysis is performed using the modern Clang toolchain and SDKs (11.3 for Mac, 8.4 for iPhone).
 
 ## ⚙️ Key Technical Standards
 

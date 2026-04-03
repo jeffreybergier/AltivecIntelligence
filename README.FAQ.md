@@ -104,6 +104,13 @@ See the table below to understand the compilers and SDKs used:
 Even though the Mac version uses 2 compilers and 2 SDKs, it combines them into
 one Universal Binary with the lipo command.
 
+## How do I run static analysis on my code?
+For modern targets (X64, ARM64, and iPhone), you can use the Clang Static Analyzer. Run the following command in your app's directory:
+```bash
+make analyze
+```
+This will check for common issues like memory leaks, null pointer dereferences, and other logic errors using the modern Clang 14 toolchain.
+
 ## Project Origins
 
 ### Why was this project built?
