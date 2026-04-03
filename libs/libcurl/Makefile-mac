@@ -17,24 +17,62 @@ OPENSSL_URL=https://www.openssl.org/source/openssl-$(OPENSSL_VER).tar.gz
 CURL_URL=https://curl.se/download/curl-$(CURL_VER).tar.gz
 
 # Architecture Specific Flags
-PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(PPC_COMPAT_FLAGS)
-X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH)
-X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -mmacosx-version-min=$(MAC_MIN_X64) -march=core2 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
-X64_LDFLAGS=-Wl,-platform_version,macos,$(MAC_MIN_X64),10.11 -Wl,-syslibroot,$(SDK_X64_PATH) -nostartfiles $(SDK_X64_PATH)/usr/lib/crt1.10.6.o
+PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(LEGACY_GCC_FLAGS)
+X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH) $(LEGACY_GCC_FLAGS)
+X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_X64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
 ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
 
-all: static
+all: static aicc
 
-static: $(PREFIX)/lib/libcurl.a
+aicc: static $(PREFIX)/lib/libAICURLConnection.a
+	@echo "Updating AICURLConnection output..."
+	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
+	cp $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/
+	cp AICURLConnection.h $(BUILD_ROOT)/include/
+	@echo "AICURLConnection build successful."
+
+aicc-analyze:
+	@echo "--- Analyzing AICURLConnection (x64) ---"
+	@$(COMPILER_X64) --analyze -Xanalyzer -analyzer-output=text \
+		$(X64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x64/include AICURLConnection.m
+
+static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/cacert.pem
 	@echo "Organizing final Mac output..."
 	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
 	cp $(PREFIX)/lib/*.a $(BUILD_ROOT)/lib/
 	cp -R $(PREFIX)/include/* $(BUILD_ROOT)/include/
+	cp AICURLConnection.h $(BUILD_ROOT)/include/
 	@echo "-----------------------------------------------------------"
 	@echo "MAC QUAD-FAT (ppc, x86, x64, arm64) BUILD SUCCESSFUL"
 	@echo "Libraries: $(BUILD_ROOT)/lib"
 	@echo "Headers:   $(BUILD_ROOT)/include"
 	@echo "-----------------------------------------------------------"
+
+$(BUILD_ROOT)/lib/cacert.pem:
+	mkdir -p $(BUILD_ROOT)/lib
+	[ -f tarballs/cacert.pem ] || (mkdir -p tarballs && curl -sL https://curl.se/ca/cacert.pem -o tarballs/cacert.pem)
+	cp tarballs/cacert.pem $@
+
+# --- AICURLConnection ---
+$(PREFIX)/lib/libAICURLConnection.a: AICURLConnection.m AICURLConnection.h $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libcrypto.a $(PREFIX)/lib/libz.a
+	@echo "--- Building AICURLConnection (ppc) ---"
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) $(PPC_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/ppc/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-ppc.o
+	$(AR_LEGACY) rc $(PREFIX)/ppc/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-ppc.o
+	$(RANLIB_LEGACY) $(PREFIX)/ppc/lib/libAICURLConnection.a
+	@echo "--- Building AICURLConnection (x86) ---"
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) $(X86_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x86/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x86.o
+	$(AR_LEGACY) rc $(PREFIX)/x86/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x86.o
+	$(RANLIB_LEGACY) $(PREFIX)/x86/lib/libAICURLConnection.a
+	@echo "--- Building AICURLConnection (x64) ---"
+	$(COMPILER_X64) $(X64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x64.o
+	$(AR_MODERN) rc $(PREFIX)/x64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x64.o
+	$(RANLIB_MODERN) $(PREFIX)/x64/lib/libAICURLConnection.a
+	@echo "--- Building AICURLConnection (arm64) ---"
+	$(COMPILER_ARM64) $(ARM64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/arm64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-arm64.o
+	$(AR_MODERN) rc $(PREFIX)/arm64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-arm64.o
+	$(RANLIB_MODERN) $(PREFIX)/arm64/lib/libAICURLConnection.a
+	# Lipo
+	$(LIPO) -create $(PREFIX)/ppc/lib/libAICURLConnection.a $(PREFIX)/x86/lib/libAICURLConnection.a $(PREFIX)/x64/lib/libAICURLConnection.a $(PREFIX)/arm64/lib/libAICURLConnection.a -output $(PREFIX)/lib/libAICURLConnection.a
 
 # --- ZLIB ---
 $(INTERMEDIATE)/zlib-$(ZLIB_VER):
@@ -123,34 +161,43 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
 	CC="$(COMPILER_PPC) $(PPC_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/ppc/include" LDFLAGS="-L$(PREFIX)/ppc/lib" \
+	CPPFLAGS="-I$(PREFIX)/ppc/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/ppc/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=powerpc-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
+	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/ppc --with-zlib=$(PREFIX)/ppc \
 	--prefix=$(PREFIX)/ppc && \
+	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
+	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	@echo "--- Building curl (x86) ---"
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
 	CC="$(COMPILER_X86) $(X86_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/x86/include" LDFLAGS="-L$(PREFIX)/x86/lib" \
+	CPPFLAGS="-I$(PREFIX)/x86/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/x86/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=i386-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
+	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/x86 --with-zlib=$(PREFIX)/x86 \
 	--prefix=$(PREFIX)/x86 && \
+	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
+	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	@echo "--- Building curl (x64) ---"
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
 	CC="$(COMPILER_X64) $(X64_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/x64/include" LDFLAGS="-L$(PREFIX)/x64/lib $(X64_LDFLAGS)" \
+	CPPFLAGS="-I$(PREFIX)/x64/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/x64/lib $(X64_LDFLAGS)" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=x86_64-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
+	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/x64 --with-zlib=$(PREFIX)/x64 \
 	--prefix=$(PREFIX)/x64 && \
+	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
+	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	@echo "--- Building curl (arm64) ---"
 	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
@@ -160,6 +207,7 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=aarch64-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-hsts --disable-alt-svc \
+	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/arm64 --with-zlib=$(PREFIX)/arm64 \
 	--prefix=$(PREFIX)/arm64 && \
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
@@ -172,4 +220,4 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: mac clean
+.PHONY: mac static aicc aicc-analyze clean

@@ -20,8 +20,29 @@ mac-static:
 phone: phone-static
 mac: mac-static
 
+# --- AICURLConnection Only Targets ---
+aicc: aicc-mac
+
+aicc-mac:
+	@echo "==========================================================="
+	@echo "BUILDING MAC AICURLConnection (ppc, x86, x64, arm64)"
+	@echo "==========================================================="
+	$(MAKE) -f Makefile-mac aicc
+
+aicc-phone:
+	@echo "==========================================================="
+	@echo "BUILDING PHONE AICURLConnection (armv7, arm64)"
+	@echo "==========================================================="
+	$(MAKE) -f Makefile-phone aicc
+
+aicc-analyze:
+	@echo "==========================================================="
+	@echo "ANALYZING AICURLConnection (x64)"
+	@echo "==========================================================="
+	$(MAKE) -f Makefile-mac aicc-analyze
+
 clean:
 	$(MAKE) -f Makefile-phone clean
 	$(MAKE) -f Makefile-mac clean
 
-.PHONY: all phone-static mac-static phone mac clean
+.PHONY: all phone-static mac-static phone mac aicc aicc-mac aicc-phone aicc-analyze clean

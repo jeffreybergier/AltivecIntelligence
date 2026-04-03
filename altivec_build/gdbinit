@@ -1,0 +1,8 @@
+## Do not ask for confirmation
+set confirm off
+
+## Stop on Exception
+fb -[NSException raise]
+
+## Uncomment to run automatically
+## run

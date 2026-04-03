@@ -124,9 +124,6 @@ if [ -f "$WRAPPER" ]; then
         ln -sf $WRAPPER ${arch}-apple-darwin11-clang
         ln -sf $WRAPPER ${arch}-apple-darwin11-clang++
     done
-    # Add x86_64-apple-darwin15 for the 10.11 SDK
-    ln -sf $WRAPPER x86_64-apple-darwin15-clang
-    ln -sf $WRAPPER x86_64-apple-darwin15-clang++
 fi
 
 popd &>/dev/null

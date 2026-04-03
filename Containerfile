@@ -66,7 +66,7 @@ ENV OSX_VERSION_MIN=10.5
 ENV UNATTENDED=1
 ENV OSXCROSS_NO_DSYMUTIL=1
 ENV INSTALLPREFIX=/osxcross/target
-ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib"
 
 # 3. Copy OSXCross and build base toolchain
 WORKDIR /osxcross
@@ -98,18 +98,4 @@ ENV PATH="/osxcross/target/bin:${PATH}"
 WORKDIR /opt/osxcross
 ENTRYPOINT ["/bin/bash", "-c"]
 CMD ["/bin/bash"]
-
-# --- Phase 2: Node.js and Gemini Environment ---
-FROM altivec-base AS altivec-gemini
-ENV FORCE_COLOR=1
-
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN npm install -g @google/gemini-cli
-
-WORKDIR /repo/altivec
-ENTRYPOINT ["gemini"]
-CMD ["--yolo"]
 

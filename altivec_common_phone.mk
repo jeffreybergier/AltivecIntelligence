@@ -22,7 +22,7 @@ ALL_SOURCES = $(SOURCES) $(EXTRA_SOURCES)
 OBJS = $(addprefix $(INT_DIR)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) $(EXTRA_SOURCES:.m=.o) $(EXTRA_SOURCES:.c=.o)))
 
 # --- Flags ---
-IOS_FLAGS = $(OPT_FLAGS) -g -Wall \
+IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -Wall \
             -Wimplicit-function-declaration -Wobjc-method-access \
             -Wno-unused-command-line-argument -Wunguarded-availability \
             -isysroot $(IOS_SDK_PATH) \
@@ -44,6 +44,12 @@ debug: validate
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf build-release build-debug
+
+analyze: validate
+	@echo "--- Running Clang Static Analyzer (arm64) ---"
+	@$(CLANG14) --analyze -Xanalyzer -analyzer-output=text \
+		-target arm64-apple-ios4.3 -arch arm64 -isysroot $(IOS_SDK_PATH) \
+		$(IOS_FLAGS) $(ALL_SOURCES)
 
 validate:
 	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi
@@ -76,6 +82,10 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin
 		echo "  > copying resources" ; \
 		cp -R $(RES_DIR)/* $@/ ; \
 	fi
+	@if [ -f "$(CURL_DIR)/lib/cacert.pem" ]; then \
+		echo "  > copying cacert.pem" ; \
+		cp "$(CURL_DIR)/lib/cacert.pem" $@/ ; \
+	fi
 	@echo "  > extracting symbols"
 	@$(DSYMUTIL) $< -o $(BUILD_DIR)/$(APP_NAME).dSYM
 	@echo -n "APPL????" > $@/PkgInfo
@@ -85,7 +95,7 @@ $(INT_DIR)/$(APP_NAME)-bin: $(OBJS)
 	@echo " [2/4] Linking Phone universal binary (armv7, arm64)..."
 	@export PATH=$(BIN_DIR):$(PATH); \
 	$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
-	           $(IOS_FLAGS) $(IOS_FRAMEWORKS) $^ -o $@
+	           $(IOS_FLAGS) $(IOS_FRAMEWORKS) $(LIBS_IPHONE) $^ -o $@
 
 $(INT_DIR)/%.o: %.m
 	@mkdir -p $(INT_DIR)
@@ -105,4 +115,4 @@ $(INT_DIR)/%.o: %.c
 	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
 	           $(IOS_FLAGS) -c $< -o $@
 
-.PHONY: release debug clean validate
+.PHONY: release debug clean analyze validate
