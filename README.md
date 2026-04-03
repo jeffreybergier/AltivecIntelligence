@@ -214,18 +214,18 @@ app for my favorite retro device.
 - `GEMINI.md`: AI mandates and technical constraints.
 
 ## 🚧 To-Do List
-1. [X] Build `libcurl` for modern networking on old platforms
-1. [ ] Build Dynamic Framework for `libcurl`
-1. [X] Update Deploy Script for Mac to deploy entire build folder for better debugging in GDB
+1. [ ] Enable on-device debugging for iOS
+1. [ ] Learn how to add libraries as dynamic frameworks (not static libs)
+1. [ ] Add `libgit` as a dependency for file syncing
 1. [ ] Setup Github Actions
    1. [ ] Build release apps and save in artifact storage
    1. [ ] Execute tests on Mac runners
+1. [X] Build `libcurl` for modern networking on old platforms
+1. [X] Improve Deploy Script
+1.    [X] Enable Gemini to debug apps directly on the host Mac
 1. [X] Remove Custom-Built 10.5/10.6 Hybrid SDK 
    1. [X] Change x64 Build to use Clang-14 and macOS 11.3 SDK
    1. [X] Change PPC and x86 Build to use Apple GCC 4.2.1 and Mac OS X 10.5 SDK
-1. [ ] Enable on-device debugging for iOS
-1. [ ] Enable Gemini to debug apps directly on the host Mac
-1. [ ] Include [`PLBlocks` \(Plausible Blocks\)](https://plausible.coop/blog/2009/07/02/blocks-for-iphone-3.0-and-mac-os-x-10/) for use in the 10.4u SDK slices to enable block usage for all toolchains 
  
 
 ## 😍 Contributing
