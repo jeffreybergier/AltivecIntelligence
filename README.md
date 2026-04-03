@@ -187,14 +187,17 @@ repository, we recommend adding this project as a git submodule. Please see
 
 #### Example Prompt
 Try starting your session by explaining the environment to the AI:
-
-> Hello, I want to build a simple 'Hello World' app for my favorite retro 
-> device. My app code is in `/repo/app`. The Altivec engine and examples are in 
-> `/repo/altivec`. The cross-compiler toolchain is in `/osxcross`. 
-> Please start by reading the README.md and GEMINI.md files in the engine 
-> folder. Please always try create makefiles for my app using the altive_common
-> .mk files in the `/repo/altivec` folder so I can ensure my makefiles are
-> small and compatible with many retro Apple devices.
+```
+Hello, you are inside of a docker container that has a cross-compile 
+environment for building retro Mac and iPhone Apps. My app code is in /repo/app. 
+The Altivec engine and examples are in /repo/altivec. The cross-compiler 
+toolchain is in /osxcross. Please start by reading the README.md and GEMINI.md 
+files in the engine folder. Please always try create makefiles for my app using 
+the altive_common[mac|phone].mk files in the `/repo/altivec` folder so I can 
+ensure my makefiles are small and make apps compatible with many retro Apple 
+devices. Make sure you treat my repo (/repo/app) as the base location for your 
+work on my app.
+```
 
 ### 6. Make Your Own App with Gemini
 Decide whether you want to make an iPhone App or a Mac App, and then ask Gemini
