@@ -6,10 +6,11 @@ This document describes the logic and requirements of the `altivec_deploy.sh` sc
 The script automates the discovery, transfer, installation, and debugging of applications on local or remote Darwin-based devices (Mac and iPhone). It prioritizes clear logic, robust preflights, and interactive debugging.
 
 ## 2. Command Line Interface
-- **Usage:** `./altivec_deploy.sh <path_to_app_or_build_dir> [-d <user@host>]`
+- **Usage:** `./altivec_deploy.sh <path_to_app_or_build_dir> [-d <user@host>] [-y|--yes]`
 - **Arguments:**
   - `<path_to_app_or_build_dir>`: Path to a `.app` bundle or a directory containing one.
   - `-d | --device <user@host>`: (Optional) SSH connection string for a remote target. If omitted, the script runs in Local Mode.
+  - `-y | --yes`: (Optional) Skips the deployment summary and confirmation prompt for non-interactive use. In this mode, the script also bypasses remote debuggers (GDB/LLDB) and automatically kills the remote application upon exit.
 
 ## 3. Architecture & Style
 - **Variable Management:** Following a "C89 style" approach, all variables are declared and initialized at the top of the script. Constants (paths, remote roots) are grouped for easy auditing.
