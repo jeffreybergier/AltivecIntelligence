@@ -33,6 +33,7 @@ deprecation warnings as those will be common when dealing with these old API's.
 - **Primary Toolchain:** OSXCross 0.13 (ppc-test branch)
 - **Host Architecture:** Ubuntu 22 (aarch64/x86_64)
 - **Installation Path:** `/osxcross/target/bin` (Automatically in `PATH`)
+- **Project Root:** `/repo/altivec`
 
 ## 📦 Installed SDKs
 Located in /osxcross/target/SDK/:
