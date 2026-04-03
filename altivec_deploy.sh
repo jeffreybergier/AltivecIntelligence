@@ -36,6 +36,7 @@ DEV_LOG_IOS="" # path to /var/log/syslog
 DEV_APPINST="" # path to appinst
 DEV_IPAINST="" # path to ipainstaller
 DEV_NEEDS_CLEANUP=false # Flag to track if we've touched the remote device
+NON_INTERACTIVE=false
 
 # --- FUNCTIONS ---
 
@@ -84,6 +85,15 @@ log_instructions() {
         echo "        automatically after stopping."
       fi
     fi
+  elif [ "$type" = "logsnone" ]; then
+    echo "  NO LOGS FOUND:"
+    echo "  - The app has been launched on the remote Mac."
+    echo "  - No system log was found to tail."
+    echo "  - Press CTRL+C to stop the app and cleanup."
+    if [ "$is_remote" = "true" ]; then
+      echo "  Note: Remote files will be deleted"
+      echo "        automatically after stopping."
+    fi
   fi
   echo "***************************************************"
   echo ""
@@ -113,6 +123,8 @@ check_util_path() {
 cleanup() {
   if [ "$DEV_NEEDS_CLEANUP" = true ]; then
     if [ "$DEV_TYPE" = "mac" ]; then
+      echo "Stopping remote app..."
+      $DEV_SSH_CMD "killall '$APP_NAME' 2>/dev/null"
       echo "Cleaning up remote Mac directory..."
       $DEV_SSH_CMD "rm -rf $REMOTE_MAC_BASE"
     elif [ "$DEV_TYPE" = "ios" ]; then
@@ -288,6 +300,11 @@ preflight_summary() {
     log_item "Transfer: $(basename "$APP_IPA_PATH")"
   fi
 
+  if [ "$NON_INTERACTIVE" = true ]; then
+    log_item "Continuing automatically (--yes set)"
+    return 0
+  fi
+
   echo ""
   read -p "Continue with deployment? (Y/n): " choice
   if [[ ! "$choice" =~ ^[Yy]$ ]] && [ -n "$choice" ]; then
@@ -334,15 +351,15 @@ execute_remote_mac() {
 
   # Perform a single transfer
   echo "Transferring files to remote Mac..."
-  scp -r "${transfer_list[@]}" "$DEVICE_SSH_STR:$REMOTE_MAC_BASE/"
+  scp -O -r "${transfer_list[@]}" "$DEVICE_SSH_STR:$REMOTE_MAC_BASE/"
   
   # Unzip on remote
   $DEV_SSH_CMD "cd $REMOTE_MAC_BASE && unzip -o $(basename "$APP_ZIP_PATH")"
   
-  if [ -n "$DEV_LLDB" ]; then
+  if [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_LLDB" ]; then
     log_instructions "debugger" "true"
     $DEV_SSH_CMD -t "lldb -s $REMOTE_MAC_BASE/lldbinit $remote_bin_path"
-  elif [ -n "$DEV_GDB" ]; then
+  elif [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_GDB" ]; then
     log_instructions "debugger" "true"
     $DEV_SSH_CMD -t "gdb -x $REMOTE_MAC_BASE/gdbinit $remote_bin_path"
   else
@@ -350,6 +367,10 @@ execute_remote_mac() {
     if [ -n "$DEV_LOG" ]; then
       log_instructions "logs" "true"
       $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
+    else
+      log_instructions "logsnone" "true"
+      # Wait for the user to press CTRL+C
+      while true; do sleep 1; done
     fi
   fi
 }
@@ -360,7 +381,7 @@ execute_remote_iphone() {
   
   $DEV_SSH_CMD "mkdir -p $REMOTE_IOS_BASE"
   DEV_NEEDS_CLEANUP=true
-  scp "$APP_IPA_PATH" "$DEVICE_SSH_STR:$REMOTE_IOS_BASE/"
+  scp -O "$APP_IPA_PATH" "$DEVICE_SSH_STR:$REMOTE_IOS_BASE/"
   
   if [ -n "$DEV_APPINST" ]; then
     install_cmd="appinst $REMOTE_IOS_BASE/$ipa_name"
@@ -383,7 +404,7 @@ execute_remote_iphone() {
 trap cleanup EXIT
 
 if [ "$#" -lt 1 ]; then
-  echo "Usage: $0 <path_to_app_or_build_dir> [-d <user@host>]"
+  echo "Usage: $0 <path_to_app_or_build_dir> [-d <user@host>] [-y|--yes]"
   exit 1
 fi
 
@@ -393,6 +414,7 @@ shift
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     -d|--device) DEVICE_SSH_STR="$2"; shift ;;
+    -y|--yes) NON_INTERACTIVE=true ;;
     *) log_fail "Unknown argument: $1"; exit 1 ;;
   esac
   shift
