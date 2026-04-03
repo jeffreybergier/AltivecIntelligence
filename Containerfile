@@ -46,6 +46,11 @@ RUN apt-get update && apt-get install -y \
     lld \
     && rm -rf /var/lib/apt/lists/*
 
+# 1.5. Install Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
 
 # 2. Settings for the User
 
