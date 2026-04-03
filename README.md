@@ -179,19 +179,24 @@ for more info on how to use Gemini CLI.
 docker compose run --rm altivec-intelligence
 ```
 
-I always recommend starting your session by either resuming the previous session
-with `/resume` so it can reload its context OR by asking it to pre-populate its
-context so that it knows about its own environment
+#### Using as a Submodule
+If you want to use Altivec Intelligence as an engine for your own app 
+repository, we recommend adding this project as a git submodule. Please see 
+[altivec_compose.yml](altivec_compose.yml) for exact instructions and a template 
+`compose.yml` for your parent repository.
 
-```
-Hello, can you start off by reading the README.md file as well as your
-GEMINI.md file. Then explore the docker container you are in, especially
-/osxcross and the apps folder in the current working directory. After that, let
-me know what you can do and what you can help me with. 
-```
+#### Example Prompt
+Try starting your session by explaining the environment to the AI:
+
+> Hello, I want to build a simple 'Hello World' app for my favorite retro 
+> device. My app code is in `/repo/app`. The Altivec engine and examples are in 
+> `/repo/altivec`. The cross-compiler toolchain is in `/osxcross`. 
+> Please start by reading the README.md and GEMINI.md files in the engine 
+> folder. Please always try create makefiles for my app using the altive_common
+> .mk files in the `/repo/altivec` folder so I can ensure my makefiles are
+> small and compatible with many retro Apple devices.
 
 ### 6. Make Your Own App with Gemini
-
 Decide whether you want to make an iPhone App or a Mac App, and then ask Gemini
 to make you a new app.
 
@@ -224,7 +229,6 @@ app for my favorite retro device.
  
 
 ## 😍 Contributing
-
 This was a small project for me so I could work on my own hobby apps for my 
 iPhone 5 and my iMac G4. I am not a compiler, cmake, SDK, or build-system 
 engineer. I would not have been able to do this without Gemini. That said,
@@ -234,7 +238,6 @@ can I learn more. If you know, I want to know. So please file an issue and let's
 talk about it ❤️
 
 ## ⚖️ License & Credit
-
 This project is built on top of [OSXCross](https://github.com/tpoechtrager/osxcross). 
 You should check out this project because it could make it much easier and
 cheaper for you to automatically build and release your apps because it allows
