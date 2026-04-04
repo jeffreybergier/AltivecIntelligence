@@ -7,14 +7,18 @@
 # 2. Copy this file to your project root:
 #    cp altivec/altivec_compose.yml ./compose.yml
 #
-# 3. Use with Gemini CLI (AI Assistant):
+# 3. Build docker images (one time):
+#    docker compose build
+#
+# 4. Build an example app from the Altivec submodule:
+#    docker compose run --rm altivec "cd /repo/altivec/apps/SingleWindow && make"
+#
+# 5a. Use with Gemini CLI (AI Assistant):
 #    docker compose run --rm altivec-intelligence
 #
-# 4. Use with standard shell (no AI):
+# 5b. Use with standard shell (no AI):
 #    docker compose run --rm altivec
 #
-# 5. Build an example app from the Altivec submodule:
-#    docker compose run --rm altivec "cd /repo/altivec/apps/SingleWindow && make"
 
 services:
   altivec-intelligence:
@@ -22,17 +26,17 @@ services:
       file: ./altivec/compose.yml
       service: altivec-intelligence
     volumes:
-      - .:/repo/app
+      - .:/repo/user
       # Uncomment the following line to allow the AI to use your local SSH keys 
       # for deploying applications to your vintage Macs and iPhones.
       # The :ro flag ensures the container cannot modify your host keys.
       # - ~/.ssh:/root/.ssh:ro
-    working_dir: /repo/app
+    working_dir: /repo/user
 
   altivec:
     extends:
       file: ./altivec/compose.yml
       service: altivec
     volumes:
-      - .:/repo/app
-    working_dir: /repo/app
+      - .:/repo/user
+    working_dir: /repo/user

@@ -46,11 +46,6 @@ RUN apt-get update && apt-get install -y \
     lld \
     && rm -rf /var/lib/apt/lists/*
 
-# 1.5. Install Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
-
 
 # 2. Settings for the User
 
@@ -100,7 +95,22 @@ RUN echo "Post-Build: Altivec Intelligence" \
 ENV PATH="/osxcross/target/bin:${PATH}"
 
 # 6. Move into Working Directory
-WORKDIR /opt/osxcross
+WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-c"]
 CMD ["/bin/bash"]
+
+# --- Phase 2: Node.js and Gemini Environment ---
+FROM altivec-base AS altivec-gemini
+ENV FORCE_COLOR=1
+
+# Install Node.js v22 LTS
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g @google/gemini-cli
+
+WORKDIR /repo/altivec
+ENTRYPOINT ["gemini"]
+CMD ["--yolo"]
 
