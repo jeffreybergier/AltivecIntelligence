@@ -40,6 +40,41 @@ NON_INTERACTIVE=false
 
 # --- FUNCTIONS ---
 
+# Portable timeout replacement for macOS/Linux
+timeout_int() {
+  local sec="$1"; shift
+  # Use GNU timeout/gtimeout if available for efficiency
+  if command -v timeout >/dev/null 2>&1; then
+    timeout -s INT "$sec" "$@"
+    return $?
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout -s INT "$sec" "$@"
+    return $?
+  fi
+
+  # Fallback: Loop-based timer
+  "$@" &
+  local pid=$!
+  local count=0
+  
+  # Check if process is alive every second
+  while [ $count -lt "$sec" ]; do
+    if ! kill -0 $pid 2>/dev/null; then
+      wait $pid 2>/dev/null
+      return $?
+    fi
+    sleep 1
+    count=$((count + 1))
+  done
+
+  # Timeout reached: Kill process
+  kill -TERM $pid 2>/dev/null
+  sleep 2
+  kill -KILL $pid 2>/dev/null
+  wait $pid 2>/dev/null
+  return 124
+}
+
 log_header() {
   echo ""
   echo "=== $1 ==="
@@ -316,19 +351,24 @@ preflight_summary() {
 execute_local() {
   local bin_path="$APP_BUNDLE_PATH/Contents/MacOS/$APP_NAME"
   
-  if [ -n "$DEV_LLDB" ]; then
+  if [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_LLDB" ]; then
     log_instructions "debugger"
     # Use exec to replace the shell process with the debugger.
     # This ensures that signals (like Ctrl+C) are handled directly by LLDB.
     exec lldb -s "$APP_LLDBINIT" "$bin_path"
-  elif [ -n "$DEV_GDB" ]; then
+  elif [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_GDB" ]; then
     log_instructions "debugger"
     exec gdb -x "$APP_GDBINIT" "$bin_path"
   else
     open "$APP_BUNDLE_PATH"
     if [ -n "$DEV_LOG" ]; then
       log_instructions "logs"
-      tail -f "$DEV_LOG" | grep --line-buffered "$APP_NAME"
+      if [ "$NON_INTERACTIVE" = true ]; then
+        echo "Tailing logs for 60 seconds (--yes)..."
+        timeout_int 60 tail -f "$DEV_LOG" | grep --line-buffered "$APP_NAME" || true
+      else
+        tail -f "$DEV_LOG" | grep --line-buffered "$APP_NAME"
+      fi
     fi
   fi
 }
@@ -366,11 +406,21 @@ execute_remote_mac() {
     $DEV_SSH_CMD "open $remote_app_path"
     if [ -n "$DEV_LOG" ]; then
       log_instructions "logs" "true"
-      $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
+      if [ "$NON_INTERACTIVE" = true ]; then
+        echo "Tailing logs for 60 seconds (--yes)..."
+        timeout_int 60 $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME" || true
+      else
+        $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
+      fi
     else
       log_instructions "logsnone" "true"
       # Wait for the user to press CTRL+C
-      while true; do sleep 1; done
+      if [ "$NON_INTERACTIVE" = true ]; then
+        echo "Waiting for 60 seconds before cleanup (--yes)..."
+        sleep 60
+      else
+        while true; do sleep 1; done
+      fi
     fi
   fi
 }
@@ -395,7 +445,12 @@ execute_remote_iphone() {
   if [ -n "$DEV_LOG" ]; then
     log_instructions "logs" "true"
     echo "Tailing logs for $APP_NAME..."
-    $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
+    if [ "$NON_INTERACTIVE" = true ]; then
+      echo "Tailing logs for 60 seconds (--yes)..."
+      timeout_int 60 $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME" || true
+    else
+      $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
+    fi
   fi
 }
 
