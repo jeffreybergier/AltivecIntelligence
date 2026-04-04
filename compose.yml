@@ -12,13 +12,14 @@ services:
     build:
       context: .
       dockerfile: Containerfile
-      target: altivec-base
+      target: altivec-gemini
     image: altivec-intelligence-image
     environment:
       - FORCE_COLOR=1
-    working_dir: /repo/altivec
+    working_dir: /repo/user
     volumes:
       - .:/repo/altivec
+      - .:/repo/user
       - ~/.gemini:/root/.gemini
     stdin_open: true
     tty: true
@@ -26,7 +27,7 @@ services:
       - /bin/bash
       - -c
       - |
-        npm install -g @google/gemini-cli && \
+        npm update -g @google/gemini-cli && \
         gemini --yolo
 
   altivec:
@@ -35,8 +36,9 @@ services:
       dockerfile: Containerfile
       target: altivec-base
     image: altivec-base-image
-    working_dir: /repo/altivec
+    working_dir: /repo/user
     volumes:
       - .:/repo/altivec
+      - .:/repo/user
     stdin_open: true
     tty: true
