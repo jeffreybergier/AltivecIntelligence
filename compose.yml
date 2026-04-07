@@ -49,7 +49,7 @@ services:
       - -c
       - |
         npm update -g @anthropic-ai/claude-code && \
-        claude --dangerously-skip-permissions
+        claude
 
   altivec:
     build:
