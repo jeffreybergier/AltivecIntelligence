@@ -37,6 +37,7 @@ DEV_APPINST="" # path to appinst
 DEV_IPAINST="" # path to ipainstaller
 DEV_NEEDS_CLEANUP=false # Flag to track if we've touched the remote device
 NON_INTERACTIVE=false
+TIMEOUT=60
 
 # --- FUNCTIONS ---
 
@@ -360,13 +361,13 @@ execute_local() {
     log_instructions "debugger"
     exec gdb -x "$APP_GDBINIT" "$bin_path"
   else
-    open "$APP_BUNDLE_PATH"
-    if [ -n "$DEV_LOG" ]; then
-      log_instructions "logs"
-      if [ "$NON_INTERACTIVE" = true ]; then
-        echo "Tailing logs for 60 seconds (--yes)..."
-        timeout_int 60 tail -f "$DEV_LOG" | grep --line-buffered "$APP_NAME" || true
-      else
+    if [ "$NON_INTERACTIVE" = true ]; then
+      echo "Executing $APP_NAME for $TIMEOUT seconds (--yes)..."
+      timeout_int $TIMEOUT "$bin_path" || true
+    else
+      open "$APP_BUNDLE_PATH"
+      if [ -n "$DEV_LOG" ]; then
+        log_instructions "logs"
         tail -f "$DEV_LOG" | grep --line-buffered "$APP_NAME"
       fi
     fi
@@ -403,22 +404,17 @@ execute_remote_mac() {
     log_instructions "debugger" "true"
     $DEV_SSH_CMD -t "gdb -x $REMOTE_MAC_BASE/gdbinit $remote_bin_path"
   else
-    $DEV_SSH_CMD "open $remote_app_path"
-    if [ -n "$DEV_LOG" ]; then
-      log_instructions "logs" "true"
-      if [ "$NON_INTERACTIVE" = true ]; then
-        echo "Tailing logs for 60 seconds (--yes)..."
-        timeout_int 60 $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME" || true
-      else
-        $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
-      fi
+    if [ "$NON_INTERACTIVE" = true ]; then
+      echo "Executing $APP_NAME on remote Mac for $TIMEOUT seconds (--yes)..."
+      timeout_int $TIMEOUT $DEV_SSH_CMD "$remote_bin_path" || true
     else
-      log_instructions "logsnone" "true"
-      # Wait for the user to press CTRL+C
-      if [ "$NON_INTERACTIVE" = true ]; then
-        echo "Waiting for 60 seconds before cleanup (--yes)..."
-        sleep 60
+      $DEV_SSH_CMD "open $remote_app_path"
+      if [ -n "$DEV_LOG" ]; then
+        log_instructions "logs" "true"
+        $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
       else
+        log_instructions "logsnone" "true"
+        # Wait for the user to press CTRL+C
         while true; do sleep 1; done
       fi
     fi
@@ -446,8 +442,8 @@ execute_remote_iphone() {
     log_instructions "logs" "true"
     echo "Tailing logs for $APP_NAME..."
     if [ "$NON_INTERACTIVE" = true ]; then
-      echo "Tailing logs for 60 seconds (--yes)..."
-      timeout_int 60 $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME" || true
+      echo "Tailing logs for $TIMEOUT seconds (--yes)..."
+      timeout_int $TIMEOUT $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME" || true
     else
       $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
     fi
@@ -469,7 +465,13 @@ shift
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     -d|--device) DEVICE_SSH_STR="$2"; shift ;;
-    -y|--yes) NON_INTERACTIVE=true ;;
+    -y|--yes) 
+      NON_INTERACTIVE=true
+      if [[ "$2" =~ ^[0-9]+$ ]]; then
+        TIMEOUT="$2"
+        shift
+      fi
+      ;;
     *) log_fail "Unknown argument: $1"; exit 1 ;;
   esac
   shift
