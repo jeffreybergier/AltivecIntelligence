@@ -168,17 +168,22 @@ Host imacg4-tiger
     HostKeyAlgorithms +ssh-rsa
 ```
 
-### 5. Use Gemini AI to Build Your Own Apps
+### 5. Use AI to Build Your Own Apps
 
-Launch Gemini CLI and login with your Google Account. Even the free account 
-should allow plenty of retro-app creation time. Please see 
-[Gemini documentation](https://geminicli.com/docs/get-started/examples/)
-for more info on how to use Gemini CLI.
+Launch Gemini CLI or Claude Code and login with your account. Please see
+[Gemini documentation](https://geminicli.com/docs/get-started/examples/) or 
+[Claude Code documentation](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview)
+for more info on how to use these tools.
 
+#### Using Gemini
 ```bash
-docker compose run --rm altivec-intelligence
+docker compose run --rm altivec-gemini
 ```
 
+#### Using Claude
+```bash
+docker compose run --rm altivec-claude
+```
 #### Using as a Submodule
 If you want to use Altivec Intelligence as an engine for your own app 
 repository, we recommend adding this project as a git submodule. Please see 
