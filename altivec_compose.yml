@@ -14,17 +14,32 @@
 #    docker compose run --rm altivec "cd /repo/altivec/apps/SingleWindow && make"
 #
 # 5a. Use with Gemini CLI (AI Assistant):
-#    docker compose run --rm altivec-intelligence
+#    docker compose run --rm altivec-gemini
 #
-# 5b. Use with standard shell (no AI):
+# 5b. Use with Claude Code (AI Assistant):
+#    docker compose run --rm altivec-claude
+#
+# 5c. Use with standard shell (no AI):
 #    docker compose run --rm altivec
 #
 
 services:
-  altivec-intelligence:
+  altivec-gemini:
     extends:
       file: ./altivec/compose.yml
-      service: altivec-intelligence
+      service: altivec-gemini
+    volumes:
+      - .:/repo/user
+      # Uncomment the following line to allow the AI to use your local SSH keys 
+      # for deploying applications to your vintage Macs and iPhones.
+      # The :ro flag ensures the container cannot modify your host keys.
+      # - ~/.ssh:/root/.ssh:ro
+    working_dir: /repo/user
+
+  altivec-claude:
+    extends:
+      file: ./altivec/compose.yml
+      service: altivec-claude
     volumes:
       - .:/repo/user
       # Uncomment the following line to allow the AI to use your local SSH keys 

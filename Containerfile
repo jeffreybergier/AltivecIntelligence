@@ -99,8 +99,8 @@ WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-c"]
 CMD ["/bin/bash"]
 
-# --- Phase 2: Node.js and Gemini Environment ---
-FROM altivec-base AS altivec-gemini
+# --- Phase 2: Node.js and AI Environment ---
+FROM altivec-base AS altivec-ai
 ENV FORCE_COLOR=1
 
 # Install Node.js v22 LTS
@@ -108,9 +108,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @google/gemini-cli
+RUN npm install -g @google/gemini-cli @anthropic-ai/claude-code
 
 WORKDIR /repo/altivec
-ENTRYPOINT ["gemini"]
-CMD ["--yolo"]
+ENTRYPOINT ["/bin/bash"]
+CMD []
 

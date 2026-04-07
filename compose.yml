@@ -3,23 +3,23 @@
 #
 # Usage:
 # Build Images:      docker compose build
-# Use With AI:       docker compose run --rm altivec-intelligence
+# Use With Gemini:   docker compose run --rm altivec-gemini
+# Use With Claude:   docker compose run --rm altivec-claude
 # Use W/out AI:      docker compose run --rm altivec
 # Build Example App: docker compose run --rm altivec "cd apps/SingleWindow && make all"
 
 services:
-  altivec-intelligence:
+  altivec-gemini:
     build:
       context: .
       dockerfile: Containerfile
-      target: altivec-gemini
-    image: altivec-intelligence-image
+      target: altivec-ai
+    image: altivec-ai-image
     environment:
       - FORCE_COLOR=1
-    working_dir: /repo/user
+    working_dir: /repo/altivec
     volumes:
       - .:/repo/altivec
-      - .:/repo/user
       - ~/.gemini:/root/.gemini
     stdin_open: true
     tty: true
@@ -30,15 +30,35 @@ services:
         npm update -g @google/gemini-cli && \
         gemini --yolo
 
+  altivec-claude:
+    build:
+      context: .
+      dockerfile: Containerfile
+      target: altivec-ai
+    image: altivec-ai-image
+    environment:
+      - FORCE_COLOR=1
+    working_dir: /repo/altivec
+    volumes:
+      - .:/repo/altivec
+      - ~/.claude:/root/.claude
+    stdin_open: true
+    tty: true
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        npm update -g @anthropic-ai/claude-code && \
+        claude --dangerously-skip-permissions
+
   altivec:
     build:
       context: .
       dockerfile: Containerfile
       target: altivec-base
     image: altivec-base-image
-    working_dir: /repo/user
+    working_dir: /repo/altivec
     volumes:
       - .:/repo/altivec
-      - .:/repo/user
     stdin_open: true
     tty: true
