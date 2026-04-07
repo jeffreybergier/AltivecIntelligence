@@ -36,8 +36,11 @@ services:
       dockerfile: Containerfile
       target: altivec-ai
     image: altivec-ai-image
+    hostname: altivec-claude-hostname
     environment:
       - FORCE_COLOR=1
+      - IS_SANDBOX=1
+      - HOME=/root
     working_dir: /repo/altivec
     volumes:
       - .:/repo/altivec
@@ -49,7 +52,7 @@ services:
       - -c
       - |
         npm update -g @anthropic-ai/claude-code && \
-        claude
+        claude --dangerously-skip-permissions
 
   altivec:
     build:
