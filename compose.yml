@@ -15,8 +15,6 @@ services:
       dockerfile: Containerfile
       target: altivec-ai
     image: altivec-ai-image
-    environment:
-      - FORCE_COLOR=1
     working_dir: /repo/altivec
     volumes:
       - .:/repo/altivec
@@ -27,8 +25,8 @@ services:
       - /bin/bash
       - -c
       - |
-        npm update -g @google/gemini-cli && \
-        gemini --yolo
+        npm update -g @google/gemini-cli
+        exec gemini --yolo
 
   altivec-claude:
     build:
@@ -36,23 +34,22 @@ services:
       dockerfile: Containerfile
       target: altivec-ai
     image: altivec-ai-image
-    hostname: altivec-claude-hostname
     environment:
       - FORCE_COLOR=1
       - IS_SANDBOX=1
-      - HOME=/root
     working_dir: /repo/altivec
     volumes:
       - .:/repo/altivec
       - ~/.claude:/root/.claude
+      - ~/.claude.json:/root/.claude.json
     stdin_open: true
     tty: true
     entrypoint:
       - /bin/bash
       - -c
       - |
-        npm update -g @anthropic-ai/claude-code && \
-        claude --dangerously-skip-permissions
+        npm update -g @anthropic-ai/claude-code
+        exec claude --dangerously-skip-permissions
 
   altivec:
     build:
