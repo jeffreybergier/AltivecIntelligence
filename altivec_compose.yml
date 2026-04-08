@@ -19,9 +19,15 @@
 # 5b. Use with Claude Code (AI Assistant):
 #    docker compose run --rm altivec-claude
 #
-# 5c. Use with standard shell (no AI):
-#    docker compose run --rm altivec
-#
+#  If using Claude for the first time:
+#    Claude uses ~/.claude.json to store login 
+#    instead of in its ~/.claude folder like Gemini does.
+#    This file much exist before booting claude, run:
+#      touch ~/.claude.json
+#    before booting up Claude for the first time.
+#    Claude will still complain the file is corrupted, 
+#    but it will offer to let you reset it and then restart Claude.
+# 
 
 services:
   altivec-gemini:
@@ -40,6 +46,10 @@ services:
     extends:
       file: ./altivec/compose.yml
       service: altivec-claude
+    environment:
+      # Create .env file and add key and token for Docker to read it
+      # Do not commit .env file into your git repo
+      - CLAUDE_CODE_OAUTH_TOKEN
     volumes:
       - .:/repo/user
       # Uncomment the following line to allow the AI to use your local SSH keys 
