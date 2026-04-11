@@ -249,11 +249,33 @@ static size_t AIHeaderCallback(void *contents,
   curl_easy_setopt(curl, CURLOPT_CAINFO, [certPath UTF8String]);
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 
+  // Set HTTP method and body from the NSURLRequest
+  NSData *body = [request HTTPBody];
+  if (body && [body length] > 0) {
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, [body bytes]);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)[body length]);
+  }
+
+  // Forward request headers
+  struct curl_slist *headers = NULL;
+  NSDictionary *reqHeaders = [request allHTTPHeaderFields];
+  NSEnumerator *keyEnum = [reqHeaders keyEnumerator];
+  NSString *key;
+  while ((key = [keyEnum nextObject])) {
+    NSString *line = [NSString stringWithFormat:@"%@: %@", key, [reqHeaders objectForKey:key]];
+    headers = curl_slist_append(headers, [line UTF8String]);
+  }
+  if (headers)
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
   NSMutableData *receivedData = [NSMutableData data];
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AISyncWriteCallback);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)receivedData);
 
   CURLcode res = curl_easy_perform(curl);
+  if (headers)
+    curl_slist_free_all(headers);
   
   if (res != CURLE_OK) {
     if (error) {
