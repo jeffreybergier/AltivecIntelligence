@@ -266,19 +266,34 @@ preflight_device() {
   [ -n "$DEV_IPAINST" ] && log_item "ipainstaller: $DEV_IPAINST" || log_item "ipainstaller: Not found"
   
   # Find Logs
+  # On Tiger (10.4), GUI apps launched via `open` write NSLog to the per-user
+  # console log at /Library/Logs/Console/<uid>/console.log.
+  # Prefer this over /var/log/system.log for Mac deployments.
+  local console_log=""
+  local uid=""
   if [ "$DEV_IS_REMOTE" = true ]; then
+    uid=$($DEV_SSH_CMD "id -u")
+    console_log=$($DEV_SSH_CMD "[ -f /Library/Logs/Console/$uid/console.log ] && echo '/Library/Logs/Console/$uid/console.log'")
     DEV_LOG_MAC=$($DEV_SSH_CMD "[ -f /var/log/system.log ] && echo '/var/log/system.log'")
     DEV_LOG_IOS=$($DEV_SSH_CMD "[ -f /var/log/syslog ] && echo '/var/log/syslog'")
   else
+    uid=$(id -u)
+    [ -f "/Library/Logs/Console/$uid/console.log" ] && console_log="/Library/Logs/Console/$uid/console.log"
     [ -f /var/log/system.log ] && DEV_LOG_MAC="/var/log/system.log"
     [ -f /var/log/syslog ] && DEV_LOG_IOS="/var/log/syslog"
   fi
 
+  [ -n "$console_log" ] && log_item "Console Log: $console_log" || log_item "Console Log: Not found"
   [ -n "$DEV_LOG_MAC" ] && log_item "Syslog (Mac): $DEV_LOG_MAC" || log_item "Syslog (Mac): Not found"
   [ -n "$DEV_LOG_IOS" ] && log_item "Syslog (iOS): $DEV_LOG_IOS" || log_item "Syslog (iOS): Not found"
 
-  # Pick best log for tailing (Prefer Mac log)
-  DEV_LOG="${DEV_LOG_MAC:-$DEV_LOG_IOS}"
+  # Pick best log: prefer console log (captures GUI app NSLog on Tiger),
+  # then system.log, then iOS syslog.
+  if [ -n "$console_log" ]; then
+    DEV_LOG="$console_log"
+  else
+    DEV_LOG="${DEV_LOG_MAC:-$DEV_LOG_IOS}"
+  fi
 
   return 0
   }
@@ -363,7 +378,19 @@ execute_local() {
   else
     if [ "$NON_INTERACTIVE" = true ]; then
       echo "Executing $APP_NAME for $TIMEOUT seconds (--yes)..."
-      timeout_int $TIMEOUT "$bin_path" || true
+      if [ -n "$DEV_LOG" ]; then
+        tail -f "$DEV_LOG" | grep --line-buffered "$APP_NAME" &
+        TAIL_PID=$!
+        sleep 1
+      fi
+      open "$APP_BUNDLE_PATH"
+      if [ -n "$DEV_LOG" ]; then
+        sleep $TIMEOUT
+        kill $TAIL_PID 2>/dev/null
+        wait $TAIL_PID 2>/dev/null
+      else
+        sleep $TIMEOUT
+      fi
     else
       open "$APP_BUNDLE_PATH"
       if [ -n "$DEV_LOG" ]; then
@@ -391,12 +418,16 @@ execute_remote_mac() {
   [ -f "$APP_LLDBINIT" ] && transfer_list+=("$APP_LLDBINIT")
 
   # Perform a single transfer
-  echo "Transferring files to remote Mac..."
+  log_item "Transferring files to remote Mac..."
   scp -O -r "${transfer_list[@]}" "$DEVICE_SSH_STR:$REMOTE_MAC_BASE/"
-  
+
   # Unzip on remote
-  $DEV_SSH_CMD "cd $REMOTE_MAC_BASE && unzip -o $(basename "$APP_ZIP_PATH")"
-  
+  local zip_name file_count
+  zip_name=$(basename "$APP_ZIP_PATH")
+  log_item "Unzipping..."
+  file_count=$($DEV_SSH_CMD "cd $REMOTE_MAC_BASE && unzip -l $zip_name | tail -1 | awk '{print \$2}' && unzip -q -o $zip_name")
+  log_item "Unzipped ($file_count files)"
+
   if [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_LLDB" ]; then
     log_instructions "debugger" "true"
     $DEV_SSH_CMD -t "lldb -s $REMOTE_MAC_BASE/lldbinit $remote_bin_path"
@@ -405,8 +436,20 @@ execute_remote_mac() {
     $DEV_SSH_CMD -t "gdb -x $REMOTE_MAC_BASE/gdbinit $remote_bin_path"
   else
     if [ "$NON_INTERACTIVE" = true ]; then
-      echo "Executing $APP_NAME on remote Mac for $TIMEOUT seconds (--yes)..."
-      timeout_int $TIMEOUT $DEV_SSH_CMD "$remote_bin_path" || true
+      log_item "Executing $APP_NAME on remote Mac for $TIMEOUT seconds (--yes)..."
+      if [ -n "$DEV_LOG" ]; then
+        $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME" &
+        TAIL_PID=$!
+        sleep 1
+      fi
+      $DEV_SSH_CMD "open $remote_app_path"
+      if [ -n "$DEV_LOG" ]; then
+        sleep $TIMEOUT
+        kill $TAIL_PID 2>/dev/null
+        wait $TAIL_PID 2>/dev/null
+      else
+        sleep $TIMEOUT
+      fi
     else
       $DEV_SSH_CMD "open $remote_app_path"
       if [ -n "$DEV_LOG" ]; then
