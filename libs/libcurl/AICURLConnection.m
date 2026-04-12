@@ -308,8 +308,8 @@ static size_t AIHeaderCallback(void *contents,
 - (void)__workerThread:(id)unused;
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-  
-  NSLog(@"[AICURLConnection __workerThread:] Starting transfer for: %@", 
+
+  NSLog(@"[AICURLConnection __workerThread:] Starting transfer for: %@",
         [request_ URL]);
 
   curl_easy_setopt(curl_, CURLOPT_URL, [[[request_ URL] absoluteString] UTF8String]);
@@ -318,8 +318,33 @@ static size_t AIHeaderCallback(void *contents,
   curl_easy_setopt(curl_, CURLOPT_HEADERFUNCTION, AIHeaderCallback);
   curl_easy_setopt(curl_, CURLOPT_HEADERDATA, self);
   curl_easy_setopt(curl_, CURLOPT_NOSIGNAL, 1L);
-  
+
+  // Forward HTTP method and body
+  NSString *method = [request_ HTTPMethod];
+  if (method && [method caseInsensitiveCompare:@"POST"] == NSOrderedSame) {
+    NSData *body = [request_ HTTPBody];
+    if (body && [body length] > 0) {
+      curl_easy_setopt(curl_, CURLOPT_POST, 1L);
+      curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, [body bytes]);
+      curl_easy_setopt(curl_, CURLOPT_POSTFIELDSIZE, (long)[body length]);
+    }
+  }
+
+  // Forward HTTP request headers
+  struct curl_slist *reqHeaders = NULL;
+  NSDictionary *headerFields = [request_ allHTTPHeaderFields];
+  NSEnumerator *keyEnum = [headerFields keyEnumerator];
+  NSString *key;
+  while ((key = [keyEnum nextObject])) {
+    NSString *line = [NSString stringWithFormat:@"%@: %@", key, [headerFields objectForKey:key]];
+    reqHeaders = curl_slist_append(reqHeaders, [line UTF8String]);
+  }
+  if (reqHeaders)
+    curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, reqHeaders);
+
   CURLcode res = curl_easy_perform(curl_);
+  if (reqHeaders)
+    curl_slist_free_all(reqHeaders);
   
   NSLog(@"[AICURLConnection __workerThread:] Transfer finished with code: %d", res);
 
