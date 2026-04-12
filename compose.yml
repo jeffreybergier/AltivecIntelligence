@@ -49,7 +49,7 @@ services:
       - -c
       - |
         npm update -g @anthropic-ai/claude-code
-        exec claude --model haiku --max-turns 8 --dangerously-skip-permissions
+        exec claude --dangerously-skip-permissions
 
   altivec:
     build:
