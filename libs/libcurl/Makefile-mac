@@ -22,6 +22,9 @@ X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PAT
 X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_X64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
 ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
 
+ASICR_DIR = $(CWD)/../ASICURLRequest
+ASICR_SRCS = $(ASICR_DIR)/ASIHTTPRequest.m $(ASICR_DIR)/ASIFormDataRequest.m $(ASICR_DIR)/ASINetworkQueue.m
+
 all: static aicc
 
 aicc: static $(PREFIX)/lib/libAICURLConnection.a
@@ -30,6 +33,84 @@ aicc: static $(PREFIX)/lib/libAICURLConnection.a
 	cp $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/
 	cp AICURLConnection.h $(BUILD_ROOT)/include/
 	@echo "AICURLConnection build successful."
+
+asicr: static $(PREFIX)/lib/libASICURLRequest.a
+	@echo "Updating ASICURLRequest output..."
+	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
+	cp $(PREFIX)/lib/libASICURLRequest.a $(BUILD_ROOT)/lib/
+	cp $(ASICR_DIR)/ASIHTTPRequest.h $(ASICR_DIR)/ASIFormDataRequest.h \
+	   $(ASICR_DIR)/ASINetworkQueue.h $(ASICR_DIR)/ASIHTTPRequestConfig.h \
+	   $(ASICR_DIR)/ASIHTTPRequestDelegate.h $(BUILD_ROOT)/include/
+	@echo "ASICURLRequest build successful."
+
+$(PREFIX)/lib/libASICURLRequest.a: $(ASICR_SRCS) $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libcrypto.a $(PREFIX)/lib/libz.a
+	@echo "--- Building ASICURLRequest (ppc) ---"
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) $(PPC_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/ppc/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASIHTTPRequest.m    -o $(INTERMEDIATE)/ASICURLRequest-ASIHTTPRequest-ppc.o
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) $(PPC_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/ppc/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASIFormDataRequest.m -o $(INTERMEDIATE)/ASICURLRequest-ASIFormDataRequest-ppc.o
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) $(PPC_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/ppc/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASINetworkQueue.m   -o $(INTERMEDIATE)/ASICURLRequest-ASINetworkQueue-ppc.o
+	$(AR_LEGACY) rc $(PREFIX)/ppc/lib/libASICURLRequest.a \
+	  $(INTERMEDIATE)/ASICURLRequest-ASIHTTPRequest-ppc.o \
+	  $(INTERMEDIATE)/ASICURLRequest-ASIFormDataRequest-ppc.o \
+	  $(INTERMEDIATE)/ASICURLRequest-ASINetworkQueue-ppc.o
+	$(RANLIB_LEGACY) $(PREFIX)/ppc/lib/libASICURLRequest.a
+	@echo "--- Building ASICURLRequest (x86) ---"
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) $(X86_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/x86/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASIHTTPRequest.m    -o $(INTERMEDIATE)/ASICURLRequest-ASIHTTPRequest-x86.o
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) $(X86_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/x86/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASIFormDataRequest.m -o $(INTERMEDIATE)/ASICURLRequest-ASIFormDataRequest-x86.o
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) $(X86_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/x86/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASINetworkQueue.m   -o $(INTERMEDIATE)/ASICURLRequest-ASINetworkQueue-x86.o
+	$(AR_LEGACY) rc $(PREFIX)/x86/lib/libASICURLRequest.a \
+	  $(INTERMEDIATE)/ASICURLRequest-ASIHTTPRequest-x86.o \
+	  $(INTERMEDIATE)/ASICURLRequest-ASIFormDataRequest-x86.o \
+	  $(INTERMEDIATE)/ASICURLRequest-ASINetworkQueue-x86.o
+	$(RANLIB_LEGACY) $(PREFIX)/x86/lib/libASICURLRequest.a
+	@echo "--- Building ASICURLRequest (x64) ---"
+	$(COMPILER_X64) $(X64_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/x64/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASIHTTPRequest.m    -o $(INTERMEDIATE)/ASICURLRequest-ASIHTTPRequest-x64.o
+	$(COMPILER_X64) $(X64_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/x64/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASIFormDataRequest.m -o $(INTERMEDIATE)/ASICURLRequest-ASIFormDataRequest-x64.o
+	$(COMPILER_X64) $(X64_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/x64/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASINetworkQueue.m   -o $(INTERMEDIATE)/ASICURLRequest-ASINetworkQueue-x64.o
+	$(AR_MODERN) rc $(PREFIX)/x64/lib/libASICURLRequest.a \
+	  $(INTERMEDIATE)/ASICURLRequest-ASIHTTPRequest-x64.o \
+	  $(INTERMEDIATE)/ASICURLRequest-ASIFormDataRequest-x64.o \
+	  $(INTERMEDIATE)/ASICURLRequest-ASINetworkQueue-x64.o
+	$(RANLIB_MODERN) $(PREFIX)/x64/lib/libASICURLRequest.a
+	@echo "--- Building ASICURLRequest (arm64) ---"
+	$(COMPILER_ARM64) $(ARM64_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/arm64/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASIHTTPRequest.m    -o $(INTERMEDIATE)/ASICURLRequest-ASIHTTPRequest-arm64.o
+	$(COMPILER_ARM64) $(ARM64_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/arm64/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASIFormDataRequest.m -o $(INTERMEDIATE)/ASICURLRequest-ASIFormDataRequest-arm64.o
+	$(COMPILER_ARM64) $(ARM64_FLAGS) $(OPT_FLAGS) \
+	  -I$(ASICR_DIR) -I$(PREFIX)/arm64/include -fobjc-exceptions \
+	  -c $(ASICR_DIR)/ASINetworkQueue.m   -o $(INTERMEDIATE)/ASICURLRequest-ASINetworkQueue-arm64.o
+	$(AR_MODERN) rc $(PREFIX)/arm64/lib/libASICURLRequest.a \
+	  $(INTERMEDIATE)/ASICURLRequest-ASIHTTPRequest-arm64.o \
+	  $(INTERMEDIATE)/ASICURLRequest-ASIFormDataRequest-arm64.o \
+	  $(INTERMEDIATE)/ASICURLRequest-ASINetworkQueue-arm64.o
+	$(RANLIB_MODERN) $(PREFIX)/arm64/lib/libASICURLRequest.a
+	# Lipo
+	$(LIPO) -create \
+	  $(PREFIX)/ppc/lib/libASICURLRequest.a \
+	  $(PREFIX)/x86/lib/libASICURLRequest.a \
+	  $(PREFIX)/x64/lib/libASICURLRequest.a \
+	  $(PREFIX)/arm64/lib/libASICURLRequest.a \
+	  -output $(PREFIX)/lib/libASICURLRequest.a
 
 aicc-analyze:
 	@echo "--- Analyzing AICURLConnection (x64) ---"
