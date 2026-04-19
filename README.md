@@ -24,7 +24,72 @@ Below is a Quick Start Guide. For more detailed information about the project's
 origins, technical matrix, and safety considerations, please see the
 [**FAQ**](README.FAQ.md).
 
-## 📦 Installation & Quick Start
+## 📦 Quick Start Guide
+
+**Altivec Intelligence** is designed to be used as a **git submodule** inside
+your own app repository. This keeps your app code separate from the engine and
+lets you update the engine independently.
+
+### Add Submodule to your Repo
+
+See [altivec_compose.yml](altivec_compose.yml) for the full template and notes on
+first-time Claude setup.
+
+```bash
+# 0. If you do not already have a repository for your app idea
+#    create a new repo using init
+git init MyCoolRepo && cd MyCoolRepo
+
+# 1. Add Altivec as a submodule:
+git submodule add https://github.com/jeffreybergier/AltivecIntelligence.git altivec
+
+# 2. Copy the template compose file to your project root:
+cp altivec/altivec_compose.yml ./compose.yml
+
+# 3. Build docker images (one time):
+docker compose build
+
+# 4a. Use with Gemini CLI:
+docker compose run --rm altivec-gemini
+
+# 4b. Use with Claude Code:
+docker compose run --rm altivec-claude
+```
+
+### Introduce the AI to Your Project
+
+#### Introduction Prompt
+
+```
+Hello, you are inside of a docker container that has a cross-compile 
+environment for building retro Mac and iPhone Apps. My app code is in /repo/user. 
+The Altivec engine and examples are in /repo/altivec. The cross-compiler 
+toolchain is in /osxcross. Please start by reading the README.md and AGENTS.md 
+files in the engine folder. Please always try create makefiles for my app using 
+the altive_common[mac|phone].mk files in the `/repo/altivec` folder so I can 
+ensure my makefiles are small and make apps compatible with many retro Apple 
+devices. Make sure you treat my repo (/repo/user) as the base location for your 
+work on my app.
+```
+
+#### Make a New App Prompt
+
+``` 
+I want to make my own app. My app will be called MyNewApp and I want you to use
+the SingleWindow app in the ./altivec/apps folder as a starting point to work
+from. Please store the new app in ./source along with its new Makefile. 
+After that please compile the app and ensure there are no warnings. I will
+run it to make sure it works. 
+```
+
+**Note:** you can change the example app as the source depending on if you want
+an iPhone app or Mac app. Also, if you want to do networking, you may consider
+using the CURLmac or CURLphone app as starting place because those have
+libcurl linked.
+
+## 📦 Slow Start Guide (Full Explanation)
+
+The steps below are for exploring the standalone engine and its sample apps.
 
 ### 1. Prerequisites
 
@@ -168,58 +233,12 @@ Host imacg4-tiger
     HostKeyAlgorithms +ssh-rsa
 ```
 
-### 5. Use AI to Build Your Own Apps
-
-Launch Gemini CLI or Claude Code and login with your account. Please see
-[Gemini documentation](https://geminicli.com/docs/get-started/examples/) or 
-[Claude Code documentation](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview)
-for more info on how to use these tools.
-
-#### Using Gemini
-```bash
-docker compose run --rm altivec-gemini
-```
-
-#### Using Claude
-```bash
-docker compose run --rm altivec-claude
-```
-#### Using as a Submodule
-If you want to use Altivec Intelligence as an engine for your own app 
-repository, we recommend adding this project as a git submodule. Please see 
-[altivec_compose.yml](altivec_compose.yml) for exact instructions and a template 
-`compose.yml` for your parent repository.
-
-#### Example Prompt
-Try starting your session by explaining the environment to the AI:
-```
-Hello, you are inside of a docker container that has a cross-compile 
-environment for building retro Mac and iPhone Apps. My app code is in /repo/user. 
-The Altivec engine and examples are in /repo/altivec. The cross-compiler 
-toolchain is in /osxcross. Please start by reading the README.md and GEMINI.md 
-files in the engine folder. Please always try create makefiles for my app using 
-the altive_common[mac|phone].mk files in the `/repo/altivec` folder so I can 
-ensure my makefiles are small and make apps compatible with many retro Apple 
-devices. Make sure you treat my repo (/repo/user) as the base location for your 
-work on my app.
-```
-
-### 6. Make Your Own App with Gemini
-Decide whether you want to make an iPhone App or a Mac App, and then ask Gemini
-to make you a new app.
-
-``` 
-I want to make my own app, can you start with the SingleWindow app and make
-me a new app called MyCoolApp? Then we can get started creating the exact retro
-app for my favorite retro device. 
-```
-
 ## 📂 Project Structure
 - [`apps`](./apps/): Sample projects and Makefiles
 - [`altivec_common_mac.mk`](./altivec_common_mac.mk): A "parent" Makefile with the general rules for compiling Mac apps
 - [`altivec_common_phone.mk`](./altivec_common_phone.mk): A "parent" Makefile with the general rules for compiling Phone apps
 - `altivec_deploy.sh`: Automated SSH deployment script.
-- `GEMINI.md`: AI mandates and technical constraints.
+- `AGENTS.md`: AI mandates and technical constraints.
 
 ## 🚧 To-Do List
 1. [ ] Enable on-device debugging for iOS
@@ -230,7 +249,7 @@ app for my favorite retro device.
    1. [ ] Execute tests on Mac runners
 1. [X] Build `libcurl` for modern networking on old platforms
 1. [X] Improve Deploy Script
-1.    [X] Enable Gemini to debug apps directly on the host Mac
+1.    [X] Enable AI to debug apps directly on the host Mac
 1. [X] Remove Custom-Built 10.5/10.6 Hybrid SDK 
    1. [X] Change x64 Build to use Clang-14 and macOS 11.3 SDK
    1. [X] Change PPC and x86 Build to use Apple GCC 4.2.1 and Mac OS X 10.5 SDK
@@ -239,8 +258,8 @@ app for my favorite retro device.
 ## 😍 Contributing
 This was a small project for me so I could work on my own hobby apps for my 
 iPhone 5 and my iMac G4. I am not a compiler, cmake, SDK, or build-system 
-engineer. I would not have been able to do this without Gemini. That said,
-I also know Gemini has probably not produced the most efficient build files
+engineer. I would not have been able to do this without AI. That said,
+I also know AI has probably not produced the most efficient build files
 and scripts. So I am totally open to new ideas. How can we improve them, how
 can I learn more. If you know, I want to know. So please file an issue and let's
 talk about it ❤️

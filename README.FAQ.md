@@ -28,9 +28,9 @@ Go for it, just tell your AI to read the compose file and it will easily be
 able to run commands inside the docker container from your host computer.
 
 ### The AI keeps changing things when I just ask it questions
-This is one of my biggest annoyances with Gemini. I often want its opinions
-before deciding how to move forward with changes. My suggestion is to change
-your prompt:
+This is one of my biggest annoyances with AI (worse with Gemini than Claude). 
+I often want its opinions before deciding how to move forward with changes. 
+My suggestion is to change your prompt:
 
 ```
 Do not change any code, I just want to know your top 3 options for how I should
@@ -38,9 +38,9 @@ do X
 ```
 
 ### The AI keeps overwriting my changes
-This is one of my biggest annoyances with Gemini. If I change a file manually,
-Gemini will often happily overwrite my changes. My suggestion is to change your
-prompt:
+This is one of my biggest annoyances with AI (worse with Gemini than Claude). 
+If I change a file manually, the AI will often happily overwrite my changes. 
+My suggestion is to change your prompt:
 
 ```
 I updated some files manually because its the style I want. Can you check to
@@ -53,8 +53,8 @@ be sure I did not break anything?
 I don't like installing developer tools (aside from Xcode) on my Mac. So whether
 I am working with NPM, Ruby, Python, etc, I always containerize the development
 environment so I do not have to remember how I set up my Mac to build and run
-the app. For this reason, I also do that with AI. I always run Gemini in a container so
-it does not have access to my personal files and data.
+the app. For this reason, I also do that with AI. I always run the AI CLI in a 
+container so it does not have access to my personal files and data.
 
 ### Is it safe to run this AI tool?
 Yes, the environment is containerized within Docker. The AI only has access to
@@ -79,7 +79,7 @@ functions work fine. But if you see warnings about "'Foo' may not respond to
 selector 'Bar'" then you will likely experience a crash when you run on an old
 system. So please remove those.
 
-You can ask Gemini
+You can ask the AI
 
 ```
 Can you rebuild the app and summarize all the warnings for me? You can ignore
