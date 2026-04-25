@@ -38,16 +38,16 @@ jobs:
         with:
           context: .
           file: Containerfile
-          target: altivec-base
+          target: altivec-builder
           load: true
-          tags: altivec-base:local
-          cache-from: type=gha,scope=altivec-base
-          cache-to: type=gha,scope=altivec-base,mode=max
+          tags: altivec-intelligence:local
+          cache-from: type=gha,scope=altivec-builder
+          cache-to: type=gha,scope=altivec-builder,mode=max
 
       - name: Build libcurl on top of base image
         run: |
           cat > Dockerfile.libcurl << 'EOF'
-          FROM altivec-base:local
+          FROM altivec-intelligence:local
           WORKDIR /repo/altivec
           COPY libs/libcurl/ ./libs/libcurl/
           RUN cd libs/libcurl && make all
