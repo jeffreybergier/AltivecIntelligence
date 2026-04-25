@@ -33,6 +33,20 @@ MAC_FLAGS = $(OPT_FLAGS) -g -Wall
 MAC_LIBS = -framework AppKit -lobjc
 LEGACY_GCC_FLAGS = -fno-stack-protector -fno-common -fno-zero-initialized-in-bss
 
+# --- Auto-detect libcurl ---
+LIBCURL_SEARCH_PATHS = ../../altivec/libs/libcurl/build-mac ../../../altivec/libs/libcurl/build-mac /repo/user/altivec/libs/libcurl/build-mac /repo/altivec/libs/libcurl/build-mac
+LIBCURL_PATH = $(firstword $(wildcard $(addsuffix /lib/libcurl.a, $(LIBCURL_SEARCH_PATHS))))
+ifneq ($(LIBCURL_PATH),)
+  LIBCURL_DIR = $(patsubst %/lib/libcurl.a,%,$(LIBCURL_PATH))
+  MAC_FLAGS += -I$(LIBCURL_DIR)/include
+  MAC_LIBS += -framework SystemConfiguration \
+              $(LIBCURL_DIR)/lib/libAICURLConnection.a \
+              $(LIBCURL_DIR)/lib/libcurl.a \
+              $(LIBCURL_DIR)/lib/libssl.a \
+              $(LIBCURL_DIR)/lib/libcrypto.a \
+              $(LIBCURL_DIR)/lib/libz.a
+endif
+
 # --- Target Paths ---
 BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 ZIP_FILE = $(BUILD_DIR)/$(APP_NAME).zip

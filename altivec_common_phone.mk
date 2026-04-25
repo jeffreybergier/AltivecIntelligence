@@ -21,6 +21,14 @@ OPT_FLAGS ?= -O3
 ALL_SOURCES = $(SOURCES) $(EXTRA_SOURCES)
 OBJS = $(addprefix $(INT_DIR)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) $(EXTRA_SOURCES:.m=.o) $(EXTRA_SOURCES:.c=.o)))
 
+# --- Auto-detect libcurl ---
+LIBCURL_SEARCH_PATHS = ../../altivec/libs/libcurl/build-phone ../../../altivec/libs/libcurl/build-phone /repo/user/altivec/libs/libcurl/build-phone /repo/altivec/libs/libcurl/build-phone
+LIBCURL_PATH = $(firstword $(wildcard $(addsuffix /lib/libcurl.a, $(LIBCURL_SEARCH_PATHS))))
+ifneq ($(LIBCURL_PATH),)
+  LIBCURL_DIR = $(patsubst %/lib/libcurl.a,%,$(LIBCURL_PATH))
+  EXTRA_FLAGS += -I$(LIBCURL_DIR)/include
+endif
+
 # --- Flags ---
 IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -Wall \
             -Wimplicit-function-declaration -Wobjc-method-access \
@@ -29,6 +37,13 @@ IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -Wall \
             -B$(BIN_DIR)
 
 IOS_FRAMEWORKS = -framework UIKit -framework Foundation -framework CoreGraphics
+ifneq ($(LIBCURL_PATH),)
+  IOS_FRAMEWORKS += $(LIBCURL_DIR)/lib/libAICURLConnection.a \
+                    $(LIBCURL_DIR)/lib/libcurl.a \
+                    $(LIBCURL_DIR)/lib/libssl.a \
+                    $(LIBCURL_DIR)/lib/libcrypto.a \
+                    $(LIBCURL_DIR)/lib/libz.a
+endif
 
 # --- Top Level Targets ---
 .DEFAULT_GOAL := release
