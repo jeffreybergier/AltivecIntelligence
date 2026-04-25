@@ -1,6 +1,7 @@
-# AltivecIntelligence: Parent Project Setup
+## AltivecIntelligence: Parent Project Setup
 # Use this file to "activate" the Altivec toolchain in your new repository.
 #
+# Usage:
 # 1. Add Altivec as a submodule:
 #    git submodule add https://github.com/jeffreybergier/AltivecIntelligence.git altivec
 #
@@ -13,46 +14,30 @@
 # 4. Build an example app from the Altivec submodule:
 #    docker compose run --rm altivec "cd /repo/altivec/apps/SingleWindow && make"
 #
-# 5a. Use with Gemini CLI (AI Assistant):
-#    docker compose run --rm altivec-gemini
+# 5. Use with AI Assistant:
+#    docker compose run --rm altivec-intelligence
 #
-# 5b. Use with Claude Code (AI Assistant):
-#    docker compose run --rm altivec-claude
+#    Supported AI Assistants:
+#    - Claude Code
+#    - Gemini CLI
+#    - Other LLM CLIs
 #
-#  If using Claude for the first time:
-#    Claude uses ~/.claude.json to store login 
-#    instead of in its ~/.claude folder like Gemini does.
-#    This file much exist before booting claude, run:
-#      touch ~/.claude.json
-#    before booting up Claude for the first time.
-#    Claude will still complain the file is corrupted, 
-#    but it will offer to let you reset it and then restart Claude.
-# 
+#    The entrypoint script will automatically select which one is available.
+#
 
 services:
-  altivec-gemini:
+  altivec-intelligence:
     extends:
       file: ./altivec/compose.yml
-      service: altivec-gemini
-    volumes:
-      - .:/repo/user
-      # Uncomment the following line to allow the AI to use your local SSH keys 
-      # for deploying applications to your vintage Macs and iPhones.
-      # The :ro flag ensures the container cannot modify your host keys.
-      # - ~/.ssh:/root/.ssh:ro
-    working_dir: /repo/user
-
-  altivec-claude:
-    extends:
-      file: ./altivec/compose.yml
-      service: altivec-claude
+      service: altivec-intelligence
     environment:
+      # Claude Code token (if using Claude Code as AI assistant)
       # Create .env file and add key and token for Docker to read it
       # Do not commit .env file into your git repo
       - CLAUDE_CODE_OAUTH_TOKEN
     volumes:
       - .:/repo/user
-      # Uncomment the following line to allow the AI to use your local SSH keys 
+      # Uncomment the following line to allow the AI to use your local SSH keys
       # for deploying applications to your vintage Macs and iPhones.
       # The :ro flag ensures the container cannot modify your host keys.
       # - ~/.ssh:/root/.ssh:ro

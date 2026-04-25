@@ -1,4 +1,4 @@
-[![AltiveIntelligence Fun 90's Header Image](README.thumb.png)](README.png)
+[![AltiveIntelligence Fun 90's Header Image](altivec_build/README.thumb.png)](altivec_build/README.png)
 
 # 🤖 Altivec Intelligence
 
