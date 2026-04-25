@@ -1,51 +1,62 @@
-# --- Phase 1: Build OSXCross Toolchain ---
-FROM ubuntu:22.04 AS altivec-base
-
-ENV DEBIAN_FRONTEND=noninteractive
+FROM ubuntu:22.04 AS altivec-builder
 
 # 1. Install Dependencies
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
+    # --- Core system / base ---
+    bash \
+    ca-certificates \
+    xdg-utils \
+    file \
+    # --- Build essentials / toolchain ---
     build-essential \
+    make \
+    patch \
     clang \
     llvm-dev \
+    lld \
+    lldb \
+    # --- Compiler & math libs (GCC toolchain deps) ---
+    libgmp-dev \
+    libmpfr-dev \
+    libmpc-dev \
+    # --- Core libraries / dev headers ---
     libxml2-dev \
-    uuid-dev \
     libssl-dev \
-    bash \
-    patch \
-    make \
+    libz-dev \
+    uuid-dev \
+    # --- Build systems / scripting ---
+    cmake \
+    python3 \
+    python3-distutils \
+    m4 \
+    texinfo \
+    # --- Parser / compiler tools ---
+    flex \
+    bison \
+    # --- Archive / compression ---
     tar \
     xz-utils \
     bzip2 \
     gzip \
-    git \
-    python3 \
-    python3-distutils \
     cpio \
-    libz-dev \
-    cmake \
+    zip \
+    # --- Version control ---
+    git \
+    # --- Networking / transfer ---
+    curl \
     wget \
     rsync \
     ssh \
-    zip \
-    curl \
+    iputils-ping \
+    # --- CLI utilities / productivity ---
     jq \
-    file \
-    libmpc-dev \
-    libmpfr-dev \
-    libgmp-dev \
-    flex \
-    bison \
-    texinfo \
-    m4 \
     ripgrep \
     fd-find \
     tree \
-    iputils-ping \
-    lldb \
-    lld \
+    # --- Misc / extra tools ---
+    wabt \
     && rm -rf /var/lib/apt/lists/*
-
 
 # 2. Settings for the User
 
@@ -94,23 +105,22 @@ RUN echo "Post-Build: Altivec Intelligence" \
 # 5. Configure the final environment
 ENV PATH="/osxcross/target/bin:${PATH}"
 
-# 6. Move into Working Directory
+# 6. Node.js 22 LTS (matches wrangler's supported runtime)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# 7. Cloudflare CLI + local dev deps needed to compute / test X-Hmac
+RUN npm install -g \
+      wrangler \
+      jsdom \
+      qrcode-terminal \
+      @anthropic-ai/claude-code \
+      @openai/codex \
+      @google/gemini-cli
+
+# 8. Move into Working Directory
 WORKDIR /repo/altivec
-ENTRYPOINT ["/bin/bash", "-c"]
+ENTRYPOINT ["/bin/bash", "-lc"]
 CMD ["/bin/bash"]
-
-# --- Phase 2: Node.js and AI Environment ---
-FROM altivec-base AS altivec-ai
-ENV FORCE_COLOR=1
-
-# Install Node.js v22 LTS
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN npm install -g @google/gemini-cli @anthropic-ai/claude-code
-
-WORKDIR /repo/altivec
-ENTRYPOINT ["/bin/bash"]
-CMD []
 
