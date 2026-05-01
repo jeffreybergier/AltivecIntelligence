@@ -135,26 +135,6 @@ log_instructions() {
   echo ""
 }
 
-# Robust utility check that respects exit codes and handles noisy 'which'
-check_util_path() {
-  local cmd="$1"
-  local path=""
-  if [ "$DEV_IS_REMOTE" = true ]; then
-    # Use 'command -v' which is POSIX and more reliable than 'which'
-    path=$($DEV_SSH_CMD "command -v $cmd" 2>/dev/null)
-    if [ $? -eq 0 ] && [ -n "$path" ]; then
-      echo "$path"
-      return 0
-    fi
-  else
-    path=$(command -v "$cmd" 2>/dev/null)
-    if [ $? -eq 0 ] && [ -n "$path" ]; then
-      echo "$path"
-      return 0
-    fi
-  fi
-  return 1
-}
 
 cleanup() {
   if [ "$DEV_NEEDS_CLEANUP" = true ]; then
@@ -212,83 +192,90 @@ preflight_app() {
 }
 
 preflight_device() {
-  local uname_out=""
-  local mobile_check=""
-  
   log_header "Device Preflight"
 
   if [ -n "$DEVICE_SSH_STR" ]; then
     DEV_IS_REMOTE=true
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$DEVICE_SSH_STR" "exit" 2>/dev/null; then
+    DEV_SSH_CMD="ssh $DEVICE_SSH_STR"
+
+    # Single SSH round-trip: gather all preflight data at once
+    local preflight_data
+    preflight_data=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$DEVICE_SSH_STR" '
+      MY_UNAME=$(uname)
+      printf "UNAME=%s\n" "$MY_UNAME"
+      if [ "$MY_UNAME" = "Darwin" ]; then
+        [ -d /var/mobile ] && printf "DEVTYPE=ios\n" || printf "DEVTYPE=mac\n"
+      else
+        printf "DEVTYPE=%s\n" "$MY_UNAME"
+      fi
+      printf "GDB=%s\n"    "$(command -v gdb          2>/dev/null)"
+      printf "LLDB=%s\n"   "$(command -v lldb         2>/dev/null)"
+      printf "APPINST=%s\n"  "$(command -v appinst      2>/dev/null)"
+      printf "IPAINST=%s\n"  "$(command -v ipainstaller 2>/dev/null)"
+      MY_UID=$(id -u)
+      [ -f "/Library/Logs/Console/$MY_UID/console.log" ] \
+        && printf "CONSOLE_LOG=/Library/Logs/Console/%s/console.log\n" "$MY_UID" \
+        || printf "CONSOLE_LOG=\n"
+      [ -f /var/log/system.log ] && printf "SYSLOG_MAC=/var/log/system.log\n" || printf "SYSLOG_MAC=\n"
+      [ -f /var/log/syslog ]     && printf "SYSLOG_IOS=/var/log/syslog\n"     || printf "SYSLOG_IOS=\n"
+    ' 2>/dev/null)
+
+    if [ $? -ne 0 ] || [ -z "$preflight_data" ]; then
       log_fail "SSH connection to '$DEVICE_SSH_STR' failed"
       echo "       Run 'ssh $DEVICE_SSH_STR' to debug the errors"
       echo "       Note: Key authentication is required for this script"
       return 1
     fi
-    DEV_SSH_CMD="ssh $DEVICE_SSH_STR"
     log_item "SSH Connection: OK"
+
+    # Parse all results from the single round-trip
+    DEV_OS=$(printf '%s' "$preflight_data"    | grep "^UNAME="       | cut -d= -f2-)
+    DEV_TYPE=$(printf '%s' "$preflight_data"  | grep "^DEVTYPE="     | cut -d= -f2-)
+    DEV_GDB=$(printf '%s' "$preflight_data"   | grep "^GDB="         | cut -d= -f2-)
+    DEV_LLDB=$(printf '%s' "$preflight_data"  | grep "^LLDB="        | cut -d= -f2-)
+    DEV_APPINST=$(printf '%s' "$preflight_data"  | grep "^APPINST="  | cut -d= -f2-)
+    DEV_IPAINST=$(printf '%s' "$preflight_data"  | grep "^IPAINST="  | cut -d= -f2-)
+    local console_log
+    console_log=$(printf '%s' "$preflight_data"  | grep "^CONSOLE_LOG=" | cut -d= -f2-)
+    DEV_LOG_MAC=$(printf '%s' "$preflight_data"  | grep "^SYSLOG_MAC="  | cut -d= -f2-)
+    DEV_LOG_IOS=$(printf '%s' "$preflight_data"  | grep "^SYSLOG_IOS="  | cut -d= -f2-)
   else
     DEV_IS_REMOTE=false
     log_item "Local Deployment"
-  fi
 
-  # Determine OS
-  if [ "$DEV_IS_REMOTE" = true ]; then
-    uname_out=$($DEV_SSH_CMD "uname")
-  else
-    uname_out=$(uname)
-  fi
-  DEV_OS="$uname_out"
-  log_item "OS: $DEV_OS"
-
-  # Determine Device Type
-  if [ "$DEV_OS" = "Darwin" ]; then
-    if [ "$DEV_IS_REMOTE" = true ]; then
-      mobile_check=$($DEV_SSH_CMD "[ -d /var/mobile ] && echo 'ios' || echo 'mac'")
+    DEV_OS=$(uname)
+    if [ "$DEV_OS" = "Darwin" ]; then
+      [ -d /var/mobile ] && DEV_TYPE="ios" || DEV_TYPE="mac"
     else
-      [ -d /var/mobile ] && mobile_check="ios" || mobile_check="mac"
+      DEV_TYPE="$DEV_OS"
     fi
-  else
-    mobile_check="$DEV_OS"
+    DEV_GDB=$(command -v gdb          2>/dev/null)
+    DEV_LLDB=$(command -v lldb        2>/dev/null)
+    DEV_APPINST=$(command -v appinst      2>/dev/null)
+    DEV_IPAINST=$(command -v ipainstaller 2>/dev/null)
+
+    local uid console_log
+    uid=$(id -u)
+    console_log=""
+    [ -f "/Library/Logs/Console/$uid/console.log" ] && console_log="/Library/Logs/Console/$uid/console.log"
+    [ -f /var/log/system.log ] && DEV_LOG_MAC="/var/log/system.log"
+    [ -f /var/log/syslog ]     && DEV_LOG_IOS="/var/log/syslog"
   fi
-  DEV_TYPE="$mobile_check"
+
+  log_item "OS: $DEV_OS"
   log_item "Type: $DEV_TYPE"
+  [ -n "$DEV_GDB" ]     && log_item "GDB: $DEV_GDB"               || log_item "GDB: Not found"
+  [ -n "$DEV_LLDB" ]    && log_item "LLDB: $DEV_LLDB"             || log_item "LLDB: Not found"
+  [ -n "$DEV_APPINST" ] && log_item "appinst: $DEV_APPINST"       || log_item "appinst: Not found"
+  [ -n "$DEV_IPAINST" ] && log_item "ipainstaller: $DEV_IPAINST"  || log_item "ipainstaller: Not found"
 
-  # Find Utilities Robustly
-  DEV_GDB=$(check_util_path "gdb")
-  DEV_LLDB=$(check_util_path "lldb")
-  DEV_APPINST=$(check_util_path "appinst")
-  DEV_IPAINST=$(check_util_path "ipainstaller")
-
-  [ -n "$DEV_GDB" ] && log_item "GDB: $DEV_GDB" || log_item "GDB: Not found"
-  [ -n "$DEV_LLDB" ] && log_item "LLDB: $DEV_LLDB" || log_item "LLDB: Not found"
-  [ -n "$DEV_APPINST" ] && log_item "appinst: $DEV_APPINST" || log_item "appinst: Not found"
-  [ -n "$DEV_IPAINST" ] && log_item "ipainstaller: $DEV_IPAINST" || log_item "ipainstaller: Not found"
-  
-  # Find Logs
   # On Tiger (10.4), GUI apps launched via `open` write NSLog to the per-user
   # console log at /Library/Logs/Console/<uid>/console.log.
   # Prefer this over /var/log/system.log for Mac deployments.
-  local console_log=""
-  local uid=""
-  if [ "$DEV_IS_REMOTE" = true ]; then
-    uid=$($DEV_SSH_CMD "id -u")
-    console_log=$($DEV_SSH_CMD "[ -f /Library/Logs/Console/$uid/console.log ] && echo '/Library/Logs/Console/$uid/console.log'")
-    DEV_LOG_MAC=$($DEV_SSH_CMD "[ -f /var/log/system.log ] && echo '/var/log/system.log'")
-    DEV_LOG_IOS=$($DEV_SSH_CMD "[ -f /var/log/syslog ] && echo '/var/log/syslog'")
-  else
-    uid=$(id -u)
-    [ -f "/Library/Logs/Console/$uid/console.log" ] && console_log="/Library/Logs/Console/$uid/console.log"
-    [ -f /var/log/system.log ] && DEV_LOG_MAC="/var/log/system.log"
-    [ -f /var/log/syslog ] && DEV_LOG_IOS="/var/log/syslog"
-  fi
+  [ -n "$console_log" ]  && log_item "Console Log: $console_log"   || log_item "Console Log: Not found"
+  [ -n "$DEV_LOG_MAC" ]  && log_item "Syslog (Mac): $DEV_LOG_MAC"  || log_item "Syslog (Mac): Not found"
+  [ -n "$DEV_LOG_IOS" ]  && log_item "Syslog (iOS): $DEV_LOG_IOS"  || log_item "Syslog (iOS): Not found"
 
-  [ -n "$console_log" ] && log_item "Console Log: $console_log" || log_item "Console Log: Not found"
-  [ -n "$DEV_LOG_MAC" ] && log_item "Syslog (Mac): $DEV_LOG_MAC" || log_item "Syslog (Mac): Not found"
-  [ -n "$DEV_LOG_IOS" ] && log_item "Syslog (iOS): $DEV_LOG_IOS" || log_item "Syslog (iOS): Not found"
-
-  # Pick best log: prefer console log (captures GUI app NSLog on Tiger),
-  # then system.log, then iOS syslog.
   if [ -n "$console_log" ]; then
     DEV_LOG="$console_log"
   else
@@ -296,7 +283,7 @@ preflight_device() {
   fi
 
   return 0
-  }
+}
 preflight_go_nogo() {
   # 1. Check OS/Type
   if [[ "$DEV_TYPE" != "mac" && "$DEV_TYPE" != "ios" ]]; then
