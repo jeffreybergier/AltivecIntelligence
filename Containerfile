@@ -54,6 +54,7 @@ RUN apt-get update && apt-get install -y \
     ripgrep \
     fd-find \
     tree \
+    sqlite3 \
     # --- Misc / extra tools ---
     wabt \
     && rm -rf /var/lib/apt/lists/*
@@ -117,7 +118,9 @@ RUN npm install -g \
       qrcode-terminal \
       @anthropic-ai/claude-code \
       @openai/codex \
-      @google/gemini-cli
+      @google/gemini-cli \
+      @mariozechner/pi-coding-agent \
+      opencode-ai@latest
 
 # 8. Move into Working Directory
 WORKDIR /repo/altivec

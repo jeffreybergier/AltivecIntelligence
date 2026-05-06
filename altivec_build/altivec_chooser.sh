@@ -58,10 +58,15 @@ launch_claude() {
 
 launch_standard() {
   local cmd="$1"
-  local flag="$2"
+  local flag="${2:-}"
 
   require_cmd "$cmd"
-  exec "$cmd" "$flag"
+
+  if [[ -n "$flag" ]]; then
+    exec "$cmd" "$flag"
+  else
+    exec "$cmd"
+  fi
 }
 
 require_cmd npm
@@ -70,11 +75,13 @@ require_cmd node
 echo ""
 show_banner
 echo "Select an AI agent:"
-echo "  1) Claude  (@anthropic-ai/claude-code)"
-echo "  2) Codex   (@openai/codex)"
-echo "  3) Gemini  (@google/gemini-cli)"
+echo "  1) Claude (@anthropic-ai/claude-code)"
+echo "  2) Codex  (@openai/codex)"
+echo "  3) Gemini (@google/gemini-cli)"
+echo "  4) Pi       (Advanced) (@mariozechner/pi-coding-agent)"
+echo "  5) OpenCode (Advanced) (@opencode-ai)"
 echo ""
-read -rp "Choice [1-3]: " choice
+read -rp "Choice [1-5]: " choice
 
 case "$choice" in
   1)
@@ -88,6 +95,14 @@ case "$choice" in
   3)
     pkg="@google/gemini-cli"
     launcher="launch_standard gemini --yolo"
+    ;;
+  4)
+    pkg="@mariozechner/pi-coding-agent"
+    launcher="launch_standard pi"
+    ;;
+  5)
+    pkg="opencode-ai"
+    launcher="launch_standard opencode"
     ;;
   *)
     log "main" "Invalid choice: $choice"

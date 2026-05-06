@@ -17,10 +17,12 @@
 # 5. Use with AI Assistant:
 #    docker compose run --rm altivec-intelligence
 #
-#    Supported AI Assistants:
+#    Preinstalled AI CLI's:
 #    - Claude Code
+#    - OpenAI Codec
 #    - Gemini CLI
-#    - Other LLM CLIs
+#    - Pi.dev
+#    - OpenCode
 #
 #    The entrypoint script will automatically select which one is available.
 #
