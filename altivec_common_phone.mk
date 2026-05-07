@@ -30,9 +30,9 @@ ifneq ($(LIBCURL_PATH),)
 endif
 
 # --- Flags ---
-IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -Wall \
+IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wconversion -Wsign-conversion -Wfloat-conversion \
             -Wimplicit-function-declaration -Wobjc-method-access \
-            -Wno-unused-command-line-argument -Wunguarded-availability \
+            -Wno-unused-command-line-argument -Wunguarded-availability -Wno-semicolon-before-method-body \
             -isysroot $(IOS_SDK_PATH) \
             -B$(BIN_DIR)
 

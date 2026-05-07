@@ -29,7 +29,8 @@ OPT_FLAGS ?= -O3
 UNIVERSAL_BIN ?= $(INT_DIR)/$(APP_NAME)-universal
 
 # --- Flags (Decoupled from SDK) ---
-MAC_FLAGS = $(OPT_FLAGS) -g -Wall
+MAC_FLAGS = $(OPT_FLAGS) -g -std=c99 -Wall -Wextra
+CLANG_EXTRA_WARNINGS = -Wsign-conversion -Wfloat-conversion -Wno-semicolon-before-method-body
 MAC_LIBS = -framework AppKit -lobjc
 LEGACY_GCC_FLAGS = -fno-stack-protector -fno-common -fno-zero-initialized-in-bss
 
@@ -83,7 +84,7 @@ analyze: validate
 	@echo "--- Running Clang Static Analyzer (x86_64) ---"
 	@$(COMPILER_X64) --analyze -Xanalyzer -analyzer-output=text \
 		-target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
-		$(MAC_FLAGS) $(ALL_SOURCES)
+		$(MAC_FLAGS) $(CLANG_EXTRA_WARNINGS) $(ALL_SOURCES)
 
 validate:
 	@if [ ! -d "$(SDK_MAC_OLD_PATH)" ]; then echo " [!] ERROR: Mac SDK 10.5 missing at $(SDK_MAC_OLD_PATH)"; exit 1; fi
@@ -179,13 +180,13 @@ $(INT_DIR)/x64/%.o: %.m
 	fi
 	@echo "  > x64: $(notdir $<)"
 	@$(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
-	    $(MAC_FLAGS) -c $< -o $@
+	    $(MAC_FLAGS) $(CLANG_EXTRA_WARNINGS) -c $< -o $@
 
 $(INT_DIR)/x64/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo "  > x64: $(notdir $<)"
 	@$(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
-	    $(MAC_FLAGS) -c $< -o $@
+	    $(MAC_FLAGS) $(CLANG_EXTRA_WARNINGS) -c $< -o $@
 
 # --- arm slice (11.0 target, 11.3 sdk) ---
 $(INT_DIR)/arm.bin: $(ARM_OBJS)
@@ -201,12 +202,12 @@ $(INT_DIR)/arm/%.o: %.m
 	fi
 	@echo "  > arm64: $(notdir $<)"
 	@$(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
-	    $(MAC_FLAGS) -c $< -o $@
+	    $(MAC_FLAGS) $(CLANG_EXTRA_WARNINGS) -c $< -o $@
 
 $(INT_DIR)/arm/%.o: %.c
 	@mkdir -p $(dir $@)
 	@echo "  > arm64: $(notdir $<)"
 	@$(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
-	    $(MAC_FLAGS) -c $< -o $@
+	    $(MAC_FLAGS) $(CLANG_EXTRA_WARNINGS) -c $< -o $@
 
 .PHONY: release debug clean analyze validate
