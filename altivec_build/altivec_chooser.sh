@@ -78,7 +78,7 @@ echo "Select an AI agent:"
 echo "  1) Claude (@anthropic-ai/claude-code)"
 echo "  2) Codex  (@openai/codex)"
 echo "  3) Gemini (@google/gemini-cli)"
-echo "  4) Pi       (Advanced) (@mariozechner/pi-coding-agent)"
+echo "  4) Pi       (Advanced) (@earendil-works/pi-coding-agent)"
 echo "  5) OpenCode (Advanced) (@opencode-ai)"
 echo ""
 read -rp "Choice [1-5]: " choice
@@ -97,7 +97,7 @@ case "$choice" in
     launcher="launch_standard gemini --yolo"
     ;;
   4)
-    pkg="@mariozechner/pi-coding-agent"
+    pkg="@earendil-works/pi-coding-agent"
     launcher="launch_standard pi"
     ;;
   5)

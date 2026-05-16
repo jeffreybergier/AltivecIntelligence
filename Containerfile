@@ -55,6 +55,17 @@ RUN apt-get update && apt-get install -y \
     fd-find \
     tree \
     sqlite3 \
+    # --- Image / icon tooling ---
+    imagemagick \
+    icnsutils \
+    # --- macOS app bundle / packaging ---
+    libplist-utils \
+    # --- Reverse engineering / binary + protocol analysis ---
+    xxd \
+    binwalk \
+    thrift-compiler \
+    golang-go \
+    mitmproxy \
     # --- Misc / extra tools ---
     wabt \
     && rm -rf /var/lib/apt/lists/*
@@ -80,11 +91,27 @@ ENV OSXCROSS_NO_DSYMUTIL=1
 ENV INSTALLPREFIX=/osxcross/target
 ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib"
 
-# 3. Copy OSXCross and build base toolchain
+# 3. Install Radare to help with decompilation 
+#    and reverse engineering (optional)
+
+# NOTE: use the acr copy-install, NOT sys/install.sh — the latter is a
+# developer install that symlinks /usr/local/bin/* back into the build
+# tree, which the `rm -rf` below then deletes (→ dangling symlinks).
+RUN curl -Ls https://github.com/radareorg/radare2/releases/download/6.1.4/radare2-6.1.4.tar.xz \
+    | tar xJ \
+    && cd radare2-6.1.4 \
+    && ./configure --prefix=/usr \
+    && make -j"$JOBS" \
+    && make install \
+    && cd / && rm -rf radare2-6.1.4 \
+    && ldconfig \
+    && radare2 -v
+
+# 4. Copy OSXCross and build base toolchain
 WORKDIR /osxcross
 COPY altivec_build/ ./altivec_build/
 
-# 4. Build OSXCross and Compilers
+# 5. Build OSXCross and Compilers
 
 RUN echo "Pre-Build: Altivec Intelligence" \
       && ./altivec_build/altivec_prebuild.sh
@@ -103,7 +130,6 @@ RUN echo "Post-Build: Altivec Intelligence" \
       && ./altivec_postbuild.sh \
       && rm -rf tarballs
 
-# 5. Configure the final environment
 ENV PATH="/osxcross/target/bin:${PATH}"
 
 # 6. Node.js 22 LTS (matches wrangler's supported runtime)
@@ -111,7 +137,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# 7. Cloudflare CLI + local dev deps needed to compute / test X-Hmac
+# 7. Fix broken npm bundled with nodesource, then install globals
+RUN curl -fsSL https://registry.npmjs.org/npm/-/npm-11.14.1.tgz -o /tmp/npm.tgz \
+    && mkdir -p /tmp/npm-install \
+    && tar xzf /tmp/npm.tgz -C /tmp/npm-install \
+    && node /tmp/npm-install/package/bin/npm-cli.js install -g npm@11.14.1 \
+    && rm -rf /tmp/npm.tgz /tmp/npm-install
+
 RUN npm install -g \
       wrangler \
       jsdom \
@@ -119,10 +151,33 @@ RUN npm install -g \
       @anthropic-ai/claude-code \
       @openai/codex \
       @google/gemini-cli \
-      @mariozechner/pi-coding-agent \
-      opencode-ai@latest
+      @earendil-works/pi-coding-agent \
+      opencode-ai@latest \
+      prettier \
+      js-beautify \
+      webcrack
 
-# 8. Move into Working Directory
+# 8. rcodesign — real Apple code signer (osxcross only ships
+#    codesign_allocate, which reserves space but cannot sign).
+#    Prebuilt static musl binary from indygreg/apple-platform-rs.
+#    NOTE: must be ARG, not ENV — rcodesign reads any RCODESIGN_*
+#    env var as config, so a persistent ENV RCODESIGN_VERSION makes
+#    every rcodesign invocation abort with "UnknownField(version)".
+ARG RCODESIGN_VERSION=0.27.0
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in \
+      amd64) RC_ARCH=x86_64-unknown-linux-musl ;; \
+      arm64) RC_ARCH=aarch64-unknown-linux-musl ;; \
+      *) echo "unsupported arch for rcodesign" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/rcodesign.tar.gz \
+      "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}/apple-codesign-${RCODESIGN_VERSION}-${RC_ARCH}.tar.gz"; \
+    tar -xzf /tmp/rcodesign.tar.gz -C /tmp; \
+    install -m 0755 "/tmp/apple-codesign-${RCODESIGN_VERSION}-${RC_ARCH}/rcodesign" /usr/local/bin/rcodesign; \
+    rm -rf /tmp/rcodesign.tar.gz "/tmp/apple-codesign-${RCODESIGN_VERSION}-${RC_ARCH}"; \
+    rcodesign --version
+
+# 9. Move into Working Directory
 WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-lc"]
 CMD ["/bin/bash"]
