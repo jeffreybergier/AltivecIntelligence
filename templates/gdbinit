@@ -5,4 +5,4 @@ set confirm off
 fb -[NSException raise]
 
 ## Uncomment to run automatically
-run
+## run

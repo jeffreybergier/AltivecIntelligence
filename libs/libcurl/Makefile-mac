@@ -10,6 +10,10 @@ CWD=$(shell pwd)
 BUILD_ROOT=$(CWD)/build-mac
 INTERMEDIATE=$(BUILD_ROOT)/intermediate
 PREFIX=$(BUILD_ROOT)/prefix
+STAMP_DIR=$(BUILD_ROOT)/stamps
+PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
+PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
+TARBALL_DIR=tarballs
 
 # Source URLs
 ZLIB_URL=https://zlib.net/fossils/zlib-$(ZLIB_VER).tar.gz
@@ -21,147 +25,242 @@ PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH
 X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH) $(LEGACY_GCC_FLAGS)
 X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_X64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
 ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
+X64_COMPILE_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -B$(BIN_DIR)
+ARM64_COMPILE_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -B$(BIN_DIR)
 
-all: static aicc
+ZLIB_TARBALL=$(TARBALL_DIR)/zlib-$(ZLIB_VER).tar.gz
+OPENSSL_TARBALL=$(TARBALL_DIR)/openssl-$(OPENSSL_VER).tar.gz
+CURL_TARBALL=$(TARBALL_DIR)/curl-$(CURL_VER).tar.gz
 
-aicc: static $(PREFIX)/lib/libAICURLConnection.a
-	@echo "Updating AICURLConnection output..."
-	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
-	cp $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/
-	cp AICURLConnection.h $(BUILD_ROOT)/include/
+ZLIB_PPC_SRC=$(INTERMEDIATE)/zlib-$(ZLIB_VER)-ppc
+ZLIB_X86_SRC=$(INTERMEDIATE)/zlib-$(ZLIB_VER)-x86
+ZLIB_X64_SRC=$(INTERMEDIATE)/zlib-$(ZLIB_VER)-x64
+ZLIB_ARM64_SRC=$(INTERMEDIATE)/zlib-$(ZLIB_VER)-arm64
+
+OPENSSL_PPC_SRC=$(INTERMEDIATE)/openssl-$(OPENSSL_VER)-ppc
+OPENSSL_X86_SRC=$(INTERMEDIATE)/openssl-$(OPENSSL_VER)-x86
+OPENSSL_X64_SRC=$(INTERMEDIATE)/openssl-$(OPENSSL_VER)-x64
+OPENSSL_ARM64_SRC=$(INTERMEDIATE)/openssl-$(OPENSSL_VER)-arm64
+
+CURL_PPC_SRC=$(INTERMEDIATE)/curl-$(CURL_VER)-ppc
+CURL_X86_SRC=$(INTERMEDIATE)/curl-$(CURL_VER)-x86
+CURL_X64_SRC=$(INTERMEDIATE)/curl-$(CURL_VER)-x64
+CURL_ARM64_SRC=$(INTERMEDIATE)/curl-$(CURL_VER)-arm64
+
+PUBLIC_LIBS=$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
+            $(PUBLIC_LIB_DIR)/libcurl.a \
+            $(PUBLIC_LIB_DIR)/libssl.a \
+            $(PUBLIC_LIB_DIR)/libcrypto.a \
+            $(PUBLIC_LIB_DIR)/libz.a
+
+all: static
+
+static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem $(PUBLIC_INCLUDE_DIR)/.stamp verify-mac prune-build-files
+	@echo "-----------------------------------------------------------"
+	@echo "MAC QUAD-FAT (ppc, x86, x64, arm64) BUILD SUCCESSFUL"
+	@echo "Libraries: $(PUBLIC_LIB_DIR)"
+	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
+
+aicc: static
 	@echo "AICURLConnection build successful."
 
 aicc-analyze:
 	@echo "--- Analyzing AICURLConnection (x64) ---"
 	@$(COMPILER_X64) --analyze -Xanalyzer -analyzer-output=text \
-		$(X64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x64/include AICURLConnection.m
+		$(X64_COMPILE_FLAGS) $(OPT_FLAGS) -I$(PUBLIC_INCLUDE_DIR) AICURLConnection.m
 
-static: $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libAICURLConnection.a $(BUILD_ROOT)/lib/cacert.pem
-	@echo "Organizing final Mac output..."
-	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
-	cp $(PREFIX)/lib/*.a $(BUILD_ROOT)/lib/
-	cp -R $(PREFIX)/include/* $(BUILD_ROOT)/include/
-	cp AICURLConnection.h $(BUILD_ROOT)/include/
-	@echo "-----------------------------------------------------------"
-	@echo "MAC QUAD-FAT (ppc, x86, x64, arm64) BUILD SUCCESSFUL"
-	@echo "Libraries: $(BUILD_ROOT)/lib"
-	@echo "Headers:   $(BUILD_ROOT)/include"
-	@echo "-----------------------------------------------------------"
+verify-mac: $(PUBLIC_LIBS)
+	@echo "--- Verifying Mac universal libraries ---"
+	@missing=0; \
+	for lib in $(PUBLIC_LIBS); do \
+		info="`$(LIPO) -info $$lib 2>/dev/null`"; \
+		echo "  > $$info"; \
+		for arch in ppc i386 x86_64 arm64; do \
+			echo "$$info" | grep -qw "$$arch" || { \
+				echo " [!] ERROR: $$lib missing $$arch"; \
+				missing=1; \
+			}; \
+		done; \
+	done; \
+	exit $$missing
 
-$(BUILD_ROOT)/lib/cacert.pem:
-	mkdir -p $(BUILD_ROOT)/lib
-	[ -f tarballs/cacert.pem ] || (mkdir -p tarballs && curl -sL https://curl.se/ca/cacert.pem -o tarballs/cacert.pem)
-	cp tarballs/cacert.pem $@
+prune-build-files:
+	@echo "--- Removing Mac libcurl build-only files ---"
+	rm -rf $(INTERMEDIATE) $(PREFIX) $(STAMP_DIR)
 
-# --- AICURLConnection ---
-$(PREFIX)/lib/libAICURLConnection.a: AICURLConnection.m AICURLConnection.h $(PREFIX)/lib/libcurl.a $(PREFIX)/lib/libcrypto.a $(PREFIX)/lib/libz.a
-	@echo "--- Building AICURLConnection (ppc) ---"
-	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) $(PPC_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/ppc/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-ppc.o
-	$(AR_LEGACY) rc $(PREFIX)/ppc/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-ppc.o
-	$(RANLIB_LEGACY) $(PREFIX)/ppc/lib/libAICURLConnection.a
-	@echo "--- Building AICURLConnection (x86) ---"
-	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) $(X86_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x86/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x86.o
-	$(AR_LEGACY) rc $(PREFIX)/x86/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x86.o
-	$(RANLIB_LEGACY) $(PREFIX)/x86/lib/libAICURLConnection.a
-	@echo "--- Building AICURLConnection (x64) ---"
-	$(COMPILER_X64) $(X64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x64.o
-	$(AR_MODERN) rc $(PREFIX)/x64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x64.o
-	$(RANLIB_MODERN) $(PREFIX)/x64/lib/libAICURLConnection.a
-	@echo "--- Building AICURLConnection (arm64) ---"
-	$(COMPILER_ARM64) $(ARM64_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/arm64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-arm64.o
-	$(AR_MODERN) rc $(PREFIX)/arm64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-arm64.o
-	$(RANLIB_MODERN) $(PREFIX)/arm64/lib/libAICURLConnection.a
-	# Lipo
-	$(LIPO) -create $(PREFIX)/ppc/lib/libAICURLConnection.a $(PREFIX)/x86/lib/libAICURLConnection.a $(PREFIX)/x64/lib/libAICURLConnection.a $(PREFIX)/arm64/lib/libAICURLConnection.a -output $(PREFIX)/lib/libAICURLConnection.a
+$(TARBALL_DIR):
+	mkdir -p $@
+
+$(ZLIB_TARBALL): | $(TARBALL_DIR)
+	curl -fL $(ZLIB_URL) -o $@
+
+$(OPENSSL_TARBALL): | $(TARBALL_DIR)
+	curl -fL $(OPENSSL_URL) -o $@
+
+$(CURL_TARBALL): | $(TARBALL_DIR)
+	curl -fL $(CURL_URL) -o $@
+
+$(PUBLIC_LIB_DIR)/cacert.pem: $(TARBALL_DIR)/cacert.pem
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $< $@
+
+$(TARBALL_DIR)/cacert.pem: | $(TARBALL_DIR)
+	curl -fL https://curl.se/ca/cacert.pem -o $@
+
+define extract_source
+$1: $2
+	mkdir -p $(INTERMEDIATE) $(STAMP_DIR)
+	rm -rf $3
+	mkdir -p $3
+	tar -xf $2 -C $3 --strip-components=1
+	touch $$@
+endef
+
+$(eval $(call extract_source,$(STAMP_DIR)/zlib-ppc.extract,$(ZLIB_TARBALL),$(ZLIB_PPC_SRC),zlib-$(ZLIB_VER)))
+$(eval $(call extract_source,$(STAMP_DIR)/zlib-x86.extract,$(ZLIB_TARBALL),$(ZLIB_X86_SRC),zlib-$(ZLIB_VER)))
+$(eval $(call extract_source,$(STAMP_DIR)/zlib-x64.extract,$(ZLIB_TARBALL),$(ZLIB_X64_SRC),zlib-$(ZLIB_VER)))
+$(eval $(call extract_source,$(STAMP_DIR)/zlib-arm64.extract,$(ZLIB_TARBALL),$(ZLIB_ARM64_SRC),zlib-$(ZLIB_VER)))
+
+$(eval $(call extract_source,$(STAMP_DIR)/openssl-ppc.extract,$(OPENSSL_TARBALL),$(OPENSSL_PPC_SRC),openssl-$(OPENSSL_VER)))
+$(eval $(call extract_source,$(STAMP_DIR)/openssl-x86.extract,$(OPENSSL_TARBALL),$(OPENSSL_X86_SRC),openssl-$(OPENSSL_VER)))
+$(eval $(call extract_source,$(STAMP_DIR)/openssl-x64.extract,$(OPENSSL_TARBALL),$(OPENSSL_X64_SRC),openssl-$(OPENSSL_VER)))
+$(eval $(call extract_source,$(STAMP_DIR)/openssl-arm64.extract,$(OPENSSL_TARBALL),$(OPENSSL_ARM64_SRC),openssl-$(OPENSSL_VER)))
+
+$(eval $(call extract_source,$(STAMP_DIR)/curl-ppc.extract,$(CURL_TARBALL),$(CURL_PPC_SRC),curl-$(CURL_VER)))
+$(eval $(call extract_source,$(STAMP_DIR)/curl-x86.extract,$(CURL_TARBALL),$(CURL_X86_SRC),curl-$(CURL_VER)))
+$(eval $(call extract_source,$(STAMP_DIR)/curl-x64.extract,$(CURL_TARBALL),$(CURL_X64_SRC),curl-$(CURL_VER)))
+$(eval $(call extract_source,$(STAMP_DIR)/curl-arm64.extract,$(CURL_TARBALL),$(CURL_ARM64_SRC),curl-$(CURL_VER)))
 
 # --- ZLIB ---
-$(INTERMEDIATE)/zlib-$(ZLIB_VER):
-	mkdir -p $(INTERMEDIATE)
-	[ -f tarballs/zlib-$(ZLIB_VER).tar.gz ] || (mkdir -p tarballs && curl -sL $(ZLIB_URL) -o tarballs/zlib-$(ZLIB_VER).tar.gz)
-	cd $(INTERMEDIATE) && tar -xf $(CWD)/tarballs/zlib-$(ZLIB_VER).tar.gz
-
-$(PREFIX)/lib/libz.a: $(INTERMEDIATE)/zlib-$(ZLIB_VER)
+$(STAMP_DIR)/zlib-ppc.done: $(STAMP_DIR)/zlib-ppc.extract
 	@echo "--- Building zlib (ppc) ---"
-	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
+	cd $(ZLIB_PPC_SRC) && \
 	./configure --static --prefix=$(PREFIX)/ppc && \
 	sed -i 's|^CC=.*|CC=$(COMPILER_PPC) $(PPC_FLAGS)|g' Makefile && \
 	sed -i 's|^AR=.*|AR=$(AR_LEGACY)|g' Makefile && \
 	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_LEGACY)|g' Makefile && \
 	make clean && make -j$(JOBS) ARFLAGS="rc" install
+	touch $@
+
+$(STAMP_DIR)/zlib-x86.done: $(STAMP_DIR)/zlib-x86.extract
 	@echo "--- Building zlib (x86) ---"
-	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
+	cd $(ZLIB_X86_SRC) && \
 	./configure --static --prefix=$(PREFIX)/x86 && \
 	sed -i 's|^CC=.*|CC=$(COMPILER_X86) $(X86_FLAGS)|g' Makefile && \
 	sed -i 's|^AR=.*|AR=$(AR_LEGACY)|g' Makefile && \
 	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_LEGACY)|g' Makefile && \
 	make clean && make -j$(JOBS) ARFLAGS="rc" install
+	touch $@
+
+$(STAMP_DIR)/zlib-x64.done: $(STAMP_DIR)/zlib-x64.extract
 	@echo "--- Building zlib (x64) ---"
-	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
+	cd $(ZLIB_X64_SRC) && \
 	./configure --static --prefix=$(PREFIX)/x64 && \
-	sed -i 's|^CC=.*|CC=$(COMPILER_X64) $(X64_FLAGS) $(X64_LDFLAGS)|g' Makefile && \
+	sed -i 's|^CC=.*|CC=$(COMPILER_X64) $(X64_FLAGS)|g' Makefile && \
 	sed -i 's|^AR=.*|AR=$(AR_MODERN)|g' Makefile && \
 	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MODERN)|g' Makefile && \
 	make clean && make -j$(JOBS) ARFLAGS="rc" install
+	touch $@
+
+$(STAMP_DIR)/zlib-arm64.done: $(STAMP_DIR)/zlib-arm64.extract
 	@echo "--- Building zlib (arm64) ---"
-	cd $(INTERMEDIATE)/zlib-$(ZLIB_VER) && \
+	cd $(ZLIB_ARM64_SRC) && \
 	./configure --static --prefix=$(PREFIX)/arm64 && \
 	sed -i 's|^CC=.*|CC=$(COMPILER_ARM64) $(ARM64_FLAGS)|g' Makefile && \
 	sed -i 's|^AR=.*|AR=$(AR_MODERN)|g' Makefile && \
 	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MODERN)|g' Makefile && \
 	make clean && make -j$(JOBS) ARFLAGS="rc" install
-	# Lipo
+	touch $@
+
+$(STAMP_DIR)/zlib-universal.done: $(STAMP_DIR)/zlib-ppc.done \
+                                    $(STAMP_DIR)/zlib-x86.done \
+                                    $(STAMP_DIR)/zlib-x64.done \
+                                    $(STAMP_DIR)/zlib-arm64.done
 	mkdir -p $(PREFIX)/lib $(PREFIX)/include
-	$(LIPO) -create $(PREFIX)/ppc/lib/libz.a $(PREFIX)/x86/lib/libz.a $(PREFIX)/x64/lib/libz.a $(PREFIX)/arm64/lib/libz.a -output $(PREFIX)/lib/libz.a
+	$(LIPO) -create $(PREFIX)/ppc/lib/libz.a \
+	                 $(PREFIX)/x86/lib/libz.a \
+	                 $(PREFIX)/x64/lib/libz.a \
+	                 $(PREFIX)/arm64/lib/libz.a \
+	                 -output $(PREFIX)/lib/libz.a
 	cp $(PREFIX)/x64/include/*.h $(PREFIX)/include/
+	touch $@
+
+$(PREFIX)/lib/libz.a: $(STAMP_DIR)/zlib-universal.done
+	@test -f $@
+	@touch $@
 
 # --- OPENSSL ---
-$(INTERMEDIATE)/openssl-$(OPENSSL_VER):
-	mkdir -p $(INTERMEDIATE)
-	[ -f tarballs/openssl-$(OPENSSL_VER).tar.gz ] || (mkdir -p tarballs && curl -sL $(OPENSSL_URL) -o tarballs/openssl-$(OPENSSL_VER).tar.gz)
-	cd $(INTERMEDIATE) && tar -xf $(CWD)/tarballs/openssl-$(OPENSSL_VER).tar.gz
-
-$(PREFIX)/lib/libcrypto.a: $(INTERMEDIATE)/openssl-$(OPENSSL_VER) $(PREFIX)/lib/libz.a
+$(STAMP_DIR)/openssl-ppc.done: $(STAMP_DIR)/openssl-ppc.extract | $(PREFIX)/lib/libz.a
 	@echo "--- Building OpenSSL (ppc) ---"
-	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
+	cd $(OPENSSL_PPC_SRC) && \
 	./Configure darwin-ppc-cc no-shared no-tests no-zlib --prefix=$(PREFIX)/ppc \
 	CC="$(COMPILER_PPC)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
 	CFLAGS="$(PPC_FLAGS) $(OPT_FLAGS)" && \
 	make clean && make -j$(JOBS) build_libs && make install_dev
+	touch $@
+
+$(STAMP_DIR)/openssl-x86.done: $(STAMP_DIR)/openssl-x86.extract | $(PREFIX)/lib/libz.a
 	@echo "--- Building OpenSSL (x86) ---"
-	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
+	cd $(OPENSSL_X86_SRC) && \
 	./Configure darwin-i386-cc no-shared no-tests no-zlib --prefix=$(PREFIX)/x86 \
 	CC="$(COMPILER_X86)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
 	CFLAGS="$(X86_FLAGS) $(OPT_FLAGS)" && \
 	make clean && make -j$(JOBS) build_libs && make install_dev
+	touch $@
+
+$(STAMP_DIR)/openssl-x64.done: $(STAMP_DIR)/openssl-x64.extract | $(PREFIX)/lib/libz.a
 	@echo "--- Building OpenSSL (x64) ---"
-	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
+	cd $(OPENSSL_X64_SRC) && \
 	./Configure darwin64-x86_64-cc no-shared no-tests no-zlib --prefix=$(PREFIX)/x64 \
 	CC="$(COMPILER_X64)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
-	CFLAGS="$(X64_FLAGS) $(X64_LDFLAGS) $(OPT_FLAGS)" && \
+	CFLAGS="$(X64_FLAGS) $(OPT_FLAGS)" && \
 	make clean && make -j$(JOBS) build_libs && make install_dev
+	touch $@
+
+$(STAMP_DIR)/openssl-arm64.done: $(STAMP_DIR)/openssl-arm64.extract | $(PREFIX)/lib/libz.a
 	@echo "--- Building OpenSSL (arm64) ---"
-	cd $(INTERMEDIATE)/openssl-$(OPENSSL_VER) && \
+	cd $(OPENSSL_ARM64_SRC) && \
 	./Configure darwin64-arm64-cc no-shared no-tests no-zlib --prefix=$(PREFIX)/arm64 \
 	CC="$(COMPILER_ARM64)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(ARM64_FLAGS) $(OPT_FLAGS)" && \
 	make clean && make -j$(JOBS) build_libs && make install_dev
-	# Lipo
-	$(LIPO) -create $(PREFIX)/ppc/lib/libssl.a $(PREFIX)/x86/lib/libssl.a $(PREFIX)/x64/lib/libssl.a $(PREFIX)/arm64/lib/libssl.a -output $(PREFIX)/lib/libssl.a
-	$(LIPO) -create $(PREFIX)/ppc/lib/libcrypto.a $(PREFIX)/x86/lib/libcrypto.a $(PREFIX)/x64/lib/libcrypto.a $(PREFIX)/arm64/lib/libcrypto.a -output $(PREFIX)/lib/libcrypto.a
-	mkdir -p $(PREFIX)/include/openssl && cp -R $(PREFIX)/x64/include/openssl/* $(PREFIX)/include/openssl/
+	touch $@
+
+$(STAMP_DIR)/openssl-universal.done: $(STAMP_DIR)/openssl-ppc.done \
+                                       $(STAMP_DIR)/openssl-x86.done \
+                                       $(STAMP_DIR)/openssl-x64.done \
+                                       $(STAMP_DIR)/openssl-arm64.done
+	mkdir -p $(PREFIX)/lib $(PREFIX)/include/openssl
+	$(LIPO) -create $(PREFIX)/ppc/lib/libssl.a \
+	                 $(PREFIX)/x86/lib/libssl.a \
+	                 $(PREFIX)/x64/lib/libssl.a \
+	                 $(PREFIX)/arm64/lib/libssl.a \
+	                 -output $(PREFIX)/lib/libssl.a
+	$(LIPO) -create $(PREFIX)/ppc/lib/libcrypto.a \
+	                 $(PREFIX)/x86/lib/libcrypto.a \
+	                 $(PREFIX)/x64/lib/libcrypto.a \
+	                 $(PREFIX)/arm64/lib/libcrypto.a \
+	                 -output $(PREFIX)/lib/libcrypto.a
+	cp -R $(PREFIX)/x64/include/openssl/* $(PREFIX)/include/openssl/
+	touch $@
+
+$(PREFIX)/lib/libcrypto.a: $(STAMP_DIR)/openssl-universal.done
+	@test -f $@
+	@touch $@
+
+$(PREFIX)/lib/libssl.a: $(STAMP_DIR)/openssl-universal.done
+	@test -f $@
+	@touch $@
 
 # --- CURL ---
-$(INTERMEDIATE)/curl-$(CURL_VER):
-	mkdir -p $(INTERMEDIATE)
-	[ -f tarballs/curl-$(CURL_VER).tar.gz ] || (mkdir -p tarballs && curl -sL $(CURL_URL) -o tarballs/curl-$(CURL_VER).tar.gz)
-	cd $(INTERMEDIATE) && tar -xf $(CWD)/tarballs/curl-$(CURL_VER).tar.gz
-
-$(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $(PREFIX)/lib/libcrypto.a
+$(STAMP_DIR)/curl-ppc.done: $(STAMP_DIR)/curl-ppc.extract | $(PREFIX)/lib/libz.a $(PREFIX)/lib/libcrypto.a $(PREFIX)/lib/libssl.a
 	@echo "--- Building curl (ppc) ---"
-	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
+	cd $(CURL_PPC_SRC) && \
 	CC="$(COMPILER_PPC) $(PPC_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/ppc/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/ppc/lib" \
+	CPPFLAGS="-I$(PREFIX)/ppc/include -DHAVE_ATOMIC=0" \
+	LDFLAGS="-L$(PREFIX)/ppc/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=powerpc-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
@@ -171,11 +270,15 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
 	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
+	touch $@
+
+$(STAMP_DIR)/curl-x86.done: $(STAMP_DIR)/curl-x86.extract | $(PREFIX)/lib/libz.a $(PREFIX)/lib/libcrypto.a $(PREFIX)/lib/libssl.a
 	@echo "--- Building curl (x86) ---"
-	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
+	cd $(CURL_X86_SRC) && \
 	CC="$(COMPILER_X86) $(X86_FLAGS)" AR="$(AR_LEGACY)" RANLIB="$(RANLIB_LEGACY)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/x86/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/x86/lib" \
+	CPPFLAGS="-I$(PREFIX)/x86/include -DHAVE_ATOMIC=0" \
+	LDFLAGS="-L$(PREFIX)/x86/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=i386-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
@@ -185,11 +288,15 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
 	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
+	touch $@
+
+$(STAMP_DIR)/curl-x64.done: $(STAMP_DIR)/curl-x64.extract | $(PREFIX)/lib/libz.a $(PREFIX)/lib/libcrypto.a $(PREFIX)/lib/libssl.a
 	@echo "--- Building curl (x64) ---"
-	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
+	cd $(CURL_X64_SRC) && \
 	CC="$(COMPILER_X64) $(X64_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/x64/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/x64/lib $(X64_LDFLAGS)" \
+	CPPFLAGS="-I$(PREFIX)/x64/include -DHAVE_ATOMIC=0" \
+	LDFLAGS="-L$(PREFIX)/x64/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=x86_64-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
@@ -199,11 +306,15 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
 	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
+	touch $@
+
+$(STAMP_DIR)/curl-arm64.done: $(STAMP_DIR)/curl-arm64.extract | $(PREFIX)/lib/libz.a $(PREFIX)/lib/libcrypto.a $(PREFIX)/lib/libssl.a
 	@echo "--- Building curl (arm64) ---"
-	cd $(INTERMEDIATE)/curl-$(CURL_VER) && \
+	cd $(CURL_ARM64_SRC) && \
 	CC="$(COMPILER_ARM64) $(ARM64_FLAGS)" AR="$(AR_MODERN)" RANLIB="$(RANLIB_MODERN)" \
 	CFLAGS="$(OPT_FLAGS) $(COMMON_WARN_FLAGS)" \
-	CPPFLAGS="-I$(PREFIX)/arm64/include -DHAVE_ATOMIC=0" LDFLAGS="-L$(PREFIX)/arm64/lib" \
+	CPPFLAGS="-I$(PREFIX)/arm64/include -DHAVE_ATOMIC=0" \
+	LDFLAGS="-L$(PREFIX)/arm64/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
 	./configure --host=aarch64-apple-darwin --disable-shared --enable-static \
 	--disable-threaded-resolver --disable-hsts --disable-alt-svc \
@@ -213,11 +324,89 @@ $(PREFIX)/lib/libcurl.a: $(INTERMEDIATE)/curl-$(CURL_VER) $(PREFIX)/lib/libz.a $
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
 	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
-	# Lipo
-	$(LIPO) -create $(PREFIX)/ppc/lib/libcurl.a $(PREFIX)/x86/lib/libcurl.a $(PREFIX)/x64/lib/libcurl.a $(PREFIX)/arm64/lib/libcurl.a -output $(PREFIX)/lib/libcurl.a
+	touch $@
+
+$(STAMP_DIR)/curl-universal.done: $(STAMP_DIR)/curl-ppc.done \
+                                    $(STAMP_DIR)/curl-x86.done \
+                                    $(STAMP_DIR)/curl-x64.done \
+                                    $(STAMP_DIR)/curl-arm64.done
+	mkdir -p $(PREFIX)/lib $(PREFIX)/include
+	$(LIPO) -create $(PREFIX)/ppc/lib/libcurl.a \
+	                 $(PREFIX)/x86/lib/libcurl.a \
+	                 $(PREFIX)/x64/lib/libcurl.a \
+	                 $(PREFIX)/arm64/lib/libcurl.a \
+	                 -output $(PREFIX)/lib/libcurl.a
 	cp -R $(PREFIX)/x64/include/curl $(PREFIX)/include/
+	touch $@
+
+$(PREFIX)/lib/libcurl.a: $(STAMP_DIR)/curl-universal.done
+	@test -f $@
+	@touch $@
+
+# --- AICURLConnection ---
+$(STAMP_DIR)/aicc-ppc.done: AICURLConnection.m AICURLConnection.h | $(PREFIX)/lib/libcurl.a
+	@echo "--- Building AICURLConnection (ppc) ---"
+	mkdir -p $(INTERMEDIATE) $(PREFIX)/ppc/lib
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) $(PPC_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/ppc/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-ppc.o
+	$(AR_LEGACY) rc $(PREFIX)/ppc/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-ppc.o
+	$(RANLIB_LEGACY) $(PREFIX)/ppc/lib/libAICURLConnection.a
+	touch $@
+
+$(STAMP_DIR)/aicc-x86.done: AICURLConnection.m AICURLConnection.h | $(PREFIX)/lib/libcurl.a
+	@echo "--- Building AICURLConnection (x86) ---"
+	mkdir -p $(INTERMEDIATE) $(PREFIX)/x86/lib
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) $(X86_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x86/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x86.o
+	$(AR_LEGACY) rc $(PREFIX)/x86/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x86.o
+	$(RANLIB_LEGACY) $(PREFIX)/x86/lib/libAICURLConnection.a
+	touch $@
+
+$(STAMP_DIR)/aicc-x64.done: AICURLConnection.m AICURLConnection.h | $(PREFIX)/lib/libcurl.a
+	@echo "--- Building AICURLConnection (x64) ---"
+	mkdir -p $(INTERMEDIATE) $(PREFIX)/x64/lib
+	$(COMPILER_X64) $(X64_COMPILE_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/x64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-x64.o
+	$(AR_MODERN) rc $(PREFIX)/x64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-x64.o
+	$(RANLIB_MODERN) $(PREFIX)/x64/lib/libAICURLConnection.a
+	touch $@
+
+$(STAMP_DIR)/aicc-arm64.done: AICURLConnection.m AICURLConnection.h | $(PREFIX)/lib/libcurl.a
+	@echo "--- Building AICURLConnection (arm64) ---"
+	mkdir -p $(INTERMEDIATE) $(PREFIX)/arm64/lib
+	$(COMPILER_ARM64) $(ARM64_COMPILE_FLAGS) $(OPT_FLAGS) -I$(PREFIX)/arm64/include -c AICURLConnection.m -o $(INTERMEDIATE)/AICURLConnection-arm64.o
+	$(AR_MODERN) rc $(PREFIX)/arm64/lib/libAICURLConnection.a $(INTERMEDIATE)/AICURLConnection-arm64.o
+	$(RANLIB_MODERN) $(PREFIX)/arm64/lib/libAICURLConnection.a
+	touch $@
+
+$(STAMP_DIR)/aicc-universal.done: $(STAMP_DIR)/aicc-ppc.done \
+                                  $(STAMP_DIR)/aicc-x86.done \
+                                  $(STAMP_DIR)/aicc-x64.done \
+                                  $(STAMP_DIR)/aicc-arm64.done
+	mkdir -p $(PREFIX)/lib
+	$(LIPO) -create $(PREFIX)/ppc/lib/libAICURLConnection.a \
+	                 $(PREFIX)/x86/lib/libAICURLConnection.a \
+	                 $(PREFIX)/x64/lib/libAICURLConnection.a \
+	                 $(PREFIX)/arm64/lib/libAICURLConnection.a \
+	                 -output $(PREFIX)/lib/libAICURLConnection.a
+	touch $@
+
+$(PREFIX)/lib/libAICURLConnection.a: $(STAMP_DIR)/aicc-universal.done
+	@test -f $@
+	@touch $@
+
+$(PUBLIC_LIB_DIR)/lib%.a: $(PREFIX)/lib/lib%.a
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $< $@
+
+$(PUBLIC_INCLUDE_DIR)/.stamp: $(PREFIX)/lib/libcurl.a \
+                              $(PREFIX)/lib/libcrypto.a \
+                              $(PREFIX)/lib/libz.a \
+                              AICURLConnection.h
+	mkdir -p $(PUBLIC_INCLUDE_DIR)
+	rm -rf $(PUBLIC_INCLUDE_DIR)/curl $(PUBLIC_INCLUDE_DIR)/openssl
+	cp -R $(PREFIX)/include/* $(PUBLIC_INCLUDE_DIR)/
+	cp AICURLConnection.h $(PUBLIC_INCLUDE_DIR)/
+	touch $@
 
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: mac static aicc aicc-analyze clean
+.PHONY: all static aicc aicc-analyze verify-mac prune-build-files clean

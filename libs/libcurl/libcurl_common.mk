@@ -36,7 +36,7 @@ LIBTOOL=$(BIN_DIR)/i386-apple-darwin9-libtool
 LD64_LLD=$(BIN_DIR)/ld64.lld
 
 # --- Standard Flags ---
-OPT_FLAGS=-O2
+OPT_FLAGS=-O3
 COMMON_WARN_FLAGS=-Wall -Wimplicit-function-declaration
 
 # --- Deployment Targets ---

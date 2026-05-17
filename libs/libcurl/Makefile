@@ -48,12 +48,10 @@ clean:
 prune-intermediates:
 	@echo "Pruning libcurl intermediates while keeping final outputs..."
 	rm -rf build-mac/intermediate \
+	       build-mac/stamps \
+	       build-mac/prefix \
 	       build-phone/intermediate \
-	       build-mac/prefix/ppc \
-	       build-mac/prefix/x86 \
-	       build-mac/prefix/x64 \
-	       build-mac/prefix/arm64 \
-	       build-phone/prefix/armv7 \
-	       build-phone/prefix/arm64
+	       build-phone/stamps \
+	       build-phone/prefix
 
 .PHONY: all phone-static mac-static phone mac aicc aicc-mac aicc-phone aicc-analyze clean prune-intermediates

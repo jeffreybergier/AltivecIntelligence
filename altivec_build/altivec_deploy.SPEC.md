@@ -23,7 +23,7 @@ The script automates the discovery, transfer, installation, and debugging of app
 1. **App Discovery:** Searches up to 2 levels deep for a `.app` bundle.
 2. **Payload Discovery:** Finds the first `.ipa` or `.zip` file in the same directory as the `.app`.
 3. **Symbol Discovery:** Finds all `.dSYM` bundles in the same directory.
-4. **Debugger Init Discovery:** Locates `gdbinit` and `lldbinit` within the `altivec_build` directory relative to the script.
+4. **Debugger Init Discovery:** Locates `gdbinit` and `lldbinit` within the `templates` directory relative to the script.
 5. **Executable Resolution:** Identifies the binary name from the `.app` bundle.
 
 ### Device Preflight

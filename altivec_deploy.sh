@@ -2,9 +2,9 @@
 
 # --- CONSTANTS ---
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly ALTIVEC_BUILD_DIR="$SCRIPT_DIR/altivec_build"
-readonly GDBINIT_FILE="$ALTIVEC_BUILD_DIR/gdbinit"
-readonly LLDBINIT_FILE="$ALTIVEC_BUILD_DIR/lldbinit"
+readonly TEMPLATE_DIR="$SCRIPT_DIR/templates"
+readonly GDBINIT_FILE="$TEMPLATE_DIR/gdbinit"
+readonly LLDBINIT_FILE="$TEMPLATE_DIR/lldbinit"
 readonly REMOTE_MAC_BASE="~/Desktop/Altivec"
 readonly REMOTE_IOS_BASE="~/tmp_altivec"
 
@@ -134,7 +134,6 @@ log_instructions() {
   echo "***************************************************"
   echo ""
 }
-
 
 cleanup() {
   if [ "$DEV_NEEDS_CLEANUP" = true ]; then
