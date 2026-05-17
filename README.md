@@ -32,7 +32,8 @@ lets you update the engine independently.
 
 ### Add Submodule to your Repo
 
-See [altivec_compose.yml](altivec_compose.yml) for the full template and notes on
+See [templates/compose.yml](templates/compose.yml) for the full template and
+notes on
 first-time Claude setup.
 
 ```bash
@@ -44,7 +45,7 @@ git init MyCoolRepo && cd MyCoolRepo
 git submodule add https://github.com/jeffreybergier/AltivecIntelligence.git altivec
 
 # 2. Copy the template compose file to your project root:
-cp altivec/altivec_compose.yml ./compose.yml
+cp altivec/templates/compose.yml ./compose.yml
 
 # 3. Build docker images (one time):
 docker compose build
@@ -163,6 +164,8 @@ docker compose run --rm altivec "cd libs/libcurl && make mac"
 
 # 2. Build the CURLmac app
 docker compose run --rm altivec "cd apps/CURLmac && make"
+
+# If required libs are missing, bootstrap now runs automatically for CURL apps
 ```
 
 ##### iPhone Build (CURLphone)
@@ -172,6 +175,14 @@ docker compose run --rm altivec "cd libs/libcurl && make phone"
 
 # 2. Build the CURLphone app
 docker compose run --rm altivec "cd apps/CURLphone && make"
+
+# If required libs are missing, bootstrap now runs automatically for CURL apps
+```
+
+##### libcurl Cleanup (Keep Final Outputs)
+```bash
+# Removes heavy intermediates, keeps build-*/lib, build-*/include, tarballs
+docker compose run --rm altivec "cd libs/libcurl && make prune-intermediates"
 ```
 
 #### Deploying to Hardware
@@ -237,8 +248,18 @@ Host imacg4-tiger
 - [`apps`](./apps/): Sample projects and Makefiles
 - [`altivec_common_mac.mk`](./altivec_common_mac.mk): A "parent" Makefile with the general rules for compiling Mac apps
 - [`altivec_common_phone.mk`](./altivec_common_phone.mk): A "parent" Makefile with the general rules for compiling Phone apps
+- [`templates`](./templates/): Reusable templates for submodule consumers (compose + thin Makefiles)
 - `altivec_deploy.sh`: Automated SSH deployment script.
 - `AGENTS.md`: AI mandates and technical constraints.
+
+## 🧩 Submodule Makefile Templates
+Use these thin templates in your app repo:
+- [`templates/Makefile.mac`](./templates/Makefile.mac)
+- [`templates/Makefile.phone`](./templates/Makefile.phone)
+
+Optional libcurl knobs:
+- `LIBCURL_REQUIRED=1`: enforce required curl artifacts at validate time.
+- `LIBCURL_DIR=/path/to/altivec/libs/libcurl/build-mac|build-phone`: override autodetect.
 
 ## 🚧 To-Do List
 1. [ ] Enable on-device debugging for iOS
@@ -274,4 +295,3 @@ This project is licensed under the **MIT License**. This is a permissive license
 that allows for free use, modification, and distribution. Note that it downloads
 various open-source and closed-source components (like OSXCross and Apple's
 SDKs) which carry their own licenses.
-

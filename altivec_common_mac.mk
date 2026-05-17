@@ -22,6 +22,9 @@ SDK_MAC_NEW_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_NEW).sdk
 LD64_LLD=/osxcross/target/bin/ld64.lld
 export OSXCROSS_NO_DSYMUTIL=1
 
+# --- Engine Root ---
+ALTIVEC_ROOT ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
 # --- Default Build Settings ---
 BUILD_DIR ?= build-release
 INT_DIR = $(BUILD_DIR)/Intermediates
@@ -35,10 +38,15 @@ MAC_LIBS = -framework AppKit -lobjc
 LEGACY_GCC_FLAGS = -fno-stack-protector -fno-common -fno-zero-initialized-in-bss
 
 # --- Auto-detect libcurl ---
-LIBCURL_SEARCH_PATHS = ../../altivec/libs/libcurl/build-mac ../../../altivec/libs/libcurl/build-mac /repo/user/altivec/libs/libcurl/build-mac /repo/altivec/libs/libcurl/build-mac
-LIBCURL_PATH = $(firstword $(wildcard $(addsuffix /lib/libcurl.a, $(LIBCURL_SEARCH_PATHS))))
-ifneq ($(LIBCURL_PATH),)
-  LIBCURL_DIR = $(patsubst %/lib/libcurl.a,%,$(LIBCURL_PATH))
+LIBCURL_DIR ?=
+LIBCURL_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/libcurl/build-mac
+ifeq ($(strip $(LIBCURL_DIR)),)
+  LIBCURL_PATH = $(firstword $(wildcard $(addsuffix /lib/libcurl.a, $(LIBCURL_SEARCH_PATHS))))
+  ifneq ($(LIBCURL_PATH),)
+    LIBCURL_DIR = $(patsubst %/lib/libcurl.a,%,$(LIBCURL_PATH))
+  endif
+endif
+ifneq ($(strip $(LIBCURL_DIR)),)
   MAC_FLAGS += -I$(LIBCURL_DIR)/include
   MAC_LIBS += -framework SystemConfiguration \
               $(LIBCURL_DIR)/lib/libAICURLConnection.a \
@@ -47,6 +55,15 @@ ifneq ($(LIBCURL_PATH),)
               $(LIBCURL_DIR)/lib/libcrypto.a \
               $(LIBCURL_DIR)/lib/libz.a
 endif
+
+# --- Optional libcurl hard requirements ---
+LIBCURL_REQUIRED ?= 0
+LIBCURL_REQUIRED_FILES = $(LIBCURL_DIR)/lib/libAICURLConnection.a \
+                         $(LIBCURL_DIR)/lib/libcurl.a \
+                         $(LIBCURL_DIR)/lib/libssl.a \
+                         $(LIBCURL_DIR)/lib/libcrypto.a \
+                         $(LIBCURL_DIR)/lib/libz.a \
+                         $(LIBCURL_DIR)/lib/cacert.pem
 
 # --- Target Paths ---
 BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
@@ -89,6 +106,8 @@ analyze: validate
 validate:
 	@if [ ! -d "$(SDK_MAC_OLD_PATH)" ]; then echo " [!] ERROR: Mac SDK 10.5 missing at $(SDK_MAC_OLD_PATH)"; exit 1; fi
 	@if [ ! -d "$(SDK_MAC_NEW_PATH)" ]; then echo " [!] ERROR: Mac SDK 11.3 missing at $(SDK_MAC_NEW_PATH)"; exit 1; fi
+	@if [ "$(LIBCURL_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libcurl-bootstrap; fi
+	@if [ "$(LIBCURL_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libs-ready; fi
 	@for dir in $(patsubst -I%,%,$(filter -I%,$(MAC_FLAGS))) $(patsubst -L%,%,$(filter -L%,$(MAC_LIBS))); do \
 		if [ ! -d "$$dir" ]; then \
 			echo " [!] ERROR: Dependency directory missing: $$dir"; \
@@ -96,6 +115,35 @@ validate:
 			exit 1; \
 		fi; \
 	done
+
+libcurl-bootstrap:
+	@if [ "$(LIBCURL_REQUIRED)" != "1" ]; then exit 0; fi
+	@if [ -z "$(LIBCURL_DIR)" ]; then \
+		echo " [!] ERROR: libcurl is required but LIBCURL_DIR is not set or auto-detected."; \
+		echo "     Set LIBCURL_DIR=/path/to/libs/libcurl/build-mac or build at $(ALTIVEC_ROOT)/libs/libcurl/build-mac."; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(LIBCURL_DIR)/lib/libcurl.a" ]; then \
+		echo " [!] Missing libcurl artifacts, running bootstrap build..."; \
+		$(MAKE) -C $(ALTIVEC_ROOT)/libs/libcurl mac-static; \
+	fi
+
+libs-ready:
+	@if [ "$(LIBCURL_REQUIRED)" != "1" ]; then exit 0; fi
+	@if [ -z "$(LIBCURL_DIR)" ]; then \
+		echo " [!] ERROR: libcurl is required but LIBCURL_DIR is not set or auto-detected."; \
+		echo "     Set LIBCURL_DIR=/path/to/libs/libcurl/build-mac."; \
+		exit 1; \
+	fi
+	@missing=""; \
+	for f in $(LIBCURL_REQUIRED_FILES); do \
+		if [ ! -f "$$f" ]; then missing="$$missing $$f"; fi; \
+	done; \
+	if [ -n "$$missing" ]; then \
+		echo " [!] ERROR: Missing required libcurl artifacts:$$missing"; \
+		echo "     Build them with: make -C $(ALTIVEC_ROOT)/libs/libcurl mac-static"; \
+		exit 1; \
+	fi
 
 # --- Internal File Targets ---
 
@@ -210,4 +258,4 @@ $(INT_DIR)/arm/%.o: %.c
 	@$(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -arch arm64 -isysroot $(SDK_MAC_NEW_PATH) \
 	    $(MAC_FLAGS) $(CLANG_EXTRA_WARNINGS) -c $< -o $@
 
-.PHONY: release debug clean analyze validate
+.PHONY: release debug clean analyze validate libcurl-bootstrap libs-ready

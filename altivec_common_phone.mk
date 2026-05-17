@@ -6,6 +6,7 @@ CLANG14 = /usr/bin/clang
 DSYMUTIL = /usr/bin/dsymutil-14
 BIN_DIR = /osxcross/target/bin
 IOS_SDK_PATH = /osxcross/target/SDK/iPhoneOS8.4.sdk
+ALTIVEC_ROOT ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 # --- Default Build Settings ---
 BUILD_DIR ?= build-release
@@ -22,12 +23,25 @@ ALL_SOURCES = $(SOURCES) $(EXTRA_SOURCES)
 OBJS = $(addprefix $(INT_DIR)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) $(EXTRA_SOURCES:.m=.o) $(EXTRA_SOURCES:.c=.o)))
 
 # --- Auto-detect libcurl ---
-LIBCURL_SEARCH_PATHS = ../../altivec/libs/libcurl/build-phone ../../../altivec/libs/libcurl/build-phone /repo/user/altivec/libs/libcurl/build-phone /repo/altivec/libs/libcurl/build-phone
-LIBCURL_PATH = $(firstword $(wildcard $(addsuffix /lib/libcurl.a, $(LIBCURL_SEARCH_PATHS))))
-ifneq ($(LIBCURL_PATH),)
-  LIBCURL_DIR = $(patsubst %/lib/libcurl.a,%,$(LIBCURL_PATH))
+LIBCURL_DIR ?=
+LIBCURL_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/libcurl/build-phone
+ifeq ($(strip $(LIBCURL_DIR)),)
+  LIBCURL_PATH = $(firstword $(wildcard $(addsuffix /lib/libcurl.a, $(LIBCURL_SEARCH_PATHS))))
+  ifneq ($(LIBCURL_PATH),)
+    LIBCURL_DIR = $(patsubst %/lib/libcurl.a,%,$(LIBCURL_PATH))
+  endif
+endif
+ifneq ($(strip $(LIBCURL_DIR)),)
   EXTRA_FLAGS += -I$(LIBCURL_DIR)/include
 endif
+
+LIBCURL_REQUIRED ?= 0
+LIBCURL_REQUIRED_FILES = $(LIBCURL_DIR)/lib/libAICURLConnection.a \
+                         $(LIBCURL_DIR)/lib/libcurl.a \
+                         $(LIBCURL_DIR)/lib/libssl.a \
+                         $(LIBCURL_DIR)/lib/libcrypto.a \
+                         $(LIBCURL_DIR)/lib/libz.a \
+                         $(LIBCURL_DIR)/lib/cacert.pem
 
 # --- Flags ---
 IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wconversion -Wsign-conversion -Wfloat-conversion \
@@ -37,7 +51,7 @@ IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wco
             -B$(BIN_DIR)
 
 IOS_FRAMEWORKS = -framework UIKit -framework Foundation -framework CoreGraphics
-ifneq ($(LIBCURL_PATH),)
+ifneq ($(strip $(LIBCURL_DIR)),)
   IOS_FRAMEWORKS += $(LIBCURL_DIR)/lib/libAICURLConnection.a \
                     $(LIBCURL_DIR)/lib/libcurl.a \
                     $(LIBCURL_DIR)/lib/libssl.a \
@@ -68,6 +82,8 @@ analyze: validate
 
 validate:
 	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi
+	@if [ "$(LIBCURL_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libcurl-bootstrap; fi
+	@if [ "$(LIBCURL_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libs-ready; fi
 	@for dir in $(patsubst -I%,%,$(filter -I%,$(IOS_FLAGS))) $(patsubst -L%,%,$(filter -L%,$(IOS_FRAMEWORKS))); do \
 		if [ ! -d "$$dir" ]; then \
 			echo " [!] ERROR: Dependency directory missing: $$dir"; \
@@ -75,6 +91,35 @@ validate:
 			exit 1; \
 		fi; \
 	done
+
+libcurl-bootstrap:
+	@if [ "$(LIBCURL_REQUIRED)" != "1" ]; then exit 0; fi
+	@if [ -z "$(LIBCURL_DIR)" ]; then \
+		echo " [!] ERROR: libcurl is required but LIBCURL_DIR is not set or auto-detected."; \
+		echo "     Set LIBCURL_DIR=/path/to/libs/libcurl/build-phone or build at $(ALTIVEC_ROOT)/libs/libcurl/build-phone."; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(LIBCURL_DIR)/lib/libcurl.a" ]; then \
+		echo " [!] Missing libcurl artifacts, running bootstrap build..."; \
+		$(MAKE) -C $(ALTIVEC_ROOT)/libs/libcurl phone-static; \
+	fi
+
+libs-ready:
+	@if [ "$(LIBCURL_REQUIRED)" != "1" ]; then exit 0; fi
+	@if [ -z "$(LIBCURL_DIR)" ]; then \
+		echo " [!] ERROR: libcurl is required but LIBCURL_DIR is not set or auto-detected."; \
+		echo "     Set LIBCURL_DIR=/path/to/libs/libcurl/build-phone."; \
+		exit 1; \
+	fi
+	@missing=""; \
+	for f in $(LIBCURL_REQUIRED_FILES); do \
+		if [ ! -f "$$f" ]; then missing="$$missing $$f"; fi; \
+	done; \
+	if [ -n "$$missing" ]; then \
+		echo " [!] ERROR: Missing required libcurl artifacts:$$missing"; \
+		echo "     Build them with: make -C $(ALTIVEC_ROOT)/libs/libcurl phone-static"; \
+		exit 1; \
+	fi
 
 # --- Internal File Targets ---
 
@@ -97,9 +142,9 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin
 		echo "  > copying resources" ; \
 		cp -R $(RES_DIR)/* $@/ ; \
 	fi
-	@if [ -f "$(CURL_DIR)/lib/cacert.pem" ]; then \
+	@if [ -f "$(LIBCURL_DIR)/lib/cacert.pem" ]; then \
 		echo "  > copying cacert.pem" ; \
-		cp "$(CURL_DIR)/lib/cacert.pem" $@/ ; \
+		cp "$(LIBCURL_DIR)/lib/cacert.pem" $@/ ; \
 	fi
 	@echo "  > extracting symbols"
 	@$(DSYMUTIL) $< -o $(BUILD_DIR)/$(APP_NAME).dSYM
@@ -130,4 +175,4 @@ $(INT_DIR)/%.o: %.c
 	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
 	           $(IOS_FLAGS) -c $< -o $@
 
-.PHONY: release debug clean analyze validate
+.PHONY: release debug clean analyze validate libcurl-bootstrap libs-ready

@@ -1,0 +1,11 @@
+# Thin template for app repos that include Altivec as a submodule.
+
+APP_NAME = MyMacApp
+SOURCES = main.m AppDelegate.m
+RES_DIR = Resources
+
+# Optional override if libcurl is required for this app:
+# LIBCURL_REQUIRED = 1
+# LIBCURL_DIR = ../altivec/libs/libcurl/build-mac
+
+include altivec/altivec_common_mac.mk

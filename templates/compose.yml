@@ -6,7 +6,7 @@
 #    git submodule add https://github.com/jeffreybergier/AltivecIntelligence.git altivec
 #
 # 2. Copy this file to your project root:
-#    cp altivec/altivec_compose.yml ./compose.yml
+#    cp altivec/templates/compose.yml ./compose.yml
 #
 # 3. Build docker images (one time):
 #    docker compose build
