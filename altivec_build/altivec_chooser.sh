@@ -77,7 +77,7 @@ show_banner
 echo "Select an AI agent:"
 echo "  1) Claude (@anthropic-ai/claude-code)"
 echo "  2) Codex  (@openai/codex)"
-echo "  3) Gemini (@google/gemini-cli)"
+echo "  3) Antigravity (Google) (agy)"
 echo "  4) Pi       (Advanced) (@earendil-works/pi-coding-agent)"
 echo "  5) OpenCode (Advanced) (@opencode-ai)"
 echo ""
@@ -93,8 +93,8 @@ case "$choice" in
     launcher="launch_standard codex --yolo"
     ;;
   3)
-    pkg="@google/gemini-cli"
-    launcher="launch_standard gemini --yolo"
+    pkg=""
+    launcher="launch_standard agy --dangerously-skip-permissions"
     ;;
   4)
     pkg="@earendil-works/pi-coding-agent"
@@ -110,9 +110,11 @@ case "$choice" in
     ;;
 esac
 
-log "main" "Updating $pkg"
-npm update -g "$pkg"
-hash -r
+if [[ -n "$pkg" ]]; then
+  log "main" "Updating $pkg"
+  npm update -g "$pkg"
+  hash -r
+fi
 
-log "main" "Launching $pkg"
+log "main" "Launching $launcher"
 $launcher

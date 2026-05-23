@@ -150,12 +150,14 @@ RUN npm install -g \
       qrcode-terminal \
       @anthropic-ai/claude-code \
       @openai/codex \
-      @google/gemini-cli \
       @earendil-works/pi-coding-agent \
       opencode-ai@latest \
       prettier \
       js-beautify \
       webcrack
+
+# 7b. Antigravity CLI (Google's replacement for Gemini CLI)
+RUN curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --dir /usr/local/bin
 
 # 8. rcodesign — real Apple code signer (osxcross only ships
 #    codesign_allocate, which reserves space but cannot sign).
