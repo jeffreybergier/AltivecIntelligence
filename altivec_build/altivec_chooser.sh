@@ -35,27 +35,6 @@ require_cmd() {
   exit 1
 }
 
-launch_claude() {
-  local npm_root=""
-  local claude_bin=""
-  local claude_wrapper=""
-
-  npm_root="$(npm root -g)"
-  claude_bin="$npm_root/@anthropic-ai/claude-code/bin/claude.exe"
-  claude_wrapper="$npm_root/@anthropic-ai/claude-code/cli-wrapper.cjs"
-
-  if [[ -x "$claude_bin" ]]; then
-    exec "$claude_bin" --dangerously-skip-permissions
-  fi
-
-  if [[ -f "$claude_wrapper" ]]; then
-    exec node "$claude_wrapper" --dangerously-skip-permissions
-  fi
-
-  log "launch_claude" "Claude install is incomplete after npm update"
-  exit 1
-}
-
 launch_standard() {
   local cmd="$1"
   local flag="${2:-}"
@@ -75,18 +54,18 @@ require_cmd node
 echo ""
 show_banner
 echo "Select an AI agent:"
-echo "  1) Claude (@anthropic-ai/claude-code)"
-echo "  2) Codex  (@openai/codex)"
-echo "  3) Antigravity (Google) (agy)"
-echo "  4) Pi       (Advanced) (@earendil-works/pi-coding-agent)"
-echo "  5) OpenCode (Advanced) (@opencode-ai)"
+echo "  1) Claude"
+echo "  2) Codex"
+echo "  3) Antigravity"
+echo "  4) Pi"
+echo "  5) OpenCode"
 echo ""
 read -rp "Choice [1-5]: " choice
 
 case "$choice" in
   1)
     pkg="@anthropic-ai/claude-code"
-    launcher="launch_claude"
+    launcher="launch_standard claude --dangerously-skip-permissions"
     ;;
   2)
     pkg="@openai/codex"
@@ -116,5 +95,5 @@ if [[ -n "$pkg" ]]; then
   hash -r
 fi
 
-log "main" "Launching $launcher"
+log "main" "$launcher"
 $launcher
