@@ -179,8 +179,15 @@ RUN set -eux; \
     rm -rf /tmp/rcodesign.tar.gz "/tmp/apple-codesign-${RCODESIGN_VERSION}-${RC_ARCH}"; \
     rcodesign --version
 
-# 9. Move into Working Directory
+# 9. Working Directory & Runtime
 WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-lc"]
 CMD ["/bin/bash"]
+
+# 10. GHCR image layer — adds libcurl on top of altivec-builder.
+#     Only built when explicitly targeted (docker compose skips it).
+FROM altivec-builder AS ghcr-action
+WORKDIR /repo/altivec
+COPY libs/libcurl/ ./libs/libcurl/
+RUN cd libs/libcurl && make all
 

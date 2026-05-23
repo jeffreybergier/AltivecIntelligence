@@ -12,19 +12,19 @@
 #    docker compose build
 #
 # 4. Build an example app from the Altivec submodule:
-#    docker compose run --rm altivec "cd /repo/altivec/apps/SingleWindow && make"
+#    docker compose run --rm altivec "cd /repo/user/altivec/apps/SingleWindow && make"
 #
 # 5. Use with AI Assistant:
 #    docker compose run --rm altivec-intelligence
 #
 #    Preinstalled AI CLI's:
 #    - Claude Code
-#    - OpenAI Codec
-#    - Gemini CLI
-#    - Pi.dev
+#    - Codex
+#    - Antigravity
+#    - Pi
 #    - OpenCode
 #
-#    The entrypoint script will automatically select which one is available.
+#    An interactive chooser prompts you to pick one.
 #
 
 services:
@@ -32,17 +32,8 @@ services:
     extends:
       file: ./altivec/compose.yml
       service: altivec-intelligence
-    environment:
-      # Claude Code token (if using Claude Code as AI assistant)
-      # Create .env file and add key and token for Docker to read it
-      # Do not commit .env file into your git repo
-      - CLAUDE_CODE_OAUTH_TOKEN
     volumes:
       - .:/repo/user
-      # Uncomment the following line to allow the AI to use your local SSH keys
-      # for deploying applications to your vintage Macs and iPhones.
-      # The :ro flag ensures the container cannot modify your host keys.
-      # - ~/.ssh:/root/.ssh:ro
     working_dir: /repo/user
 
   altivec:

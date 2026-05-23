@@ -33,20 +33,7 @@ services:
     volumes:
       ## Altivec Intelligence Repo
       - .:/repo/altivec
-      ## Claude Code Config and Auth
-      ### Note if you have never run Claude before run: 
-      ### `rmdir ~/.claude.json && touch ~/.claude.json` 
-      ### before starting docker
-      - ~/.claude.json:/root/.claude.json
-      - ~/.claude:/root/.claude
-      ## Codex Config and Auth
-      - ~/.codex:/root/.codex
-      ## Gemini Config and Auth
-      - ~/.gemini:/root/.gemini
-      ## Pi.dev Config and Auth
-      - ~/.pi:/root/.pi
-      ## OpenCode Config and Auth
-      - ~/.local/share/opencode:/root/.local/share/opencode
-      - ~/.config/opencode:/root/.config/opencode
+      ## AI Agent Config and Auth (home dir for container)
+      - ~/.altivec:/root
     entrypoint: /bin/bash
     command: -lc "./altivec_build/altivec_chooser.sh"
