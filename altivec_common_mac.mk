@@ -23,7 +23,12 @@ LD64_LLD=/osxcross/target/bin/ld64.lld
 export OSXCROSS_NO_DSYMUTIL=1
 
 # --- Engine Root ---
-ALTIVEC_ROOT ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+# Capture self-dir immediately (:=) so it resolves while this file is still
+# $(lastword MAKEFILE_LIST). With ?= alone the RHS is deferred and re-evaluates
+# later, after downstream Makefiles include other .mk/.env files — then
+# lastword points at those instead and ALTIVEC_ROOT silently mislocates.
+_altivec_self_dir := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+ALTIVEC_ROOT ?= $(_altivec_self_dir)
 
 # --- Default Build Settings ---
 BUILD_DIR ?= build-release

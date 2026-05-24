@@ -6,7 +6,12 @@ CLANG14 = /usr/bin/clang
 DSYMUTIL = /usr/bin/dsymutil-14
 BIN_DIR = /osxcross/target/bin
 IOS_SDK_PATH = /osxcross/target/SDK/iPhoneOS8.4.sdk
-ALTIVEC_ROOT ?= $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+# Capture self-dir immediately (:=) so it resolves while this file is still
+# $(lastword MAKEFILE_LIST). With ?= alone the RHS is deferred and re-evaluates
+# later, after downstream Makefiles include other .mk/.env files — then
+# lastword points at those instead and ALTIVEC_ROOT silently mislocates.
+_altivec_self_dir := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+ALTIVEC_ROOT ?= $(_altivec_self_dir)
 
 # --- Default Build Settings ---
 BUILD_DIR ?= build-release
