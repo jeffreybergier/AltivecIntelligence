@@ -39,14 +39,37 @@ PUBLIC_LIBS=$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
             $(PUBLIC_LIB_DIR)/libcrypto.a \
             $(PUBLIC_LIB_DIR)/libz.a
 
-all: static
+# --- AltivecCURL iOS Framework Settings (flat bundle, @rpath install_name) ---
+FRAMEWORK_NAME=AltivecCURL
+FRAMEWORK_BUNDLE=$(PUBLIC_LIB_DIR)/$(FRAMEWORK_NAME).framework
+FRAMEWORK_INSTALL_NAME=@rpath/$(FRAMEWORK_NAME).framework/$(FRAMEWORK_NAME)
+FRAMEWORK_VERSION=1.0.0
+DYLIB_LINK_FLAGS=-dynamiclib \
+                 -install_name $(FRAMEWORK_INSTALL_NAME) \
+                 -compatibility_version $(FRAMEWORK_VERSION) \
+                 -current_version $(FRAMEWORK_VERSION) \
+                 -Wl,-headerpad_max_install_names
+
+all: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem $(PUBLIC_INCLUDE_DIR)/.stamp $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-phone verify-dynamic prune-build-files
+	@echo "-----------------------------------------------------------"
+	@echo "PHONE STATIC + ALTIVECCURL FRAMEWORK BUILD SUCCESSFUL"
+	@echo "Libraries: $(PUBLIC_LIB_DIR)"
+	@echo "Framework: $(FRAMEWORK_BUNDLE)"
+	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
 
 static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
         $(PUBLIC_INCLUDE_DIR)/.stamp verify-phone prune-build-files
 	@echo "-----------------------------------------------------------"
-	@echo "PHONE UNIVERSAL (armv7 + arm64) BUILD SUCCESSFUL"
+	@echo "PHONE UNIVERSAL (armv7 + arm64) STATIC BUILD SUCCESSFUL"
 	@echo "Libraries: $(PUBLIC_LIB_DIR)"
 	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
+
+dynamic: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem $(PUBLIC_INCLUDE_DIR)/.stamp $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic prune-build-files
+	@echo "-----------------------------------------------------------"
+	@echo "PHONE ALTIVECCURL FRAMEWORK BUILD SUCCESSFUL"
+	@echo "Framework: $(FRAMEWORK_BUNDLE)"
 	@echo "-----------------------------------------------------------"
 
 aicc: $(PUBLIC_LIB_DIR)/libAICURLConnection.a \
@@ -221,7 +244,7 @@ LIBS="-lresolv" \
 	--with-zlib=$(PREFIX)/armv7 \
 	--enable-threaded-resolver \
 	--disable-alt-svc --disable-hsts \
-	--disable-ldap --disable-ldaps \
+	--disable-ldap --disable-ldaps --disable-symbol-hiding \
 	--prefix=$(PREFIX)/armv7 && \
 	grep -q '^#define HAVE_GETADDRINFO_THREADSAFE 1' lib/curl_config.h \
 	  || { echo " [!] armv7: HAVE_GETADDRINFO_THREADSAFE not set"; exit 1; } && \
@@ -249,7 +272,7 @@ LIBS="-lresolv" \
 	--with-zlib=$(PREFIX)/arm64 \
 	--enable-threaded-resolver \
 	--disable-alt-svc --disable-hsts \
-	--disable-ldap --disable-ldaps \
+	--disable-ldap --disable-ldaps --disable-symbol-hiding \
 	--prefix=$(PREFIX)/arm64 && \
 	grep -q '^#define HAVE_GETADDRINFO_THREADSAFE 1' lib/curl_config.h \
 	  || { echo " [!] arm64: HAVE_GETADDRINFO_THREADSAFE not set"; exit 1; } && \
@@ -316,17 +339,148 @@ $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h: AICURLConnection.h
 	mkdir -p $(PUBLIC_INCLUDE_DIR)
 	cp $< $@
 
+$(PUBLIC_INCLUDE_DIR)/AltivecCURL.h: AltivecCURL.h
+	mkdir -p $(PUBLIC_INCLUDE_DIR)
+	cp $< $@
+
 $(PUBLIC_INCLUDE_DIR)/.stamp: $(PREFIX)/lib/libcurl.a \
                               $(PREFIX)/lib/libssl.a \
                               $(PREFIX)/lib/libcrypto.a \
                               $(PREFIX)/lib/libz.a \
-                              $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h
+                              $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h \
+                              $(PUBLIC_INCLUDE_DIR)/AltivecCURL.h
 	mkdir -p $(PUBLIC_INCLUDE_DIR)
 	rm -rf $(PUBLIC_INCLUDE_DIR)/curl $(PUBLIC_INCLUDE_DIR)/openssl
 	cp -R $(PREFIX)/include/* $(PUBLIC_INCLUDE_DIR)/
 	touch $@
 
+# ============================================================
+# AltivecCURL.framework (iOS) — flat bundle layout, @rpath install_name.
+# Bundles AICURLConnection + curl + ssl + crypto + z into a single dylib.
+# ============================================================
+
+# Combined public C-API exports — intersection of armv7 + arm64.
+# Some openssl symbols are arch-specific (e.g. _aes_v8_* arm64-only); the
+# intersection ensures every arch's dylib can resolve every exported symbol.
+# nm -m + 'private external' filter drops zlib internal helpers.
+$(INTERMEDIATE)/c-exports.txt: $(STAMP_DIR)/curl-universal \
+                                $(STAMP_DIR)/openssl-universal \
+                                $(STAMP_DIR)/zlib-universal
+	@echo "--- Extracting public C exports (intersection of armv7 + arm64) ---"
+	mkdir -p $(INTERMEDIATE)
+	{ \
+	  for arch in armv7 arm64; do \
+	    { \
+	      $(NM) -gm $(PREFIX)/$$arch/lib/libcurl.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_curl_/ {print $$NF}'; \
+	      $(NM) -gm $(PREFIX)/$$arch/lib/libssl.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
+	      $(NM) -gm $(PREFIX)/$$arch/lib/libcrypto.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
+	      $(NM) -gm $(PREFIX)/$$arch/lib/libz.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
+	    } | sort -u; \
+	  done; \
+	} | sort | uniq -c | awk '$$1 == 2 {print $$2}' > $@
+
+# iOS uses the modern ObjC runtime on both armv7 and arm64
+$(INTERMEDIATE)/exports.txt: $(INTERMEDIATE)/c-exports.txt
+	cp $< $@
+	echo '_OBJC_CLASS_$$_AICURLConnection' >> $@
+	echo '_OBJC_METACLASS_$$_AICURLConnection' >> $@
+	echo '_OBJC_CLASS_$$_AIHTTPURLResponse' >> $@
+	echo '_OBJC_METACLASS_$$_AIHTTPURLResponse' >> $@
+
+# Per-arch dylib link — force_load every static archive
+$(INTERMEDIATE)/AltivecCURL-armv7.dylib: $(INTERMEDIATE)/exports.txt $(STAMP_DIR)/aicc-armv7
+	@echo "--- Linking AltivecCURL dylib (armv7) ---"
+	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports.txt \
+	  -Wl,-force_load,$(PREFIX)/armv7/lib/libAICURLConnection.a \
+	  -Wl,-force_load,$(PREFIX)/armv7/lib/libcurl.a \
+	  -Wl,-force_load,$(PREFIX)/armv7/lib/libssl.a \
+	  -Wl,-force_load,$(PREFIX)/armv7/lib/libcrypto.a \
+	  -Wl,-force_load,$(PREFIX)/armv7/lib/libz.a \
+	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
+	  -o $@
+
+$(INTERMEDIATE)/AltivecCURL-arm64.dylib: $(INTERMEDIATE)/exports.txt $(STAMP_DIR)/aicc-arm64
+	@echo "--- Linking AltivecCURL dylib (arm64) ---"
+	$(COMPILER_IOS) $(IOS_64_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports.txt \
+	  -Wl,-force_load,$(PREFIX)/arm64/lib/libAICURLConnection.a \
+	  -Wl,-force_load,$(PREFIX)/arm64/lib/libcurl.a \
+	  -Wl,-force_load,$(PREFIX)/arm64/lib/libssl.a \
+	  -Wl,-force_load,$(PREFIX)/arm64/lib/libcrypto.a \
+	  -Wl,-force_load,$(PREFIX)/arm64/lib/libz.a \
+	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
+	  -o $@
+
+# Fat dylib (armv7 + arm64)
+$(INTERMEDIATE)/AltivecCURL.dylib: $(INTERMEDIATE)/AltivecCURL-armv7.dylib \
+                                   $(INTERMEDIATE)/AltivecCURL-arm64.dylib
+	@echo "--- Merging armv7 + arm64 AltivecCURL dylib ---"
+	$(LIPO_MODERN) -create $^ -output $@
+
+# iOS Info.plist (flat framework)
+$(INTERMEDIATE)/Info.plist:
+	mkdir -p $(INTERMEDIATE)
+	printf '%s\n' \
+	  '<?xml version="1.0" encoding="UTF-8"?>' \
+	  '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+	  '<plist version="1.0">' \
+	  '<dict>' \
+	  '  <key>CFBundleDevelopmentRegion</key><string>en</string>' \
+	  '  <key>CFBundleExecutable</key><string>$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundleIdentifier</key><string>com.altivec.$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>' \
+	  '  <key>CFBundleName</key><string>$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundlePackageType</key><string>FMWK</string>' \
+	  '  <key>CFBundleShortVersionString</key><string>$(FRAMEWORK_VERSION)</string>' \
+	  '  <key>CFBundleVersion</key><string>1</string>' \
+	  '  <key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>' \
+	  '  <key>MinimumOSVersion</key><string>$(IOS_ARM64_MIN_VER)</string>' \
+	  '</dict>' \
+	  '</plist>' > $@
+
+# Assemble iOS-flat framework bundle (no Versions/, no symlinks)
+$(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME): $(INTERMEDIATE)/AltivecCURL.dylib \
+                                      $(INTERMEDIATE)/Info.plist \
+                                      $(PUBLIC_LIB_DIR)/cacert.pem \
+                                      $(PUBLIC_INCLUDE_DIR)/.stamp
+	@echo "--- Assembling AltivecCURL.framework (iOS flat layout) ---"
+	rm -rf $(FRAMEWORK_BUNDLE)
+	mkdir -p $(FRAMEWORK_BUNDLE)/Headers
+	cp $(INTERMEDIATE)/AltivecCURL.dylib $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
+	cp $(INTERMEDIATE)/Info.plist $(FRAMEWORK_BUNDLE)/Info.plist
+	cp $(PUBLIC_LIB_DIR)/cacert.pem $(FRAMEWORK_BUNDLE)/cacert.pem
+	cp -R $(PUBLIC_INCLUDE_DIR)/* $(FRAMEWORK_BUNDLE)/Headers/
+
+verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
+	@echo "--- Verifying AltivecCURL.framework (iOS) ---"
+	@info="`$(LIPO_MODERN) -info $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null`"; \
+	echo "  > $$info"; \
+	missing=0; \
+	for arch in armv7 arm64; do \
+		echo "$$info" | grep -qw "$$arch" || { \
+			echo " [!] ERROR: AltivecCURL missing $$arch"; \
+			missing=1; \
+		}; \
+	done; \
+	test -f $(FRAMEWORK_BUNDLE)/Info.plist || { echo " [!] ERROR: Info.plist missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/cacert.pem || { echo " [!] ERROR: cacert.pem missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/AltivecCURL.h || { echo " [!] ERROR: AltivecCURL.h umbrella missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/AICURLConnection.h || { echo " [!] ERROR: AICURLConnection.h missing"; missing=1; }; \
+	test -d $(FRAMEWORK_BUNDLE)/Headers/curl || { echo " [!] ERROR: curl/ headers missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/openssl/ssl.h || { echo " [!] ERROR: openssl/ headers missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/zlib.h || { echo " [!] ERROR: zlib.h missing"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _SSL_new' || { echo " [!] ERROR: _SSL_new not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _deflate' || { echo " [!] ERROR: _deflate not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: _curl_easy_init not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported"; missing=1; }; \
+	exit $$missing
+
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: all static aicc verify-phone prune-build-files clean
+.PHONY: all static dynamic aicc verify-phone verify-dynamic prune-build-files clean

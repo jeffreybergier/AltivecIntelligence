@@ -30,6 +30,7 @@ AR_MODERN=/usr/bin/llvm-ar-14
 RANLIB_MODERN=/usr/bin/llvm-ranlib-14
 LIPO_MODERN=/usr/bin/llvm-lipo-14
 LIBTOOL_MODERN=/usr/bin/llvm-libtool-darwin-14
+NM=/usr/bin/llvm-nm-14
 
 LIPO=$(BIN_DIR)/i386-apple-darwin9-lipo
 LIBTOOL=$(BIN_DIR)/i386-apple-darwin9-libtool
@@ -47,7 +48,9 @@ MAC_MIN_ARM64=11.0
 IOS_MIN_VER=4.3
 
 # PPC specific flags from altivec_common_mac.mk
-LEGACY_GCC_FLAGS=-fno-stack-protector -fno-common -fno-zero-initialized-in-bss
+# -fPIC: required so static .o files can be re-linked into AltivecCURL.dylib.
+#        Modern (x64/arm64) arches default to PIC; legacy GCC needs it explicit.
+LEGACY_GCC_FLAGS=-fno-stack-protector -fno-common -fno-zero-initialized-in-bss -fPIC
 PPC_COMPAT_FLAGS=$(LEGACY_GCC_FLAGS)
 
 # Jobs for parallel make

@@ -145,8 +145,14 @@ static size_t AIHeaderCallback(void *contents,
 
 + (NSString *)certPath;
 {
-  NSString *certPath = [[NSBundle mainBundle] pathForResource:@"cacert" 
-                                                       ofType:@"pem"];
+  // Try the framework bundle first (AltivecCURL.framework/Resources/),
+  // then fall back to the app's main bundle for static-link callers.
+  NSString *certPath = [[NSBundle bundleForClass:self] pathForResource:@"cacert"
+                                                                ofType:@"pem"];
+  if (certPath == nil) {
+    certPath = [[NSBundle mainBundle] pathForResource:@"cacert"
+                                               ofType:@"pem"];
+  }
   NSParameterAssert(certPath);
   return certPath;
 }
@@ -445,3 +451,26 @@ static size_t AIHeaderCallback(void *contents,
 }
 
 @end
+
+#pragma mark - clang __builtin_available runtime helper
+
+// Clang emits calls to __isPlatformVersionAtLeast for @available() checks.
+// Normally provided by libclang_rt.osx.a, which OSXCross does not ship —
+// stub it here so AltivecCURL.dylib is self-contained.
+#include <sys/sysctl.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+int32_t __isPlatformVersionAtLeast(uint32_t platform, uint32_t major,
+                                   uint32_t minor, uint32_t subminor) {
+  (void)subminor;
+  if (platform != 1) return 1;
+  char osrelease[64] = {0};
+  size_t size = sizeof(osrelease) - 1;
+  if (sysctlbyname("kern.osrelease", osrelease, &size, NULL, 0) != 0) return 1;
+  int darwin = atoi(osrelease);
+  int macMajor = (darwin >= 20) ? (darwin - 9) : 10;
+  int macMinor = (darwin >= 20) ? 0 : (darwin - 4);
+  if (macMajor != (int)major) return macMajor > (int)major;
+  return macMinor >= (int)minor;
+}
