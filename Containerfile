@@ -194,7 +194,7 @@ RUN set -eux; \
     curl -fsSL -o /usr/local/bin/ldid \
       "https://github.com/ProcursusTeam/ldid/releases/download/${LDID_VERSION}/${LDID_ASSET}"; \
     chmod +x /usr/local/bin/ldid; \
-    ldid -v
+    ldid 2>&1 | grep -q "Link Identity Editor"
 
 # 9. Working Directory & Runtime
 WORKDIR /repo/altivec
@@ -247,8 +247,8 @@ COPY altivec_common_phone.mk ./
 COPY apps/                   ./apps/
 RUN set -e; \
     for app in SingleWindow SingleScreen CURLmac CURLphone; do \
-      echo "=== Building $$app (release) ==="; \
-      make -C apps/$$app release; \
+      echo "=== Building $app (release) ==="; \
+      make -C apps/$app release; \
     done
 
 # Bake the rest of the runtime repo into /altivec/. Build-time-only files
