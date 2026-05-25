@@ -109,12 +109,12 @@ RUN curl -Ls https://github.com/radareorg/radare2/releases/download/6.1.4/radare
 
 # 4. Copy OSXCross and build base toolchain
 WORKDIR /osxcross
-COPY altivec_build/ ./altivec_build/
+COPY docker/ ./docker/
 
 # 5. Build OSXCross and Compilers
 
 RUN echo "Pre-Build: Altivec Intelligence" \
-      && ./altivec_build/altivec_prebuild.sh
+      && ./docker/prebuild.sh
 
 RUN echo "Build: osxcross" \
       && ./build.sh
@@ -127,7 +127,7 @@ RUN echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
       && rm -rf build
 
 RUN echo "Post-Build: Altivec Intelligence" \
-      && ./altivec_postbuild.sh \
+      && ./postbuild.sh \
       && rm -rf tarballs
 
 ENV PATH="/osxcross/target/bin:${PATH}"
@@ -179,6 +179,23 @@ RUN set -eux; \
     rm -rf /tmp/rcodesign.tar.gz "/tmp/apple-codesign-${RCODESIGN_VERSION}-${RC_ARCH}"; \
     rcodesign --version
 
+# 8b. ldid — pseudo-signer + entitlements editor for jailbroken iOS.
+#     Statically-linked binary from ProcursusTeam (musl-based; no glibc
+#     dependency on the host). Complements rcodesign above: rcodesign
+#     handles real-cert signing; ldid is the canonical tool for the
+#     ad-hoc / entitlements workflow that jailbreak tooling expects.
+ARG LDID_VERSION=v2.1.5-procursus7
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in \
+      amd64) LDID_ASSET=ldid_linux_x86_64 ;; \
+      arm64) LDID_ASSET=ldid_linux_aarch64 ;; \
+      *) echo "unsupported arch for ldid" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /usr/local/bin/ldid \
+      "https://github.com/ProcursusTeam/ldid/releases/download/${LDID_VERSION}/${LDID_ASSET}"; \
+    chmod +x /usr/local/bin/ldid; \
+    ldid -v
+
 # 9. Working Directory & Runtime
 WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-lc"]
@@ -205,16 +222,16 @@ COPY libs/libcurl/ ./libs/libcurl/
 RUN cd libs/libcurl && make all && make prune-intermediates
 
 # Bake the rest of the runtime repo into /altivec/. Build-time-only files
-# (Containerfile, compose.yml, altivec_build/, .github/) are deliberately
+# (Containerfile, compose.yml, docker/, .github/) are deliberately
 # excluded.
 COPY altivec_common_mac.mk   ./
 COPY altivec_common_phone.mk ./
 COPY AGENTS.md               ./
 COPY README.md               ./
-COPY README.FAQ.md           ./
 COPY LICENSE                 ./
 COPY apps/                   ./apps/
 COPY bin/                    ./bin/
+COPY docs/                   ./docs/
 COPY templates/              ./templates/
 
 # Recreate the AGENTS.md aliases that AI agents look for by name.

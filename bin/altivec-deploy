@@ -2,7 +2,8 @@
 
 # --- CONSTANTS ---
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly TEMPLATE_DIR="$SCRIPT_DIR/templates"
+readonly ALTIVEC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+readonly TEMPLATE_DIR="$ALTIVEC_ROOT/templates"
 readonly GDBINIT_FILE="$TEMPLATE_DIR/gdbinit"
 readonly LLDBINIT_FILE="$TEMPLATE_DIR/lldbinit"
 readonly REMOTE_MAC_BASE="~/Desktop/Altivec"
@@ -184,8 +185,18 @@ preflight_app() {
   done < <(find "$APP_DIR" -maxdepth 1 -name "*.dSYM")
 
   # Debugger inits
-  if [ -f "$GDBINIT_FILE" ]; then APP_GDBINIT="$GDBINIT_FILE"; log_item "Found gdbinit"; fi
-  if [ -f "$LLDBINIT_FILE" ]; then APP_LLDBINIT="$LLDBINIT_FILE"; log_item "Found lldbinit"; fi
+  if [ -f "$GDBINIT_FILE" ]; then
+    APP_GDBINIT="$GDBINIT_FILE"
+    log_item "Found gdbinit: $GDBINIT_FILE"
+  else
+    log_item "gdbinit: Not found ($GDBINIT_FILE)"
+  fi
+  if [ -f "$LLDBINIT_FILE" ]; then
+    APP_LLDBINIT="$LLDBINIT_FILE"
+    log_item "Found lldbinit: $LLDBINIT_FILE"
+  else
+    log_item "lldbinit: Not found ($LLDBINIT_FILE)"
+  fi
 
   return 0
 }

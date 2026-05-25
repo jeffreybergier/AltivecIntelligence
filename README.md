@@ -1,4 +1,4 @@
-[![AltiveIntelligence Fun 90's Header Image](altivec_build/README.thumb.png)](altivec_build/README.png)
+[![AltiveIntelligence Fun 90's Header Image](docs/README.thumb.png)](docs/README.png)
 
 # 🤖 Altivec Intelligence
 
@@ -22,7 +22,7 @@ niche community to make our favorite retro-tech more useful in the modern world.
 
 Below is a Quick Start Guide. For more detailed information about the project's
 origins, technical matrix, and safety considerations, please see the
-[**FAQ**](README.FAQ.md).
+[**FAQ**](docs/FAQ.md).
 
 ## 📦 Quick Start Guide
 
@@ -30,31 +30,30 @@ origins, technical matrix, and safety considerations, please see the
 your own app repository. This keeps your app code separate from the engine and
 lets you update the engine independently.
 
-### Add Submodule to your Repo
+### Set Up Your Project
 
 See [templates/compose.yml](templates/compose.yml) for the full template and
-notes on
-first-time Claude setup.
+notes on first-time AI assistant setup. No submodule needed — the GHCR image
+ships the full `/altivec/` toolchain.
 
 ```bash
-# 0. If you do not already have a repository for your app idea
-#    create a new repo using init
+# 0. If you do not already have a repository for your app idea,
+#    create one with git init
 git init MyCoolRepo && cd MyCoolRepo
 
-# 1. Add Altivec as a submodule:
-git submodule add https://github.com/jeffreybergier/AltivecIntelligence.git altivec
+# 1. Drop the template compose.yml into your project root:
+curl -fsSL https://raw.githubusercontent.com/jeffreybergier/AltivecIntelligence/main/templates/compose.yml \
+     -o compose.yml
 
-# 2. Copy the template compose file to your project root:
-cp altivec/templates/compose.yml ./compose.yml
+# 2. Pull the prebuilt image (one time, multi-GB — saves 5+ hours of osxcross build):
+docker compose pull
 
-# 3. Build docker images (one time):
-docker compose build
+# 3. Build your app (Makefile at the root of your project):
+docker compose run --rm altivec "make"
 
-# 4a. Use with Gemini CLI:
-docker compose run --rm altivec-gemini
-
-# 4b. Use with Claude Code:
-docker compose run --rm altivec-claude
+# 4. Use with AI assistant (interactive chooser picks
+#    Claude / Codex / Antigravity / Pi / OpenCode):
+docker compose run --rm altivec-intelligence
 ```
 
 ### Introduce the AI to Your Project
@@ -63,21 +62,21 @@ docker compose run --rm altivec-claude
 
 ```
 Hello, you are inside of a docker container that has a cross-compile 
-environment for building retro Mac and iPhone Apps. My app code is in /repo/user. 
-The Altivec engine and examples are in /repo/altivec. The cross-compiler 
+environment for building retro Mac and iPhone Apps. My app code is in /user. 
+The Altivec engine and examples are in /altivec. The cross-compiler 
 toolchain is in /osxcross. Please start by reading the README.md and AGENTS.md 
-files in the engine folder. Please always try create makefiles for my app using 
-the altive_common[mac|phone].mk files in the `/repo/altivec` folder so I can 
-ensure my makefiles are small and make apps compatible with many retro Apple 
-devices. Make sure you treat my repo (/repo/user) as the base location for your 
-work on my app.
+files in /altivec. Please always create makefiles for my app using 
+the altivec_common_[mac|phone].mk files in /altivec so I can ensure my 
+makefiles are small and make apps compatible with many retro Apple devices. 
+Make sure you treat my repo (/user) as the base location for your work on 
+my app.
 ```
 
 #### Make a New App Prompt
 
 ``` 
 I want to make my own app. My app will be called MyNewApp and I want you to use
-the SingleWindow app in the ./altivec/apps folder as a starting point to work
+the SingleWindow app in the /altivec/apps folder as a starting point to work
 from. Please store the new app in ./source along with its new Makefile. 
 After that please compile the app and ensure there are no warnings. I will
 run it to make sure it works. 
@@ -248,9 +247,9 @@ Host imacg4-tiger
 - [`apps`](./apps/): Sample projects and Makefiles
 - [`altivec_common_mac.mk`](./altivec_common_mac.mk): A "parent" Makefile with the general rules for compiling Mac apps
 - [`altivec_common_phone.mk`](./altivec_common_phone.mk): A "parent" Makefile with the general rules for compiling Phone apps
-- [`templates`](./templates/): Reusable templates for submodule consumers (compose + thin Makefiles)
-- [`bin/altivec-deploy`](./bin/altivec-deploy): Automated SSH deployment script.
-- `AGENTS.md`: AI mandates and technical constraints.
+- [`templates`](./templates/): Reusable templates for end users (compose + thin Makefiles for new app projects)
+- [`bin`](./bin/): Runtime scripts on `PATH` inside the image — `altivec-deploy` (push/run apps on hardware), `altivec-chooser` (AI CLI picker)
+- `AGENTS.md`: AI mandates and technical constraints (also surfaced as CLAUDE.md / GEMINI.md via symlink).
 
 ## 🧩 Submodule Makefile Templates
 Use these thin templates in your app repo:

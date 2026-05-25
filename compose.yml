@@ -14,10 +14,10 @@ services:
       dockerfile: Containerfile
       target: altivec-builder
     image: altivec-image
-    working_dir: /repo/altivec
+    working_dir: /altivec
     volumes:
       ## Altivec Intelligence Repo
-      - .:/repo/altivec
+      - .:/altivec
       
   altivec-intelligence:
     build:
@@ -29,10 +29,10 @@ services:
     tty: true
     environment:
       - IS_SANDBOX=1
-    working_dir: /repo/altivec
+    working_dir: /altivec
     volumes:
       ## Altivec Intelligence Repo
-      - .:/repo/altivec
+      - .:/altivec
       ## AI Agent Config and Auth (home dir for container)
       - ~/.altivec:/root
     entrypoint: /bin/bash

@@ -32,9 +32,10 @@ deprecation warnings as those will be common when dealing with these old API's.
 ## 🛠 Toolchain Overview
 - **Primary Toolchain:** OSXCross 0.13 (ppc-test branch)
 - **Host Architecture:** Ubuntu 22 (aarch64/x86_64)
-- **Installation Path:** `/osxcross/target/bin` (Automatically in `PATH`)
-- **Engine Root:** `/repo/altivec` (Mapped to the root of the Altivec Intelligence repository)
-- **User Root:** `/repo/user` (Mapped to the root of the current application being developed)
+- **Toolchain Path:** `/osxcross/target/bin` (on `PATH`)
+- **Altivec Root:** `/altivec` (toolchain repo baked into the image — `altivec_common_*.mk`, example `apps/`, `libs/libcurl/build-{mac,phone}` prebuilt outputs, `templates/`, `bin/`)
+- **User Root:** `/user` (the user's app project, mounted from the host)
+- **Altivec Scripts on PATH:** `/altivec/bin` provides `altivec-deploy` (push/run an app on real hardware) and `altivec-chooser` (interactive AI CLI launcher)
 
 ## 📦 Installed SDKs
 Located in /osxcross/target/SDK/:
@@ -53,16 +54,25 @@ Located in /osxcross/target/SDK/:
 
 ## 🔗 Library Build System (libcurl)
 Libraries (libcurl, openssl, zlib) are built as "Quad-Fat" static binaries (`.a`).
-- **Orchestration:** `libs/libcurl/Makefile` manages separate `Makefile-mac` and `Makefile-phone` builds.
+- **Orchestration:** `/altivec/libs/libcurl/Makefile` manages separate `Makefile-mac` and `Makefile-phone` builds. Prebuilt outputs ship in the GHCR image at `/altivec/libs/libcurl/build-{mac,phone}` — user apps link against these by default via `$(ALTIVEC_ROOT)` auto-resolution.
 - **AICURLConnection**: A robust `libcurl` wrapper with full `NSURLConnection` parity for asynchronous transfers and header parsing.
 - **Certificate Handling**: `cacert.pem` is automatically bundled with apps to ensure SSL verification works.
 
 ## 🚀 How to Build
 
-Projects use a modular Makefile system. App-specific Makefiles include a "Common" engine from the root.
+User apps include one of the common mk fragments from `/altivec/` by absolute path. A minimal user `Makefile` looks like:
+
+```makefile
+# /user/Makefile
+APP_NAME = MyApp
+SOURCES = main.m AppDelegate.m
+include /altivec/altivec_common_mac.mk   # or altivec_common_phone.mk
+```
+
+Templates for new apps live at `/altivec/templates/Makefile.{mac,phone}`. Worked example apps with full source are at `/altivec/apps/` (SingleWindow, SingleScreen, CURLmac, CURLphone).
 
 ```bash
-cd /repo/altivec/apps/SingleWindow # or SingleScreen
+cd /altivec/apps/SingleWindow # or SingleScreen
 
 # Standard Release Build (-O3)
 make

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# altivec_sdk_mac.sh - Recreates functional 10.6 SDK using Phracker sources
+# sdk_mac.sh - Recreates functional 10.6 SDK using Phracker sources
 
 set -e
 INPUT_DIR=$1

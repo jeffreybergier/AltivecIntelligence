@@ -44,10 +44,10 @@ echo "--- Applying Global Patches ---"
 cp build_gcc.sh build_gcc_ppc.sh
 
 # Prepare Intel version (default build_gcc.sh)
-patch build_gcc.sh --quiet < altivec_build/osxcross-build-gcc-intel.patch
+patch build_gcc.sh --quiet < docker/patches/osxcross-build-gcc-intel.patch
 
 # Prepare PPC version (build_gcc_ppc.sh)
-patch build_gcc_ppc.sh --quiet < altivec_build/osxcross-build-gcc-ppc.patch
+patch build_gcc_ppc.sh --quiet < docker/patches/osxcross-build-gcc-ppc.patch
 
 chmod +x build_gcc_ppc.sh build_gcc.sh
 
@@ -66,5 +66,5 @@ echo ">      iOS  8.4  SDK"
 curl -sL https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS8.4.sdk.tar.gz -o "$TARBALLS_DIR/iPhoneOS8.4.sdk.tar.gz"
 
 # Finalize
-cp altivec_build/altivec_postbuild.sh ./
+cp docker/postbuild.sh ./
 echo "--- Pre-build preparation complete ---"

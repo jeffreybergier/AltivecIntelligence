@@ -1,18 +1,26 @@
 ## AltivecIntelligence: Parent Project Setup
 # Use this file to "activate" the Altivec toolchain in your new repository.
+# No submodule needed — the GHCR image ships the full /altivec/ toolchain
+# (cross-compilers, SDKs, libcurl static libs, AI CLIs, example apps).
+#
+# Project rules and conventions for AI agents are documented at
+# /altivec/AGENTS.md inside the image (symlinked as CLAUDE.md / GEMINI.md
+# for agent-native discovery). User apps live at /user/.
 #
 # Usage:
-# 1. Add Altivec as a submodule:
-#    git submodule add https://github.com/jeffreybergier/AltivecIntelligence.git altivec
+# 1. Drop this file into your project root:
+#    curl -fsSL https://raw.githubusercontent.com/jeffreybergier/AltivecIntelligence/main/templates/compose.yml \
+#         -o compose.yml
 #
-# 2. Copy this file to your project root:
-#    cp altivec/templates/compose.yml ./compose.yml
+# 2. Pull the image (one time, multi-GB — saves you the 5+ hour osxcross build):
+#    docker compose pull
 #
-# 3. Build docker images (one time):
-#    docker compose build
+# 3. Try an example app baked into the image:
+#    docker compose run --rm altivec "cd /altivec/apps/SingleWindow && make"
 #
-# 4. Build an example app from the Altivec submodule:
-#    docker compose run --rm altivec "cd /repo/user/altivec/apps/SingleWindow && make"
+# 4. Build your own app (Makefile at the root of your project,
+#    starting from /altivec/templates/Makefile.mac or Makefile.phone):
+#    docker compose run --rm altivec "make"
 #
 # 5. Use with AI Assistant:
 #    docker compose run --rm altivec-intelligence
@@ -25,21 +33,26 @@
 #    - OpenCode
 #
 #    An interactive chooser prompts you to pick one.
-#
 
 services:
-  altivec-intelligence:
-    extends:
-      file: ./altivec/compose.yml
-      service: altivec-intelligence
-    volumes:
-      - .:/repo/user
-    working_dir: /repo/user
-
   altivec:
-    extends:
-      file: ./altivec/compose.yml
-      service: altivec
+    image: ghcr.io/jeffreybergier/altivec-intelligence:latest
+    working_dir: /user
     volumes:
-      - .:/repo/user
-    working_dir: /repo/user
+      ## Your project source
+      - .:/user
+
+  altivec-intelligence:
+    image: ghcr.io/jeffreybergier/altivec-intelligence:latest
+    stdin_open: true
+    tty: true
+    environment:
+      - IS_SANDBOX=1
+    working_dir: /user
+    volumes:
+      ## Your project source
+      - .:/user
+      ## AI Agent Config and Auth (persists on host at ~/.altivec)
+      - ~/.altivec:/root
+    entrypoint: /bin/bash
+    command: -lc "altivec-chooser"
