@@ -187,22 +187,22 @@ docker compose run --rm altivec "cd libs/libcurl && make prune-intermediates"
 
 #### Deploying to Hardware
 
-Use the `altivec_deploy.sh` script to quickly push and debug your apps on 
+Use the `altivec-deploy` script to quickly push and debug your apps on 
 actual hardware.
 
 **1. Run on your local Mac**:
 ```bash
-./altivec_deploy.sh apps/SingleWindow
+./bin/altivec-deploy apps/SingleWindow
 ```
 
 **2. Run on a remote Mac (via SSH)**:
 ```bash
-./altivec_deploy.sh apps/SingleWindow -d <mac_ip_or_hostname>
+./bin/altivec-deploy apps/SingleWindow -d <mac_ip_or_hostname>
 ```
 
 **3. Run on a jailbroken iPhone (via SSH)**:
 ```bash
-./altivec_deploy.sh apps/SingleScreen -d <iphone_ip_or_hostname>
+./bin/altivec-deploy apps/SingleScreen -d <iphone_ip_or_hostname>
 ```
 
 **Note on Deploying to iPhone**
@@ -249,7 +249,7 @@ Host imacg4-tiger
 - [`altivec_common_mac.mk`](./altivec_common_mac.mk): A "parent" Makefile with the general rules for compiling Mac apps
 - [`altivec_common_phone.mk`](./altivec_common_phone.mk): A "parent" Makefile with the general rules for compiling Phone apps
 - [`templates`](./templates/): Reusable templates for submodule consumers (compose + thin Makefiles)
-- `altivec_deploy.sh`: Automated SSH deployment script.
+- [`bin/altivec-deploy`](./bin/altivec-deploy): Automated SSH deployment script.
 - `AGENTS.md`: AI mandates and technical constraints.
 
 ## 🧩 Submodule Makefile Templates

@@ -1,12 +1,12 @@
 # AltivecIntelligence Deployment Specification
 
-This document describes the logic and requirements of the `altivec_deploy.sh` script, optimized for deploying applications to legacy and modern Apple systems.
+This document describes the logic and requirements of the `altivec-deploy` script, optimized for deploying applications to legacy and modern Apple systems.
 
 ## 1. Overview
 The script automates the discovery, transfer, installation, and debugging of applications on local or remote Darwin-based devices (Mac and iPhone). It prioritizes clear logic, robust preflights, and interactive debugging.
 
 ## 2. Command Line Interface
-- **Usage:** `./altivec_deploy.sh <path_to_app_or_build_dir> [-d <user@host>] [-y|--yes]`
+- **Usage:** `./bin/altivec-deploy <path_to_app_or_build_dir> [-d <user@host>] [-y|--yes]`
 - **Arguments:**
   - `<path_to_app_or_build_dir>`: Path to a `.app` bundle or a directory containing one.
   - `-d | --device <user@host>`: (Optional) SSH connection string for a remote target. If omitted, the script runs in Local Mode.
