@@ -214,13 +214,17 @@ $(STAMP_DIR)/curl-armv7: $(STAMP_DIR)/curl-armv7-source \
 	LDFLAGS="-L$(PREFIX)/armv7/lib" \
 LIBS="-lresolv" \
 	curl_cv_sizeof_size_t=4 \
+	curl_cv_getaddrinfo_threadsafe=yes \
 	./configure --host=arm-apple-darwin \
 	--disable-shared --enable-static \
 	--with-openssl=$(PREFIX)/armv7 \
 	--with-zlib=$(PREFIX)/armv7 \
+	--enable-threaded-resolver \
 	--disable-alt-svc --disable-hsts \
 	--disable-ldap --disable-ldaps \
 	--prefix=$(PREFIX)/armv7 && \
+	grep -q '^#define HAVE_GETADDRINFO_THREADSAFE 1' lib/curl_config.h \
+	  || { echo " [!] armv7: HAVE_GETADDRINFO_THREADSAFE not set"; exit 1; } && \
 	make -j$(JOBS) -C lib install && \
 	make -j$(JOBS) -C include install
 	touch $@
@@ -238,13 +242,17 @@ $(STAMP_DIR)/curl-arm64: $(STAMP_DIR)/curl-arm64-source \
 	LDFLAGS="-L$(PREFIX)/arm64/lib" \
 LIBS="-lresolv" \
 	curl_cv_sizeof_size_t=8 \
+	curl_cv_getaddrinfo_threadsafe=yes \
 	./configure --host=arm-apple-darwin \
 	--disable-shared --enable-static \
 	--with-openssl=$(PREFIX)/arm64 \
 	--with-zlib=$(PREFIX)/arm64 \
+	--enable-threaded-resolver \
 	--disable-alt-svc --disable-hsts \
 	--disable-ldap --disable-ldaps \
 	--prefix=$(PREFIX)/arm64 && \
+	grep -q '^#define HAVE_GETADDRINFO_THREADSAFE 1' lib/curl_config.h \
+	  || { echo " [!] arm64: HAVE_GETADDRINFO_THREADSAFE not set"; exit 1; } && \
 	make -j$(JOBS) -C lib install && \
 	make -j$(JOBS) -C include install
 	touch $@

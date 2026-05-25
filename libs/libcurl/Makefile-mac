@@ -262,13 +262,16 @@ $(STAMP_DIR)/curl-ppc.done: $(STAMP_DIR)/curl-ppc.extract | $(PREFIX)/lib/libz.a
 	CPPFLAGS="-I$(PREFIX)/ppc/include -DHAVE_ATOMIC=0" \
 	LDFLAGS="-L$(PREFIX)/ppc/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
+	curl_cv_getaddrinfo_threadsafe=yes \
 	./configure --host=powerpc-apple-darwin --disable-shared --enable-static \
-	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
+	--enable-threaded-resolver --disable-alt-svc --disable-hsts \
 	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/ppc --with-zlib=$(PREFIX)/ppc \
 	--prefix=$(PREFIX)/ppc && \
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
 	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
+	grep -q '^#define HAVE_GETADDRINFO_THREADSAFE 1' lib/curl_config.h \
+	  || { echo " [!] ppc: HAVE_GETADDRINFO_THREADSAFE not set"; exit 1; } && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	touch $@
 
@@ -280,13 +283,16 @@ $(STAMP_DIR)/curl-x86.done: $(STAMP_DIR)/curl-x86.extract | $(PREFIX)/lib/libz.a
 	CPPFLAGS="-I$(PREFIX)/x86/include -DHAVE_ATOMIC=0" \
 	LDFLAGS="-L$(PREFIX)/x86/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
+	curl_cv_getaddrinfo_threadsafe=yes \
 	./configure --host=i386-apple-darwin --disable-shared --enable-static \
-	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
+	--enable-threaded-resolver --disable-alt-svc --disable-hsts \
 	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/x86 --with-zlib=$(PREFIX)/x86 \
 	--prefix=$(PREFIX)/x86 && \
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
 	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
+	grep -q '^#define HAVE_GETADDRINFO_THREADSAFE 1' lib/curl_config.h \
+	  || { echo " [!] x86: HAVE_GETADDRINFO_THREADSAFE not set"; exit 1; } && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	touch $@
 
@@ -298,13 +304,16 @@ $(STAMP_DIR)/curl-x64.done: $(STAMP_DIR)/curl-x64.extract | $(PREFIX)/lib/libz.a
 	CPPFLAGS="-I$(PREFIX)/x64/include -DHAVE_ATOMIC=0" \
 	LDFLAGS="-L$(PREFIX)/x64/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
+	curl_cv_getaddrinfo_threadsafe=yes \
 	./configure --host=x86_64-apple-darwin --disable-shared --enable-static \
-	--disable-threaded-resolver --disable-alt-svc --disable-hsts \
+	--enable-threaded-resolver --disable-alt-svc --disable-hsts \
 	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/x64 --with-zlib=$(PREFIX)/x64 \
 	--prefix=$(PREFIX)/x64 && \
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
 	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
+	grep -q '^#define HAVE_GETADDRINFO_THREADSAFE 1' lib/curl_config.h \
+	  || { echo " [!] x64: HAVE_GETADDRINFO_THREADSAFE not set"; exit 1; } && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	touch $@
 
@@ -316,13 +325,16 @@ $(STAMP_DIR)/curl-arm64.done: $(STAMP_DIR)/curl-arm64.extract | $(PREFIX)/lib/li
 	CPPFLAGS="-I$(PREFIX)/arm64/include -DHAVE_ATOMIC=0" \
 	LDFLAGS="-L$(PREFIX)/arm64/lib" \
 	LIBS="-lssl -lcrypto -lz -lpthread -ldl" \
+	curl_cv_getaddrinfo_threadsafe=yes \
 	./configure --host=aarch64-apple-darwin --disable-shared --enable-static \
-	--disable-threaded-resolver --disable-hsts --disable-alt-svc \
+	--enable-threaded-resolver --disable-hsts --disable-alt-svc \
 	--disable-ldap --disable-ldaps \
 	--with-openssl=$(PREFIX)/arm64 --with-zlib=$(PREFIX)/arm64 \
 	--prefix=$(PREFIX)/arm64 && \
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
 	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
+	grep -q '^#define HAVE_GETADDRINFO_THREADSAFE 1' lib/curl_config.h \
+	  || { echo " [!] arm64: HAVE_GETADDRINFO_THREADSAFE not set"; exit 1; } && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	touch $@
 
