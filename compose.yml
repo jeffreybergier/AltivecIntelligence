@@ -36,4 +36,4 @@ services:
       ## AI Agent Config and Auth (home dir for container)
       - ~/.altivec:/root
     entrypoint: /bin/bash
-    command: -lc "./bin/altivec-chooser"
+    command: -lc "/altivec/bin/altivec-chooser"
