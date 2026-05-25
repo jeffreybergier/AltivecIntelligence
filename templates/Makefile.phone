@@ -1,4 +1,5 @@
-# Thin template for app repos that include Altivec as a submodule.
+# Thin template for app repos that use the Altivec GHCR image
+# (no submodule needed — /altivec/ is provided by the image).
 
 APP_NAME = MyPhoneApp
 SOURCES = main.m AppDelegate.m
@@ -6,6 +7,6 @@ RES_DIR = Resources
 
 # Optional override if libcurl is required for this app:
 # LIBCURL_REQUIRED = 1
-# LIBCURL_DIR = ../altivec/libs/libcurl/build-phone
+# LIBCURL_DIR = /altivec/libs/libcurl/build-phone
 
-include altivec/altivec_common_phone.mk
+include /altivec/altivec_common_phone.mk

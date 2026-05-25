@@ -8,4 +8,4 @@ LIBCURL_REQUIRED = 1
 # Resource files
 RESOURCES = $(wildcard Resources/*.png)
 
-include ../../altivec_common_phone.mk
+include /altivec/altivec_common_phone.mk

@@ -5,4 +5,4 @@ INFO_PLIST = Info.plist
 SOURCES = main.m AppDelegate.m
 
 # Import common Mac build engine
-include ../../altivec_common_mac.mk
+include /altivec/altivec_common_mac.mk

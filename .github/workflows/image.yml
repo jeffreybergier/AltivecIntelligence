@@ -5,8 +5,17 @@ on:
     branches: [main]
     paths:
       - 'Containerfile'
+      - '.dockerignore'
       - 'altivec_build/**'
       - 'libs/libcurl/**'
+      - 'altivec_common_*.mk'
+      - 'apps/**'
+      - 'bin/**'
+      - 'templates/**'
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'README.FAQ.md'
+      - 'LICENSE'
   workflow_dispatch:
 
 env:

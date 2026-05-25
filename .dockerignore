@@ -1,0 +1,30 @@
+# macOS metadata — sneaks in via directory COPYs
+**/.DS_Store
+
+# Local build artifacts — the image always builds fresh inside the container.
+# This protects against accidentally shipping host-built outputs that
+# would be the wrong arch anyway.
+apps/*/build-*
+apps/*/Intermediates
+libs/*/build-*
+libs/*/tarballs
+
+# Git / CI metadata
+.git/
+.github/
+.gitignore
+.dockerignore
+
+# Editor / IDE / AI agent local state
+*.swp
+*.swo
+.claudeignore
+.geminiignore
+.antigravitycli/
+.claude/
+.gemini/
+
+# Defensive — not COPY'd by the current Containerfile, but excluded
+# in case a future COPY . is added.
+Containerfile
+compose.yml

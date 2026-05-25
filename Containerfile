@@ -184,10 +184,44 @@ WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-lc"]
 CMD ["/bin/bash"]
 
-# 10. GHCR image layer — adds libcurl on top of altivec-builder.
+# 10. GHCR image layer — bakes the Altivec runtime repo into /altivec/.
+#     Builds the (slow) libcurl static libs and ships their build-mac and
+#     build-phone outputs in the image so GHCR consumers do NOT have to
+#     re-run the 5+ hour cross-compile locally. The mk files in
+#     altivec_common_*.mk expect $(ALTIVEC_ROOT)/libs/libcurl/build-{mac,phone}
+#     to exist — those paths resolve to /altivec/libs/libcurl/build-{mac,phone}
+#     here.
 #     Only built when explicitly targeted (docker compose skips it).
 FROM altivec-builder AS ghcr-action
-WORKDIR /repo/altivec
+WORKDIR /altivec
+
+# Build libcurl first so this slow layer is not invalidated by trivial
+# changes elsewhere in the repo. Outputs (build-mac/, build-phone/) are
+# preserved in the final image — that is the whole point of this stage.
+# prune-intermediates drops sources/objects/stamps while keeping the
+# build-*/lib and build-*/include trees apps actually link against;
+# done in the same RUN so the intermediates never form their own layer.
 COPY libs/libcurl/ ./libs/libcurl/
-RUN cd libs/libcurl && make all
+RUN cd libs/libcurl && make all && make prune-intermediates
+
+# Bake the rest of the runtime repo into /altivec/. Build-time-only files
+# (Containerfile, compose.yml, altivec_build/, .github/) are deliberately
+# excluded.
+COPY altivec_common_mac.mk   ./
+COPY altivec_common_phone.mk ./
+COPY AGENTS.md               ./
+COPY README.md               ./
+COPY README.FAQ.md           ./
+COPY LICENSE                 ./
+COPY apps/                   ./apps/
+COPY bin/                    ./bin/
+COPY templates/              ./templates/
+
+# Recreate the AGENTS.md aliases that AI agents look for by name.
+RUN ln -sf AGENTS.md CLAUDE.md \
+ && ln -sf AGENTS.md GEMINI.md
+
+# Put /altivec/bin on PATH so altivec-deploy and altivec-chooser are
+# callable by bare name (no ./ prefix, no .sh extension).
+ENV PATH="/altivec/bin:${PATH}"
 
