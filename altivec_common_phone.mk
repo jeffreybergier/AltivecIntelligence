@@ -28,6 +28,11 @@ ALL_SOURCES = $(SOURCES) $(EXTRA_SOURCES)
 OBJS = $(addprefix $(INT_DIR)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) $(EXTRA_SOURCES:.m=.o) $(EXTRA_SOURCES:.c=.o)))
 
 # --- Auto-detect libcurl ---
+# LIBCURL_LINKAGE picks how libcurl is linked into the app.
+#   static  (default): link the five .a archives directly into the binary.
+#   dynamic          : link against AltivecCURL.framework; the framework
+#                      is copied into <App>.app/Frameworks/ (iOS flat layout).
+LIBCURL_LINKAGE ?= static
 LIBCURL_DIR ?=
 LIBCURL_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/libcurl/build-phone
 ifeq ($(strip $(LIBCURL_DIR)),)
@@ -37,16 +42,26 @@ ifeq ($(strip $(LIBCURL_DIR)),)
   endif
 endif
 ifneq ($(strip $(LIBCURL_DIR)),)
-  EXTRA_FLAGS += -I$(LIBCURL_DIR)/include
+  ifeq ($(LIBCURL_LINKAGE),dynamic)
+    LIBCURL_FRAMEWORK = $(LIBCURL_DIR)/lib/AltivecCURL.framework
+    EXTRA_FLAGS += -F$(LIBCURL_DIR)/lib
+  else
+    EXTRA_FLAGS += -I$(LIBCURL_DIR)/include
+  endif
 endif
 
 LIBCURL_REQUIRED ?= 0
-LIBCURL_REQUIRED_FILES = $(LIBCURL_DIR)/lib/libAICURLConnection.a \
-                         $(LIBCURL_DIR)/lib/libcurl.a \
-                         $(LIBCURL_DIR)/lib/libssl.a \
-                         $(LIBCURL_DIR)/lib/libcrypto.a \
-                         $(LIBCURL_DIR)/lib/libz.a \
-                         $(LIBCURL_DIR)/lib/cacert.pem
+ifeq ($(LIBCURL_LINKAGE),dynamic)
+  LIBCURL_REQUIRED_FILES = $(LIBCURL_DIR)/lib/AltivecCURL.framework/AltivecCURL \
+                           $(LIBCURL_DIR)/lib/AltivecCURL.framework/cacert.pem
+else
+  LIBCURL_REQUIRED_FILES = $(LIBCURL_DIR)/lib/libAICURLConnection.a \
+                           $(LIBCURL_DIR)/lib/libcurl.a \
+                           $(LIBCURL_DIR)/lib/libssl.a \
+                           $(LIBCURL_DIR)/lib/libcrypto.a \
+                           $(LIBCURL_DIR)/lib/libz.a \
+                           $(LIBCURL_DIR)/lib/cacert.pem
+endif
 
 # --- Flags ---
 IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wconversion -Wsign-conversion -Wfloat-conversion \
@@ -57,11 +72,16 @@ IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wco
 
 IOS_FRAMEWORKS = -framework UIKit -framework Foundation -framework CoreGraphics
 ifneq ($(strip $(LIBCURL_DIR)),)
-  IOS_FRAMEWORKS += $(LIBCURL_DIR)/lib/libAICURLConnection.a \
-                    $(LIBCURL_DIR)/lib/libcurl.a \
-                    $(LIBCURL_DIR)/lib/libssl.a \
-                    $(LIBCURL_DIR)/lib/libcrypto.a \
-                    $(LIBCURL_DIR)/lib/libz.a
+  ifeq ($(LIBCURL_LINKAGE),dynamic)
+    IOS_FRAMEWORKS += -F$(LIBCURL_DIR)/lib -framework AltivecCURL \
+                      -Wl,-rpath,@executable_path/Frameworks
+  else
+    IOS_FRAMEWORKS += $(LIBCURL_DIR)/lib/libAICURLConnection.a \
+                      $(LIBCURL_DIR)/lib/libcurl.a \
+                      $(LIBCURL_DIR)/lib/libssl.a \
+                      $(LIBCURL_DIR)/lib/libcrypto.a \
+                      $(LIBCURL_DIR)/lib/libz.a
+  endif
 endif
 
 # --- Top Level Targets ---
@@ -104,9 +124,13 @@ libcurl-bootstrap:
 		echo "     Set LIBCURL_DIR=/path/to/libs/libcurl/build-phone or build at $(ALTIVEC_ROOT)/libs/libcurl/build-phone."; \
 		exit 1; \
 	fi
-	@if [ ! -f "$(LIBCURL_DIR)/lib/libcurl.a" ]; then \
-		echo " [!] Missing libcurl artifacts, running bootstrap build..."; \
-		$(MAKE) -C $(ALTIVEC_ROOT)/libs/libcurl phone-static; \
+	@probe="$(LIBCURL_DIR)/lib/libcurl.a"; target=phone-static; \
+	if [ "$(LIBCURL_LINKAGE)" = "dynamic" ]; then \
+		probe="$(LIBCURL_DIR)/lib/AltivecCURL.framework/AltivecCURL"; target=phone-all; \
+	fi; \
+	if [ ! -e "$$probe" ]; then \
+		echo " [!] Missing libcurl artifact ($$probe), running bootstrap build ($$target)..."; \
+		$(MAKE) -C $(ALTIVEC_ROOT)/libs/libcurl $$target; \
 	fi
 
 libs-ready:
@@ -147,7 +171,11 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin
 		echo "  > copying resources" ; \
 		cp -R $(RES_DIR)/* $@/ ; \
 	fi
-	@if [ -f "$(LIBCURL_DIR)/lib/cacert.pem" ]; then \
+	@if [ "$(LIBCURL_LINKAGE)" = "dynamic" ] && [ -d "$(LIBCURL_FRAMEWORK)" ]; then \
+		echo "  > embedding AltivecCURL.framework" ; \
+		mkdir -p $@/Frameworks ; \
+		cp -RP $(LIBCURL_FRAMEWORK) $@/Frameworks/ ; \
+	elif [ -f "$(LIBCURL_DIR)/lib/cacert.pem" ]; then \
 		echo "  > copying cacert.pem" ; \
 		cp "$(LIBCURL_DIR)/lib/cacert.pem" $@/ ; \
 	fi

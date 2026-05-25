@@ -4,6 +4,7 @@ SOURCES = main.m DownloadViewController.m CrossPlatform.m
 INFO_PLIST = Info.plist
 
 LIBCURL_REQUIRED = 1
+LIBCURL_LINKAGE = dynamic
 
 # Resource files
 RESOURCES = $(wildcard Resources/*.png)

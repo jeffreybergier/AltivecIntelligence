@@ -1,5 +1,5 @@
 #import "DownloadViewController.h"
-#import <AICURLConnection.h>
+#import <AltivecCURL/AICURLConnection.h>
 #import "CrossPlatform.h"
 
 @implementation DownloadViewController
@@ -196,7 +196,7 @@
     float progress = (float)[receivedData_ length] / (float)expectedContentLength_;
     [progressView_ XP_setProgress:progress animated:YES];
   }
-  NSString *sizeStr = [NSString XP_stringFromByteCount:[receivedData_ length]];
+  NSString *sizeStr = [NSString XP_stringFromByteCount:(long long)[receivedData_ length]];
   [statusLabel_ setText:[NSString stringWithFormat:@"Receiving: %@...", sizeStr]];
 }
 
@@ -219,7 +219,7 @@
 {
   [downloadButton_ setEnabled:YES];
   [progressView_ XP_setProgress:1.0 animated:YES];
-  NSString *sizeStr = [NSString XP_stringFromByteCount:[receivedData_ length]];
+  NSString *sizeStr = [NSString XP_stringFromByteCount:(long long)[receivedData_ length]];
   [statusLabel_ setText:[NSString stringWithFormat:@"Success! %@", sizeStr]];
   UIImage *image = [[UIImage alloc] initWithData:receivedData_];
   if (image) { [resultImageView_ setImage:image]; [image release]; }

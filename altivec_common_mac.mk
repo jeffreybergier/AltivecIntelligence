@@ -43,6 +43,11 @@ MAC_LIBS = -framework AppKit -lobjc
 LEGACY_GCC_FLAGS = -fno-stack-protector -fno-common -fno-zero-initialized-in-bss
 
 # --- Auto-detect libcurl ---
+# LIBCURL_LINKAGE picks how libcurl is linked into the app.
+#   static  (default): link the five .a archives directly into each slice.
+#   dynamic          : link against AltivecCURL.framework; the framework
+#                      is copied into <App>.app/Contents/Frameworks/.
+LIBCURL_LINKAGE ?= static
 LIBCURL_DIR ?=
 LIBCURL_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/libcurl/build-mac
 ifeq ($(strip $(LIBCURL_DIR)),)
@@ -52,23 +57,34 @@ ifeq ($(strip $(LIBCURL_DIR)),)
   endif
 endif
 ifneq ($(strip $(LIBCURL_DIR)),)
-  MAC_FLAGS += -I$(LIBCURL_DIR)/include
-  MAC_LIBS += -framework SystemConfiguration \
-              $(LIBCURL_DIR)/lib/libAICURLConnection.a \
-              $(LIBCURL_DIR)/lib/libcurl.a \
-              $(LIBCURL_DIR)/lib/libssl.a \
-              $(LIBCURL_DIR)/lib/libcrypto.a \
-              $(LIBCURL_DIR)/lib/libz.a
+  ifeq ($(LIBCURL_LINKAGE),dynamic)
+    LIBCURL_FRAMEWORK = $(LIBCURL_DIR)/lib/AltivecCURL.framework
+    MAC_FLAGS += -F$(LIBCURL_DIR)/lib
+    MAC_LIBS  += -F$(LIBCURL_DIR)/lib -framework AltivecCURL
+  else
+    MAC_FLAGS += -I$(LIBCURL_DIR)/include
+    MAC_LIBS  += -framework SystemConfiguration \
+                 $(LIBCURL_DIR)/lib/libAICURLConnection.a \
+                 $(LIBCURL_DIR)/lib/libcurl.a \
+                 $(LIBCURL_DIR)/lib/libssl.a \
+                 $(LIBCURL_DIR)/lib/libcrypto.a \
+                 $(LIBCURL_DIR)/lib/libz.a
+  endif
 endif
 
 # --- Optional libcurl hard requirements ---
 LIBCURL_REQUIRED ?= 0
-LIBCURL_REQUIRED_FILES = $(LIBCURL_DIR)/lib/libAICURLConnection.a \
-                         $(LIBCURL_DIR)/lib/libcurl.a \
-                         $(LIBCURL_DIR)/lib/libssl.a \
-                         $(LIBCURL_DIR)/lib/libcrypto.a \
-                         $(LIBCURL_DIR)/lib/libz.a \
-                         $(LIBCURL_DIR)/lib/cacert.pem
+ifeq ($(LIBCURL_LINKAGE),dynamic)
+  LIBCURL_REQUIRED_FILES = $(LIBCURL_DIR)/lib/AltivecCURL.framework/AltivecCURL \
+                           $(LIBCURL_DIR)/lib/AltivecCURL.framework/Resources/cacert.pem
+else
+  LIBCURL_REQUIRED_FILES = $(LIBCURL_DIR)/lib/libAICURLConnection.a \
+                           $(LIBCURL_DIR)/lib/libcurl.a \
+                           $(LIBCURL_DIR)/lib/libssl.a \
+                           $(LIBCURL_DIR)/lib/libcrypto.a \
+                           $(LIBCURL_DIR)/lib/libz.a \
+                           $(LIBCURL_DIR)/lib/cacert.pem
+endif
 
 # --- Target Paths ---
 BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
@@ -128,9 +144,13 @@ libcurl-bootstrap:
 		echo "     Set LIBCURL_DIR=/path/to/libs/libcurl/build-mac or build at $(ALTIVEC_ROOT)/libs/libcurl/build-mac."; \
 		exit 1; \
 	fi
-	@if [ ! -f "$(LIBCURL_DIR)/lib/libcurl.a" ]; then \
-		echo " [!] Missing libcurl artifacts, running bootstrap build..."; \
-		$(MAKE) -C $(ALTIVEC_ROOT)/libs/libcurl mac-static; \
+	@probe="$(LIBCURL_DIR)/lib/libcurl.a"; target=mac-static; \
+	if [ "$(LIBCURL_LINKAGE)" = "dynamic" ]; then \
+		probe="$(LIBCURL_DIR)/lib/AltivecCURL.framework/AltivecCURL"; target=mac-all; \
+	fi; \
+	if [ ! -e "$$probe" ]; then \
+		echo " [!] Missing libcurl artifact ($$probe), running bootstrap build ($$target)..."; \
+		$(MAKE) -C $(ALTIVEC_ROOT)/libs/libcurl $$target; \
 	fi
 
 libs-ready:
@@ -166,6 +186,11 @@ $(BUNDLE): $(UNIVERSAL_BIN)
 	@if [ -d "$(RES_DIR)" ] && [ "$$(ls -A $(RES_DIR) 2>/dev/null)" ]; then \
 		echo "  > copying resources" ; \
 		cp -R $(RES_DIR)/* $@/Contents/Resources/ ; \
+	fi
+	@if [ "$(LIBCURL_LINKAGE)" = "dynamic" ] && [ -d "$(LIBCURL_FRAMEWORK)" ]; then \
+		echo "  > embedding AltivecCURL.framework" ; \
+		mkdir -p $@/Contents/Frameworks ; \
+		cp -RP $(LIBCURL_FRAMEWORK) $@/Contents/Frameworks/ ; \
 	fi
 	@echo "  > extracting symbols (x64, arm)"
 	@if [ -f "$(INT_DIR)/x64.bin" ]; then $(DSYMUTIL) $(INT_DIR)/x64.bin -o $(BUILD_DIR)/$(APP_NAME).x64.dSYM; fi

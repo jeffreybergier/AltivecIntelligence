@@ -1,5 +1,5 @@
 #import "DownloadWindowController.h"
-#import <AICURLConnection.h>
+#import <AltivecCURL/AICURLConnection.h>
 
 #pragma mark - Cross-Platform Implementations
 
@@ -10,8 +10,8 @@
   if (bytes < 1024) return [NSString stringWithFormat:@"%lld B", bytes];
   double count = (double)bytes;
   NSArray *units = [NSArray arrayWithObjects:@"B", @"KB", @"MB", @"GB", nil];
-  int i = 0;
-  while (count >= 1024 && i < [units count] - 1) {
+  NSUInteger i = 0;
+  while (count >= 1024 && i + 1 < [units count]) {
     count /= 1024.0;
     i++;
   }
@@ -71,15 +71,17 @@
 - (NSDictionary *)data { return data_; }
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView;
-{ 
-  return (NSInteger)[sortedKeys_ count]; 
+{
+  (void)tableView;
+  return (NSInteger)[sortedKeys_ count];
 }
 
-- (id)tableView:(NSTableView *)tableView 
-    objectValueForTableColumn:(NSTableColumn *)tableColumn 
+- (id)tableView:(NSTableView *)tableView
+    objectValueForTableColumn:(NSTableColumn *)tableColumn
                           row:(NSInteger)row;
 {
-  NSString *key = [sortedKeys_ objectAtIndex:row];
+  (void)tableView;
+  NSString *key = [sortedKeys_ objectAtIndex:(NSUInteger)row];
   if ([[tableColumn identifier] isEqualToString:@"Key"]) return key;
   return [data_ objectForKey:key];
 }
@@ -178,6 +180,7 @@
 
 - (void)downloadButtonClicked:(id)sender;
 {
+  (void)sender;
   NSString *urlStr = [urlField_ stringValue];
   NSURL *url = [NSURL URLWithString:urlStr];
   if (!url) return;
@@ -226,16 +229,18 @@
 
 - (void)connection:(id)connection didReceiveData:(NSData *)data;
 {
+  (void)connection;
   [receivedData_ appendData:data];
   if (![progressIndicator_ isIndeterminate]) {
     [progressIndicator_ incrementBy:(double)[data length]];
   }
-  NSString *size = [NSString XP_stringFromByteCount:[receivedData_ length]];
+  NSString *size = [NSString XP_stringFromByteCount:(long long)[receivedData_ length]];
   [statusLabel_ setStringValue:[NSString stringWithFormat:@"Recv: %@", size]];
 }
 
 - (void)connection:(id)connection didFailWithError:(NSError *)error;
 {
+  (void)connection;
   [progressIndicator_ setIndeterminate:NO];
   [progressIndicator_ setMaxValue:1.0];
   [progressIndicator_ setDoubleValue:1.0];
@@ -246,6 +251,7 @@
 
 - (void)connectionDidFinishLoading:(id)connection;
 {
+  (void)connection;
   [progressIndicator_ setDoubleValue:[progressIndicator_ maxValue]];
   [downloadButton_ setEnabled:YES];
   NSImage *img = [[[NSImage alloc] initWithData:receivedData_] autorelease];

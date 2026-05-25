@@ -98,11 +98,13 @@
 
 - (void)applicationWillFinishLaunching:(NSNotification *)aNotification;
 {
+  (void)aNotification;
   [MainMenu setupMenu];
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification;
 {
+  (void)aNotification;
   _windowController = [[DownloadWindowController alloc] init];
   [_windowController showWindow:self];
 }
@@ -116,20 +118,21 @@
 @end
 
 // --- Main ---
-int main(int argc, char *argv[])
+int main(void)
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   NSApplication *app = [NSApplication sharedApplication];
-  
+
   AppDelegate *appDelegate = [[[AppDelegate alloc] init] autorelease];
   [app setDelegate:appDelegate];
-  
+
   [app run];
-  
+
   [pool release];
   return 0;
 }
 
 int __isPlatformVersionAtLeast(int p, int maj, int min, int rev) {
+    (void)p; (void)maj; (void)min; (void)rev;
     return 1;
 }

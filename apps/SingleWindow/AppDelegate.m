@@ -110,11 +110,13 @@
 
 - (void)applicationWillFinishLaunching:(NSNotification *)aNotification;
 {
+  (void)aNotification;
   [MainMenu setupMenu];
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification;
 {
+  (void)aNotification;
   NSRect frame = NSMakeRect(0, 0, 400, 400);
   XPWindowStyleMask styleMask = XPWindowStyleMaskTitled 
                               | XPWindowStyleMaskMiniaturizable 

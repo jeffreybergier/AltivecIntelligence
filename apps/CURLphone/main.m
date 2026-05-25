@@ -6,7 +6,7 @@
 #import <UIKit/UIKit.h>
 #import "DownloadViewController.h"
 #import "CrossPlatform.h"
-#import <AICURLConnection.h>
+#import <AltivecCURL/AICURLConnection.h>
 
 // --- KeyValueTableViewController Interface ---
 // A table view controller that displays the versions of the linked 
@@ -51,10 +51,10 @@
   return 1;
 }
 
-- (NSInteger)tableView:(UITableView *)tableView 
+- (NSInteger)tableView:(UITableView *)tableView
     numberOfRowsInSection:(NSInteger)section;
 {
-  return [sortedKeys_ count];
+  return (NSInteger)[sortedKeys_ count];
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView 
@@ -68,7 +68,7 @@
                                    reuseIdentifier:CellIdentifier] autorelease];
   }
   
-  NSString *key = [sortedKeys_ objectAtIndex:[indexPath row]];
+  NSString *key = [sortedKeys_ objectAtIndex:(NSUInteger)[indexPath row]];
   [[cell textLabel] setText:key];
   [[cell detailTextLabel] setText:[versions_ objectForKey:key]];
   
