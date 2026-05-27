@@ -201,6 +201,13 @@ WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-lc"]
 CMD ["/bin/bash"]
 
+# Put /altivec/bin on PATH so altivec-deploy and altivec-chooser are
+# callable by bare name (no ./ prefix, no .sh extension). Lives in the
+# base stage so the dev compose (which bind-mounts the repo at /altivec
+# and targets altivec-builder) gets the same PATH as the prebuilt GHCR
+# image — the bind-mount supplies the files at runtime.
+ENV PATH="/altivec/bin:${PATH}"
+
 # 10. GHCR image layer — bakes the Altivec runtime repo into /altivec/.
 #     Builds the (slow) libcurl artifacts and ships their build-mac and
 #     build-phone outputs in the image so GHCR consumers do NOT have to
@@ -265,8 +272,4 @@ COPY templates/              ./templates/
 # Recreate the AGENTS.md aliases that AI agents look for by name.
 RUN ln -sf AGENTS.md CLAUDE.md \
  && ln -sf AGENTS.md GEMINI.md
-
-# Put /altivec/bin on PATH so altivec-deploy and altivec-chooser are
-# callable by bare name (no ./ prefix, no .sh extension).
-ENV PATH="/altivec/bin:${PATH}"
 

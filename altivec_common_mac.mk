@@ -116,23 +116,46 @@ debug: validate
 
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -rf build-release build-debug
+	@rm -rf build-release build-debug $(ANALYZE_OUTPUT_DIR)
+
+# --- Static analyzer ---
+# Local Makefiles set ANALYZE_DIRS to the same dirs they vpath sources from,
+# so basenames like 'foo.c' resolve to a real path. vpath rewrites
+# prerequisite lookups for make rules but does NOT rewrite a recipe's argv,
+# so the analyzer (which we invoke directly on source files, not via the
+# pattern rules) needs its own resolution step.
+ANALYZE_DIRS       ?= .
+ANALYZE_OUTPUT_DIR ?= build-analyze
+ANALYZE_OUTPUT     ?= $(ANALYZE_OUTPUT_DIR)/analyze.txt
+analyze_find        = $(firstword $(foreach d,$(ANALYZE_DIRS),$(wildcard $(d)/$(1))))
+ANALYZE_SOURCES     = $(foreach s,$(ALL_SOURCES),$(call analyze_find,$(s)))
 
 analyze: validate
+	@mkdir -p $(ANALYZE_OUTPUT_DIR)
 	@echo "--- Running Clang Static Analyzer (x86_64) ---"
+	@echo "  > writing report to $(ANALYZE_OUTPUT)"
 	@$(COMPILER_X64) --analyze -Xanalyzer -analyzer-output=text \
 		-target x86_64-apple-macos$(MAC_MIN_MID) -arch x86_64 -isysroot $(SDK_MAC_NEW_PATH) \
-		$(MAC_FLAGS) $(CLANG_EXTRA_WARNINGS) $(ALL_SOURCES)
+		$(MAC_FLAGS) $(CLANG_EXTRA_WARNINGS) $(ANALYZE_SOURCES) > $(ANALYZE_OUTPUT) 2>&1 || true
+	@warnings=$$(grep -cE '^.+:[0-9]+:[0-9]+: warning:' $(ANALYZE_OUTPUT) 2>/dev/null || true); \
+	errors=$$(grep -cE '^.+:[0-9]+:[0-9]+: error:' $(ANALYZE_OUTPUT) 2>/dev/null || true); \
+	echo "  > $${warnings:-0} warning(s), $${errors:-0} error(s) — see $(ANALYZE_OUTPUT)"
+
+# Directories the local Makefile wants validated before a build/analyze runs.
+# Mirrors ANALYZE_DIRS in shape: a positive list, only what's explicitly given
+# gets checked. Dep dirs (cJSON, qrcodegen, libcurl headers, etc.) are
+# intentionally NOT included by default — those are managed by their own
+# build systems and have their own bootstrap targets.
+VALIDATE_PATHS ?=
 
 validate:
 	@if [ ! -d "$(SDK_MAC_OLD_PATH)" ]; then echo " [!] ERROR: Mac SDK 10.5 missing at $(SDK_MAC_OLD_PATH)"; exit 1; fi
 	@if [ ! -d "$(SDK_MAC_NEW_PATH)" ]; then echo " [!] ERROR: Mac SDK 11.3 missing at $(SDK_MAC_NEW_PATH)"; exit 1; fi
 	@if [ "$(LIBCURL_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libcurl-bootstrap; fi
 	@if [ "$(LIBCURL_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libs-ready; fi
-	@for dir in $(patsubst -I%,%,$(filter -I%,$(MAC_FLAGS))) $(patsubst -L%,%,$(filter -L%,$(MAC_LIBS))); do \
+	@for dir in $(VALIDATE_PATHS); do \
 		if [ ! -d "$$dir" ]; then \
-			echo " [!] ERROR: Dependency directory missing: $$dir"; \
-			echo "     This likely means a required library (like libcurl) hasn't been built."; \
+			echo " [!] ERROR: Project directory missing: $$dir"; \
 			exit 1; \
 		fi; \
 	done

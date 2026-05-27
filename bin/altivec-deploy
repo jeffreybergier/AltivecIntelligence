@@ -23,6 +23,10 @@ APP_DSYM_PATHS=()
 APP_NAME=""
 APP_GDBINIT=""
 APP_LLDBINIT=""
+APP_ENV_FILE=""     # auto-discovered .env (walked upward from APP_DIR)
+APP_TEMP_DIR=""     # /tmp/altivec-deploy.$$ — holds generated init files
+APP_GDBINIT_USE=""  # gdbinit actually passed to gdb (template, or merged copy)
+APP_LLDBINIT_USE="" # lldbinit actually passed to lldb (template, or merged copy)
 
 # Device Preflight
 DEV_IS_REMOTE=false
@@ -148,6 +152,93 @@ cleanup() {
       $DEV_SSH_CMD "rm -rf $REMOTE_IOS_BASE"
     fi
   fi
+  # Always nuke the local temp dir if we created one. The generated init
+  # files contain the secrets from .env, so we don't want them lingering
+  # in /tmp after the debugger exits.
+  if [ -n "$APP_TEMP_DIR" ] && [ -d "$APP_TEMP_DIR" ]; then
+    rm -rf "$APP_TEMP_DIR"
+  fi
+}
+
+# Walk upward from $APP_DIR looking for a .env file. Stops at filesystem root
+# or after 8 hops, whichever comes first. Sets APP_ENV_FILE on hit; leaves
+# it empty otherwise (which is a perfectly fine outcome — the script then
+# uses the original debugger templates unmodified).
+find_env_file() {
+  local dir
+  dir=$(cd "$APP_DIR" 2>/dev/null && pwd) || return 0
+  local i=0
+  while [ $i -lt 8 ]; do
+    if [ -f "$dir/.env" ]; then
+      APP_ENV_FILE="$dir/.env"
+      return 0
+    fi
+    [ "$dir" = "/" ] && break
+    dir=$(cd "$dir/.." && pwd)
+    i=$((i + 1))
+  done
+}
+
+# Concatenate the template file + one `set environment KEY VALUE`
+# (gdb) or `settings set target.env-vars KEY=VALUE` (lldb) line per .env
+# entry. Skips blanks, comments, and any line whose key doesn't look like an
+# environment-variable name. Always produces $output, even when .env is
+# absent (just the template, no env block) — single code path downstream.
+# Args: $1 template path (may be ""), $2 output path, $3 mode (gdb|lldb)
+build_debugger_init() {
+  local template="$1" output="$2" mode="$3"
+  local key value line
+
+  : > "$output"
+  if [ -n "$template" ] && [ -f "$template" ]; then
+    cat "$template" >> "$output"
+    echo "" >> "$output"
+  fi
+
+  [ -z "$APP_ENV_FILE" ] && return 0
+  [ ! -f "$APP_ENV_FILE" ] && return 0
+
+  echo "## auto-injected from $APP_ENV_FILE" >> "$output"
+  while IFS='' read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|\#*) continue ;;
+      *=*)    ;;
+      *)      continue ;;
+    esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    key=$(printf '%s' "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    case "$key" in
+      [A-Za-z_]*) ;;
+      *) continue ;;
+    esac
+    if [ "$mode" = "gdb" ]; then
+      printf 'set environment %s %s\n' "$key" "$value" >> "$output"
+    else
+      printf 'settings set target.env-vars %s=%s\n' "$key" "$value" >> "$output"
+    fi
+  done < "$APP_ENV_FILE"
+}
+
+# Generate the temp gdbinit/lldbinit pair into $APP_TEMP_DIR and set
+# APP_GDBINIT_USE / APP_LLDBINIT_USE to point at them. The remote path
+# logic relies on these files being named exactly "gdbinit" / "lldbinit"
+# so they scp into $REMOTE_MAC_BASE with the same basename the existing
+# `-x $REMOTE_MAC_BASE/gdbinit` invocation already expects.
+prepare_debugger_inits() {
+  if [ -z "$APP_ENV_FILE" ]; then
+    # No env to inject; use the templates directly.
+    APP_GDBINIT_USE="$APP_GDBINIT"
+    APP_LLDBINIT_USE="$APP_LLDBINIT"
+    return 0
+  fi
+  APP_TEMP_DIR="/tmp/altivec-deploy.$$"
+  mkdir -p "$APP_TEMP_DIR"
+  APP_GDBINIT_USE="$APP_TEMP_DIR/gdbinit"
+  APP_LLDBINIT_USE="$APP_TEMP_DIR/lldbinit"
+  build_debugger_init "$APP_GDBINIT"  "$APP_GDBINIT_USE"  gdb
+  build_debugger_init "$APP_LLDBINIT" "$APP_LLDBINIT_USE" lldb
+  log_item "Generated debugger inits with env from $(basename "$APP_ENV_FILE")"
 }
 
 preflight_app() {
@@ -196,6 +287,15 @@ preflight_app() {
     log_item "Found lldbinit: $LLDBINIT_FILE"
   else
     log_item "lldbinit: Not found ($LLDBINIT_FILE)"
+  fi
+
+  # .env discovery — env vars get injected into the debugger init at launch
+  # so the inferior process (the app under gdb/lldb) sees them via getenv().
+  find_env_file
+  if [ -n "$APP_ENV_FILE" ]; then
+    log_item "Found .env: $APP_ENV_FILE"
+  else
+    log_item ".env: Not found (no env-var injection)"
   fi
 
   return 0
@@ -363,15 +463,19 @@ preflight_summary() {
 
 execute_local() {
   local bin_path="$APP_BUNDLE_PATH/Contents/MacOS/$APP_NAME"
-  
+
+  prepare_debugger_inits
+
   if [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_LLDB" ]; then
     log_instructions "debugger"
-    # Use exec to replace the shell process with the debugger.
-    # This ensures that signals (like Ctrl+C) are handled directly by LLDB.
-    exec lldb -s "$APP_LLDBINIT" "$bin_path"
+    # Run as a foreground child (not exec) so the EXIT trap fires after
+    # the debugger quits and cleans up $APP_TEMP_DIR — the generated
+    # lldbinit contains plaintext secrets from .env. gdb/lldb install
+    # their own SIGINT handlers, so Ctrl+C still reaches the debugger.
+    lldb -s "$APP_LLDBINIT_USE" "$bin_path"
   elif [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_GDB" ]; then
     log_instructions "debugger"
-    exec gdb -x "$APP_GDBINIT" "$bin_path"
+    gdb -x "$APP_GDBINIT_USE" "$bin_path"
   else
     if [ "$NON_INTERACTIVE" = true ]; then
       echo "Executing $APP_NAME for $TIMEOUT seconds (--yes)..."
@@ -403,16 +507,21 @@ execute_remote_mac() {
   local remote_bin_path="$remote_app_path/Contents/MacOS/$APP_NAME"
   local transfer_list=()
   
+  prepare_debugger_inits
+
   $DEV_SSH_CMD "mkdir -p $REMOTE_MAC_BASE"
   DEV_NEEDS_CLEANUP=true
-  
-  # Prepare transfer list
+
+  # Prepare transfer list. The merged inits ($APP_*_USE) are named exactly
+  # `gdbinit` / `lldbinit` in $APP_TEMP_DIR so scp lands them in
+  # $REMOTE_MAC_BASE with the same basename the gdb/lldb invocations below
+  # already reference. Remote cleanup nukes $REMOTE_MAC_BASE on exit.
   transfer_list+=("$APP_ZIP_PATH")
   for dsym in "${APP_DSYM_PATHS[@]}"; do
     transfer_list+=("$dsym")
   done
-  [ -f "$APP_GDBINIT" ] && transfer_list+=("$APP_GDBINIT")
-  [ -f "$APP_LLDBINIT" ] && transfer_list+=("$APP_LLDBINIT")
+  [ -f "$APP_GDBINIT_USE" ]  && transfer_list+=("$APP_GDBINIT_USE")
+  [ -f "$APP_LLDBINIT_USE" ] && transfer_list+=("$APP_LLDBINIT_USE")
 
   # Perform a single transfer
   log_item "Transferring files to remote Mac..."

@@ -97,22 +97,45 @@ debug: validate
 
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -rf build-release build-debug
+	@rm -rf build-release build-debug $(ANALYZE_OUTPUT_DIR)
+
+# --- Static analyzer ---
+# Local Makefiles set ANALYZE_DIRS to the same dirs they vpath sources from,
+# so basenames like 'foo.c' resolve to a real path. vpath rewrites
+# prerequisite lookups for make rules but does NOT rewrite a recipe's argv,
+# so the analyzer (which we invoke directly on source files, not via the
+# pattern rules) needs its own resolution step.
+ANALYZE_DIRS       ?= .
+ANALYZE_OUTPUT_DIR ?= build-analyze
+ANALYZE_OUTPUT     ?= $(ANALYZE_OUTPUT_DIR)/analyze.txt
+analyze_find        = $(firstword $(foreach d,$(ANALYZE_DIRS),$(wildcard $(d)/$(1))))
+ANALYZE_SOURCES     = $(foreach s,$(ALL_SOURCES),$(call analyze_find,$(s)))
 
 analyze: validate
+	@mkdir -p $(ANALYZE_OUTPUT_DIR)
 	@echo "--- Running Clang Static Analyzer (arm64) ---"
+	@echo "  > writing report to $(ANALYZE_OUTPUT)"
 	@$(CLANG14) --analyze -Xanalyzer -analyzer-output=text \
 		-target arm64-apple-ios4.3 -arch arm64 -isysroot $(IOS_SDK_PATH) \
-		$(IOS_FLAGS) $(ALL_SOURCES)
+		$(IOS_FLAGS) $(ANALYZE_SOURCES) > $(ANALYZE_OUTPUT) 2>&1 || true
+	@warnings=$$(grep -cE '^.+:[0-9]+:[0-9]+: warning:' $(ANALYZE_OUTPUT) 2>/dev/null || true); \
+	errors=$$(grep -cE '^.+:[0-9]+:[0-9]+: error:' $(ANALYZE_OUTPUT) 2>/dev/null || true); \
+	echo "  > $${warnings:-0} warning(s), $${errors:-0} error(s) — see $(ANALYZE_OUTPUT)"
+
+# Directories the local Makefile wants validated before a build/analyze runs.
+# Mirrors ANALYZE_DIRS in shape: a positive list, only what's explicitly given
+# gets checked. Dep dirs (cJSON, qrcodegen, libcurl headers, etc.) are
+# intentionally NOT included by default — those are managed by their own
+# build systems and have their own bootstrap targets.
+VALIDATE_PATHS ?=
 
 validate:
 	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi
 	@if [ "$(LIBCURL_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libcurl-bootstrap; fi
 	@if [ "$(LIBCURL_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libs-ready; fi
-	@for dir in $(patsubst -I%,%,$(filter -I%,$(IOS_FLAGS))) $(patsubst -L%,%,$(filter -L%,$(IOS_FRAMEWORKS))); do \
+	@for dir in $(VALIDATE_PATHS); do \
 		if [ ! -d "$$dir" ]; then \
-			echo " [!] ERROR: Dependency directory missing: $$dir"; \
-			echo "     This likely means a required library (like libcurl) hasn't been built."; \
+			echo " [!] ERROR: Project directory missing: $$dir"; \
 			exit 1; \
 		fi; \
 	done
