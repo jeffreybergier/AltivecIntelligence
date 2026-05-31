@@ -34,7 +34,7 @@ deprecation warnings as those will be common when dealing with these old API's.
 - **Host Architecture:** Ubuntu 22 (aarch64/x86_64)
 - **Toolchain Path:** `/osxcross/target/bin` (on `PATH`)
 - **Altivec Root:** `/altivec` (toolchain repo baked into the image — `altivec_common_*.mk`, example `apps/`, `libs/libcurl/build-{mac,phone}` prebuilt outputs, `templates/`, `bin/`)
-- **User Root:** `/user` (the user's app project, mounted from the host)
+- **User Root:** `/repo/user` (the user's app project, mounted from the host)
 - **Altivec Scripts on PATH:** `/altivec/bin` provides `altivec-deploy` (push/run an app on real hardware) and `altivec-chooser` (interactive AI CLI launcher)
 
 ## 📦 Installed SDKs
@@ -63,7 +63,7 @@ Libraries (libcurl, openssl, zlib) are built as "Quad-Fat" static binaries (`.a`
 User apps include one of the common mk fragments from `/altivec/` by absolute path. A minimal user `Makefile` looks like:
 
 ```makefile
-# /user/Makefile
+# /repo/user/Makefile
 APP_NAME = MyApp
 SOURCES = main.m AppDelegate.m
 include /altivec/altivec_common_mac.mk   # or altivec_common_phone.mk

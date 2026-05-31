@@ -5,7 +5,7 @@
 #
 # Project rules and conventions for AI agents are documented at
 # /altivec/AGENTS.md inside the image (symlinked as CLAUDE.md / GEMINI.md
-# for agent-native discovery). User apps live at /user/.
+# for agent-native discovery). User apps live at /repo/user/.
 #
 # Usage:
 # 1. Drop this file into your project root:
@@ -37,10 +37,12 @@
 services:
   altivec:
     image: ghcr.io/jeffreybergier/altivec-intelligence:latest
-    working_dir: /user
+    working_dir: /repo/user
     volumes:
-      ## Your project source
-      - .:/user
+      - ~/.altivec:/root
+      - .:/repo/user
+      # Uncomment to add more tools into the container
+      # ../extras:/repo/extras
 
   altivec-intelligence:
     image: ghcr.io/jeffreybergier/altivec-intelligence:latest
@@ -48,11 +50,11 @@ services:
     tty: true
     environment:
       - IS_SANDBOX=1
-    working_dir: /user
+    working_dir: /repo/user
     volumes:
-      ## Your project source
-      - .:/user
-      ## AI Agent Config and Auth (persists on host at ~/.altivec)
       - ~/.altivec:/root
+      - .:/repo/user
+      # Uncomment to add more tools into the container
+      # ../extras:/repo/extras
     entrypoint: /bin/bash
     command: -lc "altivec-chooser"

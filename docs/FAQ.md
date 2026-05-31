@@ -24,28 +24,9 @@ That said, I want you to try. Even if the code is not good, if the app works
 for you, then it works for you and you should feel extremely accomplished.
 
 ### I want to use a different AI
-Go for it, just tell your AI to read the compose file and it will easily be 
-able to run commands inside the docker container from your host computer.
-
-### The AI keeps changing things when I just ask it questions
-This is one of my biggest annoyances with AI (worse with Gemini than Claude). 
-I often want its opinions before deciding how to move forward with changes. 
-My suggestion is to change your prompt:
-
-```
-Do not change any code, I just want to know your top 3 options for how I should
-do X
-```
-
-### The AI keeps overwriting my changes
-This is one of my biggest annoyances with AI (worse with Gemini than Claude). 
-If I change a file manually, the AI will often happily overwrite my changes. 
-My suggestion is to change your prompt:
-
-```
-I updated some files manually because its the style I want. Can you check to
-be sure I did not break anything?
-```
+Altivec-Intelligence already has many AI CLI's built into it, but you can add
+your own, just tell a supported AI to read the compose file and update it to
+install your preferred tool at launch.
 
 ## Safety Questions
 
@@ -62,9 +43,13 @@ the files within the container and the specific repository you are working in.
 It cannot access your personal files on your host machine.
 
 ### What about SSH access?
-SSH access is disabled by default for security. If you choose to enable it (by
-uncommenting the line in `compose.yml`), the AI can theoretically access any
-system your SSH keys have access to. **Use this feature with caution.**
+The container's home directory is the `~/.altivec` folder on your host (mounted
+as `/root` via `compose.yml`). SSH access is therefore **disabled by default**:
+the container has no keys unless you provide them. To enable it — for example to
+let `altivec-deploy` push apps to real hardware — place your keys in
+`~/.altivec/.ssh/` on the host, where they appear as `/root/.ssh` inside the
+container. Note that once keys are present, the AI can theoretically access any
+system those keys have access to. **Use this feature with caution.**
 
 ## Objective-C Questions
 

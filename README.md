@@ -26,15 +26,18 @@ origins, technical matrix, and safety considerations, please see the
 
 ## 📦 Quick Start Guide
 
-**Altivec Intelligence** is designed to be used as a **git submodule** inside
-your own app repository. This keeps your app code separate from the engine and
-lets you update the engine independently.
+**Altivec Intelligence** ships as a **prebuilt container image on GHCR**. You
+consume it by referencing the image in a `compose.yml` at the root of your own
+app repository — no submodule, no clone, no local toolchain build. This keeps
+your app code fully separate from the engine, and you update the engine by
+simply pulling a newer image.
 
 ### Set Up Your Project
 
 See [templates/compose.yml](templates/compose.yml) for the full template and
-notes on first-time AI assistant setup. No submodule needed — the GHCR image
-ships the full `/altivec/` toolchain.
+notes on first-time AI assistant setup. The GHCR image ships the entire
+`/altivec/` toolchain (cross-compilers, SDKs, libcurl static libs, sample
+apps, and AI CLIs), so your repo only needs the `compose.yml` plus your source.
 
 ```bash
 # 0. If you do not already have a repository for your app idea,
@@ -62,14 +65,13 @@ docker compose run --rm altivec-intelligence
 
 ```
 Hello, you are inside of a docker container that has a cross-compile 
-environment for building retro Mac and iPhone Apps. My app code is in /user. 
-The Altivec engine and examples are in /altivec. The cross-compiler 
+environment for building retro Mac and iPhone Apps. My app code is in /repo/user. The Altivec engine and examples are in /altivec. The cross-compiler 
 toolchain is in /osxcross. Please start by reading the README.md and AGENTS.md 
 files in /altivec. Please always create makefiles for my app using 
 the altivec_common_[mac|phone].mk files in /altivec so I can ensure my 
 makefiles are small and make apps compatible with many retro Apple devices. 
-Make sure you treat my repo (/user) as the base location for your work on 
-my app.
+Make sure you treat my repo (/repo/user) as the base location for your work on 
+my app as changes made outside of volumes mounted in the compose.yml file will be lost when we finish this session.
 ```
 
 #### Make a New App Prompt
@@ -87,121 +89,19 @@ an iPhone app or Mac app. Also, if you want to do networking, you may consider
 using the CURLmac or CURLphone app as starting place because those have
 libcurl linked.
 
-## 📦 Slow Start Guide (Full Explanation)
-
-The steps below are for exploring the standalone engine and its sample apps.
-
-### 1. Prerequisites
-
-- [**Git**](https://git-scm.com/install/)
-- [**Docker Desktop**](https://www.docker.com/get-started/) or alternative solution.
-
-### 2. Pre-setup
-
-To optimize performance of the initial build, open Docker Desktop and configure
-the Resources tab in the Settings window. 
-
-- Ensure Docker has 6-8GB RAM.
-- Ensure Docker is allowed to use as many CPU cores as you like.
-
-### 3. Build the Container
-
-This project compiles Apple GCC 4.2.1 from source, so this initial build step
-can take 5-30 minutes depending on how fast your computer is. But this only
-needs to be done once. After that, it is quick to load.
-
-Before running `docker compose build` you can configure the number of cores 
-the build is allowed to use by changing the `JOBS=` line of the 
-[`Containerfile`](Containerfile#L53). Note that it should be set to be equal to
-or less than the number of cores you configured in the Docker settings.
-
-```bash
-git clone https://github.com/your-username/AltivecIntelligence.git
-cd AltivecIntelligence
-docker compose build
-```
-
-### 4. Build Example Projects
-
-#### Mac Apps
-
-Verify the Mac toolchain by building the `SingleWindow` app:
-```bash
-docker compose run --rm altivec "cd apps/SingleWindow && make"
-```
-Outputs in `apps/SingleWindow/build-release/`:
-- `SingleWindow.app`: Universal Mac App compatible with all Macs running Mac OS X 10.4 Tiger and newer (PowerPC, Intel 32-bit, Intel 64-bit, Apple Silicon)
-- `SingleWindow.zip`: App Package as a Zip
-- `SingleWindow.[x64|arm].dSYM`: Debug Symbols for X64 and ARM Macs
-
-Verify the iPhone toolchain by building the `SingleScreen` app:
-```bash
-docker compose run --rm altivec "cd apps/SingleScreen && make"
-```
-Outputs in `apps/SingleScreen/build-release/`:
-- `SingleScreen.ipa`: Universal iPhone App Compatible with:
-  - iPhone 3GS+
-  - iOS 4.3+
-- `SingleScreen.app`: The iPhone App in its original .app form
-- `SingleScreen.dSYM`: Debug Symbols
-
-Note you can also run `make debug` to build a debug version of the sample apps
-
-#### CURL Networking Apps (Modern TLS for Legacy Devices)
-
-These apps use the **`AICURLConnection`** library (built on `libcurl` and 
-`OpenSSL`) to allow legacy devices to connect to modern HTTPS websites.
-
-**Note:** Building the full `libcurl` suite for all architectures is a heavy 
-task and may take between **5 to 60 minutes** depending on your computer's 
-performance.
-
-##### Mac Build (CURLmac)
-```bash
-# 1. Build libcurl suite for Mac (PPC, i386, x64, arm64)
-docker compose run --rm altivec "cd libs/libcurl && make mac"
-
-# 2. Build the CURLmac app
-docker compose run --rm altivec "cd apps/CURLmac && make"
-
-# If required libs are missing, bootstrap now runs automatically for CURL apps
-```
-
-##### iPhone Build (CURLphone)
-```bash
-# 1. Build libcurl suite for iPhone (armv7, arm64)
-docker compose run --rm altivec "cd libs/libcurl && make phone"
-
-# 2. Build the CURLphone app
-docker compose run --rm altivec "cd apps/CURLphone && make"
-
-# If required libs are missing, bootstrap now runs automatically for CURL apps
-```
-
-##### libcurl Cleanup (Keep Final Outputs)
-```bash
-# Removes heavy intermediates, keeps build-*/lib, build-*/include, tarballs
-docker compose run --rm altivec "cd libs/libcurl && make prune-intermediates"
-```
-
-#### Deploying to Hardware
+## Deploying to Hardware
 
 Use the `altivec-deploy` script to quickly push and debug your apps on 
 actual hardware.
 
-**1. Run on your local Mac**:
+**1. Run on a remote Mac (via SSH)**:
 ```bash
-./bin/altivec-deploy apps/SingleWindow
+docker compose run --rm altivec "altivec-deploy /altivec/apps/SingleWindow -d <mac_ip_or_hostname>"
 ```
 
-**2. Run on a remote Mac (via SSH)**:
+**2. Run on a jailbroken iPhone (via SSH)**:
 ```bash
-./bin/altivec-deploy apps/SingleWindow -d <mac_ip_or_hostname>
-```
-
-**3. Run on a jailbroken iPhone (via SSH)**:
-```bash
-./bin/altivec-deploy apps/SingleScreen -d <iphone_ip_or_hostname>
+docker compose run --rm altivec "altivec-deploy /altivec/apps/SingleScreen -d <iphone_ip_or_hostname>
 ```
 
 **Note on Deploying to iPhone**
@@ -243,15 +143,44 @@ Host imacg4-tiger
     HostKeyAlgorithms +ssh-rsa
 ```
 
+## 🏃 Running a Sample App
+
+The sample apps come **prebuilt** inside the image, so you can try one without
+compiling anything. The steps below copy the release build of **CURLmac** out
+of the container and into your own repo, where you can unzip it and open the
+`.app` on your Mac.
+
+```bash
+# 1. Copy CURLmac's release zip from the image into your project.
+#    Your repo is mounted at /repo/user, so the file lands in your
+#    current directory on the host:
+docker compose run --rm altivec "cp /altivec/apps/CURLmac/build-release/CURLmac.zip /repo/user/"
+
+# 2. On your Mac, unzip and launch the app:
+unzip CURLmac.zip
+open CURLmac.app
+```
+
+`CURLmac.app` is a Quad-Fat universal binary, so the same bundle runs on
+PowerPC, 32-bit Intel, 64-bit Intel, and Apple Silicon Macs (10.4 Tiger and
+newer). CURLmac links libcurl so this app has modern TLS 1.2 networking even on Mac OS X Tiger.
+
+> **Note:** To copy a freshly compiled build instead of the prebuilt one, run
+> `docker compose run --rm altivec "cd /altivec/apps/CURLmac && make"` first,
+> then repeat step 1. Swap `CURLmac` for `SingleWindow` to grab the simpler,
+> non-networking sample.
+
 ## 📂 Project Structure
 - [`apps`](./apps/): Sample projects and Makefiles
 - [`altivec_common_mac.mk`](./altivec_common_mac.mk): A "parent" Makefile with the general rules for compiling Mac apps
 - [`altivec_common_phone.mk`](./altivec_common_phone.mk): A "parent" Makefile with the general rules for compiling Phone apps
 - [`templates`](./templates/): Reusable templates for end users (compose + thin Makefiles for new app projects)
+- [`templates/compose.yml`](./templates/compose.yml): The compose file end users drop into their own app repo (prebuilt GHCR image, app mounted at `/repo/user`). **This is the file most people want.**
+- [`compose.yml`](./compose.yml): The **engine-development** compose — clone-and-build the image locally and mount your live checkout at `/repo/altivec`. Only needed if you are customizing the engine itself.
 - [`bin`](./bin/): Runtime scripts on `PATH` inside the image — `altivec-deploy` (push/run apps on hardware), `altivec-chooser` (AI CLI picker)
 - `AGENTS.md`: AI mandates and technical constraints (also surfaced as CLAUDE.md / GEMINI.md via symlink).
 
-## 🧩 Submodule Makefile Templates
+## 🧩 Makefile Templates
 Use these thin templates in your app repo:
 - [`templates/Makefile.mac`](./templates/Makefile.mac)
 - [`templates/Makefile.phone`](./templates/Makefile.phone)
@@ -260,9 +189,51 @@ Optional libcurl knobs:
 - `LIBCURL_REQUIRED=1`: enforce required curl artifacts at validate time.
 - `LIBCURL_DIR=/path/to/altivec/libs/libcurl/build-mac|build-phone`: override autodetect.
 
+## 🔧 Customizing the Container
+
+Everything above uses the **prebuilt GHCR image** and never requires a clone.
+You only need this section if you want to **modify the engine itself** — change
+build rules in `altivec_common_*.mk`, edit the `bin/` scripts, add a new
+library, or rebuild `libcurl` from source.
+
+### 1. Prerequisites
+- [**Git**](https://git-scm.com/install/) (to clone the engine repo)
+- [**Docker Desktop**](https://www.docker.com/get-started/) or an alternative
+
+### 2. Docker Resources
+The from-source build compiles Apple GCC 4.2.1, so give Docker some headroom in
+its Settings → Resources tab:
+- 6–8 GB RAM
+- As many CPU cores as you can spare
+
+### 3. Clone and Build
+This compiles the toolchain from source and can take **5–30 minutes** the first
+time (cached afterward). Tune the `JOBS=` line of the
+[`Containerfile`](Containerfile#L53) to match your allotted cores.
+
+```bash
+git clone https://github.com/jeffreybergier/AltivecIntelligence.git
+cd AltivecIntelligence
+docker compose build
+```
+
+The root [`compose.yml`](./compose.yml) is wired for this workflow: it mounts
+your live checkout at `/repo/altivec` (the working directory) while the baked
+toolchain stays at `/altivec`.
+
+### 4. Applying Engine Edits
+⚠️ **Important:** `/altivec` is baked into the image at build time; your live
+checkout is mounted separately at `/repo/altivec`. A build that includes
+`/altivec/altivec_common_mac.mk` therefore uses the **baked** copy, *not* your
+edits. To make engine changes take effect you must either:
+
+- **Rebuild the image** with `docker compose build`, or
+- **Overlay your checkout** by adding `- .:/altivec` to the service's `volumes`
+  so your live files shadow the baked toolchain.
+
 ## 🚧 To-Do List
 1. [ ] Enable on-device debugging for iOS
-1. [ ] Learn how to add libraries as dynamic frameworks (not static libs)
+1. [X] Add libraries as dynamic frameworks (e.g. `AltivecCURL.framework`)
 1. [ ] Add `libgit` as a dependency for file syncing
 1. [ ] Setup Github Actions
    1. [ ] Build release apps and save in artifact storage

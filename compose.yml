@@ -1,39 +1,32 @@
-## AltivecIntelligence: Cross-Compilation & AI Assistant
-# This compose file sets up the development environment.
-#
-# Usage:
-# Build Images:      docker compose build
-# Use With AI:       docker compose run --rm altivec-intelligence
-# Use W/out AI:      docker compose run --rm altivec
-# Build Example App: docker compose run --rm altivec "cd apps/SingleWindow && make"
-
 services:
   altivec:
     build:
       context: .
       dockerfile: Containerfile
-      target: altivec-builder
+      target: ghcr-action
     image: altivec-image
-    working_dir: /altivec
+    working_dir: /repo/altivec
     volumes:
-      ## Altivec Intelligence Repo
-      - .:/altivec
+      - ~/.altivec:/root
+      - .:/repo/altivec
+      # Uncomment to add more tools into the container
+      # ../extras:/repo/extras
       
   altivec-intelligence:
     build:
       context: .
       dockerfile: Containerfile
-      target: altivec-builder
+      target: ghcr-action
     image: altivec-intelligence-image
     stdin_open: true
     tty: true
     environment:
       - IS_SANDBOX=1
-    working_dir: /altivec
+    working_dir: /repo/altivec
     volumes:
-      ## Altivec Intelligence Repo
-      - .:/altivec
-      ## AI Agent Config and Auth (home dir for container)
       - ~/.altivec:/root
+      - .:/repo/altivec
+      # Uncomment to add more tools into the container
+      # ../extras:/repo/extras
     entrypoint: /bin/bash
     command: -lc "altivec-chooser"
