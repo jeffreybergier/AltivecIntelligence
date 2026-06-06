@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y \
     libz-dev \
     uuid-dev \
     # --- Build systems / scripting ---
+    bc \
     cmake \
     python3 \
     python3-distutils \

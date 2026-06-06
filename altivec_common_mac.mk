@@ -197,7 +197,9 @@ libs-ready:
 
 $(ZIP_FILE): $(BUNDLE)
 	@echo " [7/7] Zipping package..."
-	@cd $(BUILD_DIR) && zip -rq $(APP_NAME).zip $(APP_NAME).app
+	@# -y stores framework symlinks as symlinks; without it zip derefs each
+	@# link, packing the dylib 3x (root, Versions/Current, Versions/A).
+	@cd $(BUILD_DIR) && zip -rqy $(APP_NAME).zip $(APP_NAME).app
 
 $(BUNDLE): $(UNIVERSAL_BIN)
 	@echo " [6/7] Building app package..."
