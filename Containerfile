@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     xdg-utils \
     file \
+    # --- Text editors ---
+    vim \
+    nano \
     # --- Build essentials / toolchain ---
     build-essential \
     make \
@@ -50,26 +53,50 @@ RUN apt-get update && apt-get install -y \
     rsync \
     ssh \
     iputils-ping \
+    sshpass \
+    socat \
+    netcat-openbsd \
+    avahi-utils \
     # --- CLI utilities / productivity ---
     jq \
     ripgrep \
     fd-find \
     tree \
     sqlite3 \
+    shellcheck \
     # --- Image / icon tooling ---
     imagemagick \
     icnsutils \
+    webp \
+    optipng \
+    jpegoptim \
+    librsvg2-bin \
+    # --- Audio / video transcoding ---
+    ffmpeg \
     # --- macOS app bundle / packaging ---
     libplist-utils \
+    xmlstarlet \
     # --- Reverse engineering / binary + protocol analysis ---
     xxd \
     binwalk \
     thrift-compiler \
     golang-go \
     mitmproxy \
+    strace \
+    ltrace \
+    # --- Ruby / Jekyll static-site toolchain ---
+    ruby-full \
+    libffi-dev \
+    # --- Document conversion ---
+    pandoc \
     # --- Misc / extra tools ---
     wabt \
     && rm -rf /var/lib/apt/lists/*
+
+# 1b. Bundler — install the current release from RubyGems. apt's
+#      `bundler` is pinned to an older version that newer Gemfile.lock
+#      files (via their `BUNDLED WITH` line) frequently refuse to accept.
+RUN gem install bundler --no-document
 
 # 2. Settings for the User
 
@@ -196,6 +223,29 @@ RUN set -eux; \
       "https://github.com/ProcursusTeam/ldid/releases/download/${LDID_VERSION}/${LDID_ASSET}"; \
     chmod +x /usr/local/bin/ldid; \
     ldid 2>&1 | grep -q "Link Identity Editor"
+
+# 8c. ipsw — blacktop's Mach-O analysis multi-tool. `ipsw class-dump`
+#      reconstructs Obj-C (and Swift) @interface declarations straight
+#      from a Mach-O binary: the Linux-native stand-in for the classic
+#      macOS class-dump, which Ubuntu does not package for apt. Shipped
+#      as a prebuilt Go release binary, installed like rcodesign/ldid.
+#      NOTE: the release ships BOTH `ipsw` (CLI) and `ipswd` (daemon) —
+#      we deliberately install only the `ipsw` binary. The git tag is
+#      v-prefixed (vX.Y.Z) but the asset filename is not (X.Y.Z).
+ARG IPSW_VERSION=3.1.687
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in \
+      amd64) IPSW_ARCH=x86_64 ;; \
+      arm64) IPSW_ARCH=arm64 ;; \
+      *) echo "unsupported arch for ipsw" >&2; exit 1 ;; \
+    esac; \
+    mkdir -p /tmp/ipsw-install; \
+    curl -fsSL -o /tmp/ipsw.tar.gz \
+      "https://github.com/blacktop/ipsw/releases/download/v${IPSW_VERSION}/ipsw_${IPSW_VERSION}_linux_${IPSW_ARCH}.tar.gz"; \
+    tar -xzf /tmp/ipsw.tar.gz -C /tmp/ipsw-install; \
+    install -m 0755 "$(find /tmp/ipsw-install -type f -name ipsw | head -n1)" /usr/local/bin/ipsw; \
+    rm -rf /tmp/ipsw.tar.gz /tmp/ipsw-install; \
+    ipsw version
 
 # 9. Working Directory & Runtime
 WORKDIR /repo/altivec
