@@ -19,4 +19,9 @@ RES_DIR = Resources
 # ALTIVECCORE_LINKAGE = dynamic
 # ALTIVECCORE_DIR = /altivec/libs/core/build-mac
 
+# Optional override if AltivecCocoa is required for this app:
+# ALTIVECCOCOA_REQUIRED = 1
+# ALTIVECCOCOA_LINKAGE = dynamic
+# ALTIVECCOCOA_DIR = /altivec/libs/cocoa/build-mac
+
 include /altivec/altivec_common_mac.mk

@@ -16,9 +16,16 @@ RES_DIR = Resources
 
 # Optional override if AltivecCore is required for this app:
 # ALTIVECCORE_REQUIRED = 1
-# ALTIVECCORE_LINKAGE = dynamic
-# Use ALTIVECCORE_LINKAGE = static for iOS 4.3-7 devices; embedded
-# iOS frameworks require iOS 8+ at runtime.
+# ALTIVECCORE_LINKAGE = static
+# static is the iPhone default and is required for iOS 4.3-7 devices. Use
+# ALTIVECCORE_LINKAGE = dynamic only for iOS 8+ embedded-framework builds.
 # ALTIVECCORE_DIR = /altivec/libs/core/build-phone
+
+# Optional override if AltivecCocoa is required for this app:
+# ALTIVECCOCOA_REQUIRED = 1
+# ALTIVECCOCOA_LINKAGE = static
+# static is the iPhone default and is required for iOS 4.3-7 devices. Use
+# ALTIVECCOCOA_LINKAGE = dynamic only for iOS 8+ embedded-framework builds.
+# ALTIVECCOCOA_DIR = /altivec/libs/cocoa/build-phone
 
 include /altivec/altivec_common_phone.mk

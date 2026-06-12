@@ -53,12 +53,12 @@ OBJS = $(addprefix $(INT_DIR)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) 
 
 # --- Auto-detect AltivecCore ---
 # ALTIVECCORE_LINKAGE picks how the core networking stack is linked.
-#   dynamic (default): link against AltivecCore.framework; the framework
-#                      is copied into <App>.app/Frameworks/ (iOS flat layout).
-#                      Embedded iOS frameworks require iOS 8+ at runtime.
-#   static           : link the .a archives directly into the binary.
-#                      Use this for iOS 4.3-7 device compatibility.
-ALTIVECCORE_LINKAGE ?= dynamic
+#   static (default): link the .a archives directly into the binary.
+#                     Required for iOS 4.3-7 device compatibility.
+#   dynamic         : link against AltivecCore.framework; the framework
+#                     is copied into <App>.app/Frameworks/ (iOS flat layout).
+#                     Embedded iOS frameworks require iOS 8+ at runtime.
+ALTIVECCORE_LINKAGE ?= static
 ALTIVECCORE_REQUIRED ?= 0
 ALTIVECCORE_DIR ?=
 ALTIVECCORE_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/core/build-phone
@@ -101,6 +101,65 @@ else
                                $(ALTIVECCORE_DIR)/include/cJSON.h
 endif
 
+# --- Auto-detect AltivecCocoa ---
+# ALTIVECCOCOA_LINKAGE picks how the Cocoa/controller layer is linked.
+#   static (default): link libAltivecCocoa.a directly into the binary.
+#                     Required for iOS 4.3-7 device compatibility.
+#   dynamic         : link against AltivecCocoa.framework; the framework
+#                     is copied into <App>.app/Frameworks/ (iOS flat layout).
+#                     Embedded iOS frameworks require iOS 8+ at runtime.
+#
+# The current phone build intentionally exports an empty framework: the
+# AppKit controller classes compile only on Mac, but the artifact exercises
+# the same framework plumbing for future iPhone-side classes.
+ALTIVECCOCOA_LINKAGE ?= static
+ALTIVECCOCOA_REQUIRED ?= 0
+ALTIVECCOCOA_DIR ?=
+ALTIVECCOCOA_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/cocoa/build-phone
+ifeq ($(strip $(ALTIVECCOCOA_DIR)),)
+  ALTIVECCOCOA_PATH = $(firstword $(wildcard $(addsuffix /lib/AltivecCocoa.framework/AltivecCocoa, $(ALTIVECCOCOA_SEARCH_PATHS))))
+  ifneq ($(ALTIVECCOCOA_PATH),)
+    ALTIVECCOCOA_DIR = $(patsubst %/lib/AltivecCocoa.framework/AltivecCocoa,%,$(ALTIVECCOCOA_PATH))
+  else ifeq ($(ALTIVECCOCOA_REQUIRED),1)
+    ALTIVECCOCOA_DIR = $(firstword $(ALTIVECCOCOA_SEARCH_PATHS))
+  endif
+endif
+ifeq ($(ALTIVECCOCOA_REQUIRED),1)
+  ifneq ($(strip $(ALTIVECCOCOA_DIR)),)
+    ifeq ($(ALTIVECCOCOA_LINKAGE),dynamic)
+      ALTIVECCOCOA_FRAMEWORK = $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework
+      EXTRA_FLAGS += -F$(ALTIVECCOCOA_DIR)/lib
+    else
+      ALTIVECCOCOA_RESOURCE_DIR = $(ALTIVECCOCOA_DIR)/Resources
+      EXTRA_FLAGS += -I$(ALTIVECCOCOA_DIR)/include
+    endif
+  endif
+endif
+
+ifeq ($(ALTIVECCOCOA_LINKAGE),dynamic)
+  ALTIVECCOCOA_REQUIRED_FILES = $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/AltivecCocoa \
+                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Headers/AltivecCocoa.h \
+                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Headers/AIViewController.h \
+                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Headers/AICookieCutterWindowController.h \
+                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Headers/AIWebViewController.h \
+                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Headers/AIFontAwesome.h \
+                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Fonts/FA7-Solid-900.otf \
+                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Fonts/FA7-Regular-400.otf \
+                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Fonts/FA7-Brands-400.otf \
+                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Fonts/LICENSE-Font-Awesome.txt
+else
+  ALTIVECCOCOA_REQUIRED_FILES = $(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a \
+                                $(ALTIVECCOCOA_DIR)/include/AltivecCocoa.h \
+                                $(ALTIVECCOCOA_DIR)/include/AIViewController.h \
+                                $(ALTIVECCOCOA_DIR)/include/AICookieCutterWindowController.h \
+                                $(ALTIVECCOCOA_DIR)/include/AIWebViewController.h \
+                                $(ALTIVECCOCOA_DIR)/include/AIFontAwesome.h \
+                                $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Solid-900.otf \
+                                $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Regular-400.otf \
+                                $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Brands-400.otf \
+                                $(ALTIVECCOCOA_DIR)/Resources/Fonts/LICENSE-Font-Awesome.txt
+endif
+
 # --- Flags ---
 IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wconversion -Wsign-conversion -Wfloat-conversion \
             -Wimplicit-function-declaration -Wobjc-method-access \
@@ -122,6 +181,17 @@ ifeq ($(ALTIVECCORE_REQUIRED),1)
                         $(ALTIVECCORE_DIR)/lib/libz.a \
                         $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
                         $(ALTIVECCORE_DIR)/lib/libcjson.a
+    endif
+  endif
+endif
+ifeq ($(ALTIVECCOCOA_REQUIRED),1)
+  ifneq ($(strip $(ALTIVECCOCOA_DIR)),)
+    ifeq ($(ALTIVECCOCOA_LINKAGE),dynamic)
+      IOS_FRAMEWORKS += -F$(ALTIVECCOCOA_DIR)/lib -framework AltivecCocoa \
+                        -Wl,-rpath,@executable_path/Frameworks
+    else
+      IOS_FRAMEWORKS += $(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a \
+                        -framework CoreText
     endif
   endif
 endif
@@ -175,6 +245,8 @@ validate:
 	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi
 	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory altiveccore-bootstrap; fi
 	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libs-ready; fi
+	@if [ "$(ALTIVECCOCOA_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory altiveccocoa-bootstrap; fi
+	@if [ "$(ALTIVECCOCOA_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory cocoa-ready; fi
 	@for dir in $(VALIDATE_PATHS); do \
 		if [ ! -d "$$dir" ]; then \
 			echo " [!] ERROR: Project directory missing: $$dir"; \
@@ -212,6 +284,39 @@ libs-ready:
 	if [ -n "$$missing" ]; then \
 		echo " [!] ERROR: Missing required AltivecCore artifacts:$$missing"; \
 		echo "     Build them with: make -C $(ALTIVEC_ROOT)/libs/core phone"; \
+		exit 1; \
+	fi
+
+altiveccocoa-bootstrap:
+	@if [ "$(ALTIVECCOCOA_REQUIRED)" != "1" ]; then exit 0; fi
+	@if [ -z "$(ALTIVECCOCOA_DIR)" ]; then \
+		echo " [!] ERROR: AltivecCocoa is required but ALTIVECCOCOA_DIR is not set."; \
+		echo "     Set ALTIVECCOCOA_DIR=/path/to/libs/cocoa/build-phone or build at $(ALTIVEC_ROOT)/libs/cocoa/build-phone."; \
+		exit 1; \
+	fi
+	@probe="$(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a"; target=phone-static; \
+	if [ "$(ALTIVECCOCOA_LINKAGE)" = "dynamic" ]; then \
+		probe="$(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/AltivecCocoa"; target=phone-all; \
+	fi; \
+	if [ ! -e "$$probe" ]; then \
+		echo " [!] Missing AltivecCocoa artifact ($$probe), running bootstrap build ($$target)..."; \
+		$(MAKE) -C $(ALTIVEC_ROOT)/libs/cocoa $$target; \
+	fi
+
+cocoa-ready:
+	@if [ "$(ALTIVECCOCOA_REQUIRED)" != "1" ]; then exit 0; fi
+	@if [ -z "$(ALTIVECCOCOA_DIR)" ]; then \
+		echo " [!] ERROR: AltivecCocoa is required but ALTIVECCOCOA_DIR is not set."; \
+		echo "     Set ALTIVECCOCOA_DIR=/path/to/libs/cocoa/build-phone."; \
+		exit 1; \
+	fi
+	@missing=""; \
+	for f in $(ALTIVECCOCOA_REQUIRED_FILES); do \
+		if [ ! -f "$$f" ]; then missing="$$missing $$f"; fi; \
+	done; \
+	if [ -n "$$missing" ]; then \
+		echo " [!] ERROR: Missing required AltivecCocoa artifacts:$$missing"; \
+		echo "     Build them with: make -C $(ALTIVEC_ROOT)/libs/cocoa phone"; \
 		exit 1; \
 	fi
 
@@ -275,6 +380,17 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin $(PHONE_BUNDLE_DEPS)
 		echo "  > copying cacert.pem" ; \
 		cp "$(ALTIVECCORE_DIR)/lib/cacert.pem" $@/ ; \
 	fi
+	@if [ "$(ALTIVECCOCOA_REQUIRED)" = "1" ] && [ "$(ALTIVECCOCOA_LINKAGE)" = "dynamic" ] && [ -d "$(ALTIVECCOCOA_FRAMEWORK)" ]; then \
+		echo "  > embedding AltivecCocoa.framework" ; \
+		mkdir -p $@/Frameworks ; \
+		cp -RP $(ALTIVECCOCOA_FRAMEWORK) $@/Frameworks/ ; \
+	fi
+	@if [ "$(ALTIVECCOCOA_REQUIRED)" = "1" ] && [ "$(ALTIVECCOCOA_LINKAGE)" = "static" ] && [ -d "$(ALTIVECCOCOA_RESOURCE_DIR)/Fonts" ]; then \
+		echo "  > copying AltivecCocoa fonts" ; \
+		mkdir -p $@/Fonts ; \
+		cp "$(ALTIVECCOCOA_RESOURCE_DIR)"/Fonts/*.otf $@/Fonts/ ; \
+		cp "$(ALTIVECCOCOA_RESOURCE_DIR)"/Fonts/LICENSE-Font-Awesome.txt $@/Fonts/ ; \
+	fi
 	@echo "  > extracting symbols"
 	@$(DSYMUTIL) $< -o $(BUILD_DIR)/$(APP_NAME).dSYM
 	@echo -n "APPL????" > $@/PkgInfo
@@ -306,4 +422,5 @@ $(INT_DIR)/%.o: %.c
 	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
 	           $(IOS_FLAGS) -c $< -o $@
 
-.PHONY: release debug clean analyze validate altiveccore-bootstrap libs-ready
+.PHONY: release debug clean analyze validate altiveccore-bootstrap libs-ready \
+        altiveccocoa-bootstrap cocoa-ready

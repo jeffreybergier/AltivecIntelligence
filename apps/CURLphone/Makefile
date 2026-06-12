@@ -3,6 +3,6 @@ APP_NAME = CURLphone
 SOURCES = main.m DownloadViewController.m CrossPlatform.m
 
 ALTIVECCORE_REQUIRED = 1
-ALTIVECCORE_LINKAGE = dynamic
+ALTIVECCOCOA_REQUIRED = 1
 
 include /altivec/altivec_common_phone.mk

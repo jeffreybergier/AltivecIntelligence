@@ -29,6 +29,11 @@ These ENIL needs are already represented in Altivec's common build files:
 
 ## Migration Backlog
 
+Compatibility shims from `XPFoundation`, `XPAppKit`, and `XPUIKit` are
+deferred for now. They are not complete enough to embed in AltivecCore or
+AltivecCocoa, but the extraction notes remain below in case a future app needs
+specific pieces.
+
 - [x] **SQLite library builder**
   - Source: `/repo/ENIL-cocoa/source/deps/sqlite/`.
   - Moved the quad-fat Mac and universal iPhone SQLite recipes into
@@ -117,15 +122,36 @@ These ENIL needs are already represented in Altivec's common build files:
   - Acceptance: a new Mac app can start from a Tiger-safe three-pane template
     without copying ENIL UI code.
 
-- [ ] **Font Awesome optional icon helper**
+- [x] **AltivecCocoa controller library**
+  - Source:
+    - `/repo/ENIL-cocoa/source/macOS/AIViewController.*`
+    - `/repo/ENIL-cocoa/source/macOS/AICookieCutterWindowController.*`
+    - `/repo/ENIL-cocoa/source/macOS/AIWebViewController.*`
+  - Package as a Mac quad-fat `libAltivecCocoa.a` and
+    `AltivecCocoa.framework`, plus an iPhone `libAltivecCocoa.a`/framework
+    currently carrying the cross-platform Font Awesome helper.
+  - Keep `XPFoundation`, `XPAppKit`, and `XPUIKit` out of the library for now.
+  - Added app opt-in through `ALTIVECCOCOA_REQUIRED`,
+    `ALTIVECCOCOA_LINKAGE`, and `ALTIVECCOCOA_DIR`.
+  - Acceptance: Mac apps can opt in with `ALTIVECCOCOA_REQUIRED=1` and use the
+    three-pane nibless controller stack without copying ENIL sources; iPhone
+    apps can require the static library by default, with dynamic
+    framework linkage available only as an explicit iOS 8+ opt-in.
+
+- [x] **Font Awesome optional icon helper**
   - Source: `/repo/ENIL-cocoa/source/shared/FontAwesome.*`,
     `/repo/ENIL-cocoa/source/tools/gen_faicons.py`, and bundled OTF files.
-  - Decide whether Altivec should carry Font Awesome as an optional helper or
-    just document ENIL as an example.
-  - If migrated, handle font licensing, generated enum regeneration, ATSUI
-    fallback on Tiger, Core Text path on 10.5+/iOS, and platform image helpers.
-  - Acceptance: icon rendering is optional, documented, and does not burden
-    minimal templates.
+  - Migrated as `AIFontAwesome` inside `AltivecCocoa`.
+  - Renamed public symbols to the Altivec namespace (`AIFontAwesome`,
+    `AIFontAwesomeIcon`, `AIFontAwesomeStyle`, `AIFA...` enum values).
+  - Kept generated Solid icon enum regeneration through
+    `libs/cocoa/tools/gen_aifontawesome_icons.py`.
+  - Preserved Core Text rendering on 10.5+/iOS and ATSUI fallback on Tiger.
+  - Static linkage stages OTF files into the app bundle; dynamic linkage keeps
+    OTF files inside `AltivecCocoa.framework`.
+  - Bundles a Font Awesome Free / SIL OFL 1.1 notice alongside the OTF files.
+  - Acceptance: apps can render Font Awesome icons through AltivecCocoa without
+    copying ENIL helper code or writing custom font staging rules.
 
 - [ ] **C utility extraction candidates**
   - Source: `/repo/ENIL-cocoa/source/shared/enil_strbuf.*` and the pure-C

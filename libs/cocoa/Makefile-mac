@@ -1,0 +1,293 @@
+include cocoa_common.mk
+
+CWD=$(shell pwd)
+BUILD_ROOT=$(CWD)/build-mac
+INTERMEDIATE=$(BUILD_ROOT)/intermediate
+PREFIX=$(BUILD_ROOT)/prefix
+STAMP_DIR=$(BUILD_ROOT)/stamps
+PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
+PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
+PUBLIC_RESOURCE_DIR=$(BUILD_ROOT)/Resources
+
+COCOA_SOURCES=AIViewController.m \
+              AICookieCutterWindowController.m \
+              AIWebViewController.m \
+              AIFontAwesome.m
+COCOA_HEADERS=AltivecCocoa.h \
+              AIViewController.h \
+              AICookieCutterWindowController.h \
+              AIWebViewController.h \
+              AIFontAwesome.h
+COCOA_FONT_FILES=Resources/Fonts/FA7-Solid-900.otf \
+                 Resources/Fonts/FA7-Regular-400.otf \
+                 Resources/Fonts/FA7-Brands-400.otf
+COCOA_FONT_NOTICE=Resources/Fonts/LICENSE-Font-Awesome.txt
+
+PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(LEGACY_GCC_FLAGS)
+X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH) $(LEGACY_GCC_FLAGS)
+X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_X64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
+ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
+X64_COMPILE_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -B$(BIN_DIR)
+ARM64_COMPILE_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -B$(BIN_DIR)
+
+PPC_OBJS=$(addprefix $(INTERMEDIATE)/ppc/,$(COCOA_SOURCES:.m=.o))
+X86_OBJS=$(addprefix $(INTERMEDIATE)/x86/,$(COCOA_SOURCES:.m=.o))
+X64_OBJS=$(addprefix $(INTERMEDIATE)/x64/,$(COCOA_SOURCES:.m=.o))
+ARM64_OBJS=$(addprefix $(INTERMEDIATE)/arm64/,$(COCOA_SOURCES:.m=.o))
+
+PUBLIC_LIB=$(PUBLIC_LIB_DIR)/libAltivecCocoa.a
+
+FRAMEWORK_NAME=AltivecCocoa
+FRAMEWORK_VERSION=A
+FRAMEWORK_BUNDLE=$(PUBLIC_LIB_DIR)/$(FRAMEWORK_NAME).framework
+FRAMEWORK_VERSION_DIR=$(FRAMEWORK_BUNDLE)/Versions/$(FRAMEWORK_VERSION)
+FRAMEWORK_INSTALL_NAME=@executable_path/../Frameworks/$(FRAMEWORK_NAME).framework/Versions/$(FRAMEWORK_VERSION)/$(FRAMEWORK_NAME)
+FRAMEWORK_COMPAT_VER=1.0.0
+FRAMEWORK_CURRENT_VER=1.0.0
+DYLIB_LINK_FLAGS=-dynamiclib \
+                 -install_name $(FRAMEWORK_INSTALL_NAME) \
+                 -compatibility_version $(FRAMEWORK_COMPAT_VER) \
+                 -current_version $(FRAMEWORK_CURRENT_VER) \
+                 -Wl,-headerpad_max_install_names
+COCOA_FRAMEWORKS=-framework AppKit -framework WebKit \
+                 -framework CoreServices -framework ApplicationServices \
+                 -lobjc
+
+all: $(PUBLIC_LIB) $(PUBLIC_INCLUDE_DIR)/.stamp \
+     $(PUBLIC_RESOURCE_DIR)/Fonts/.stamp verify-static \
+     $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic
+	@echo "-----------------------------------------------------------"
+	@echo "MAC ALTIVECCOCOA STATIC + FRAMEWORK BUILD SUCCESSFUL"
+	@echo "Library:   $(PUBLIC_LIB)"
+	@echo "Framework: $(FRAMEWORK_BUNDLE)"
+	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-mac prune-build-files
+
+static: $(PUBLIC_LIB) $(PUBLIC_INCLUDE_DIR)/.stamp \
+        $(PUBLIC_RESOURCE_DIR)/Fonts/.stamp verify-static
+	@echo "-----------------------------------------------------------"
+	@echo "MAC ALTIVECCOCOA STATIC LIBRARY BUILD SUCCESSFUL"
+	@echo "Library: $(PUBLIC_LIB)"
+	@echo "Headers: $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-mac prune-build-files
+
+dynamic: $(PUBLIC_LIB) $(PUBLIC_INCLUDE_DIR)/.stamp \
+         $(PUBLIC_RESOURCE_DIR)/Fonts/.stamp \
+         $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic
+	@echo "-----------------------------------------------------------"
+	@echo "MAC ALTIVECCOCOA FRAMEWORK BUILD SUCCESSFUL"
+	@echo "Framework: $(FRAMEWORK_BUNDLE)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-mac prune-build-files
+
+$(INTERMEDIATE)/ppc/%.o: %.m $(COCOA_HEADERS)
+	@mkdir -p $(dir $@) $(STAMP_DIR)
+	@echo "  > ppc: $<"
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) \
+	  $(PPC_FLAGS) $(OPT_FLAGS) $(COMMON_WARN_FLAGS) -c $< -o $@
+
+$(INTERMEDIATE)/x86/%.o: %.m $(COCOA_HEADERS)
+	@mkdir -p $(dir $@) $(STAMP_DIR)
+	@echo "  > x86: $<"
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) \
+	  $(X86_FLAGS) $(OPT_FLAGS) $(COMMON_WARN_FLAGS) -c $< -o $@
+
+$(INTERMEDIATE)/x64/%.o: %.m $(COCOA_HEADERS)
+	@mkdir -p $(dir $@) $(STAMP_DIR)
+	@echo "  > x64: $<"
+	$(COMPILER_X64) $(X64_COMPILE_FLAGS) $(OPT_FLAGS) \
+	  $(CLANG_WARN_FLAGS) -c $< -o $@
+
+$(INTERMEDIATE)/arm64/%.o: %.m $(COCOA_HEADERS)
+	@mkdir -p $(dir $@) $(STAMP_DIR)
+	@echo "  > arm64: $<"
+	$(COMPILER_ARM64) $(ARM64_COMPILE_FLAGS) $(OPT_FLAGS) \
+	  $(CLANG_WARN_FLAGS) -c $< -o $@
+
+$(PREFIX)/ppc/lib/libAltivecCocoa.a: $(PPC_OBJS)
+	@echo "--- Archiving AltivecCocoa (ppc) ---"
+	mkdir -p $(PREFIX)/ppc/lib
+	$(AR_LEGACY) rc $@ $^
+	$(RANLIB_LEGACY) $@
+
+$(PREFIX)/x86/lib/libAltivecCocoa.a: $(X86_OBJS)
+	@echo "--- Archiving AltivecCocoa (i386) ---"
+	mkdir -p $(PREFIX)/x86/lib
+	$(AR_LEGACY) rc $@ $^
+	$(RANLIB_LEGACY) $@
+
+$(PREFIX)/x64/lib/libAltivecCocoa.a: $(X64_OBJS)
+	@echo "--- Archiving AltivecCocoa (x86_64) ---"
+	mkdir -p $(PREFIX)/x64/lib
+	$(AR_MODERN) rc $@ $^
+	$(RANLIB_MODERN) $@
+
+$(PREFIX)/arm64/lib/libAltivecCocoa.a: $(ARM64_OBJS)
+	@echo "--- Archiving AltivecCocoa (arm64) ---"
+	mkdir -p $(PREFIX)/arm64/lib
+	$(AR_MODERN) rc $@ $^
+	$(RANLIB_MODERN) $@
+
+$(PUBLIC_LIB): $(PREFIX)/ppc/lib/libAltivecCocoa.a \
+               $(PREFIX)/x86/lib/libAltivecCocoa.a \
+               $(PREFIX)/x64/lib/libAltivecCocoa.a \
+               $(PREFIX)/arm64/lib/libAltivecCocoa.a
+	@echo "--- Merging Quad-Fat AltivecCocoa static library ---"
+	mkdir -p $(PUBLIC_LIB_DIR)
+	$(LIPO) -create $^ -output $@
+
+$(PUBLIC_INCLUDE_DIR)/.stamp: $(COCOA_HEADERS)
+	mkdir -p $(PUBLIC_INCLUDE_DIR)/AltivecCocoa
+	cp $(COCOA_HEADERS) $(PUBLIC_INCLUDE_DIR)/
+	cp $(COCOA_HEADERS) $(PUBLIC_INCLUDE_DIR)/AltivecCocoa/
+	touch $@
+
+$(PUBLIC_RESOURCE_DIR)/Fonts/.stamp: $(COCOA_FONT_FILES) $(COCOA_FONT_NOTICE)
+	mkdir -p $(PUBLIC_RESOURCE_DIR)/Fonts
+	cp $(COCOA_FONT_FILES) $(PUBLIC_RESOURCE_DIR)/Fonts/
+	cp $(COCOA_FONT_NOTICE) $(PUBLIC_RESOURCE_DIR)/Fonts/
+	touch $@
+
+verify-static: $(PUBLIC_LIB)
+	@echo "--- Verifying Mac AltivecCocoa static library ---"
+	@info="`$(LIPO) -info $(PUBLIC_LIB) 2>/dev/null`"; \
+	echo "  > $$info"; \
+	missing=0; \
+	for arch in ppc i386 x86_64 arm64; do \
+		echo "$$info" | grep -qw "$$arch" || { \
+			echo " [!] ERROR: AltivecCocoa static library missing $$arch"; \
+			missing=1; \
+		}; \
+	done; \
+	exit $$missing
+
+$(INTERMEDIATE)/exports-legacy.txt:
+	mkdir -p $(INTERMEDIATE)
+	printf '%s\n' \
+	  '.objc_class_name_AIViewController' \
+	  '.objc_class_name_AICookieCutterWindowController' \
+	  '.objc_class_name_AIWebViewController' \
+	  '.objc_class_name_AIFontAwesome' > $@
+
+$(INTERMEDIATE)/exports-modern.txt:
+	mkdir -p $(INTERMEDIATE)
+	printf '%s\n' \
+	  '_OBJC_CLASS_$$_AIViewController' \
+	  '_OBJC_METACLASS_$$_AIViewController' \
+	  '_OBJC_CLASS_$$_AICookieCutterWindowController' \
+	  '_OBJC_METACLASS_$$_AICookieCutterWindowController' \
+	  '_OBJC_CLASS_$$_AIWebViewController' \
+	  '_OBJC_METACLASS_$$_AIWebViewController' \
+	  '_OBJC_CLASS_$$_AIFontAwesome' \
+	  '_OBJC_METACLASS_$$_AIFontAwesome' > $@
+
+$(INTERMEDIATE)/AltivecCocoa-ppc.dylib: $(PPC_OBJS) $(INTERMEDIATE)/exports-legacy.txt
+	@echo "--- Linking AltivecCocoa dylib (ppc) ---"
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) \
+	  $(PPC_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-legacy.txt \
+	  $(PPC_OBJS) $(COCOA_FRAMEWORKS) -o $@
+
+$(INTERMEDIATE)/AltivecCocoa-x86.dylib: $(X86_OBJS) $(INTERMEDIATE)/exports-legacy.txt
+	@echo "--- Linking AltivecCocoa dylib (i386) ---"
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) \
+	  $(X86_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-legacy.txt \
+	  $(X86_OBJS) $(COCOA_FRAMEWORKS) -o $@
+
+$(INTERMEDIATE)/AltivecCocoa-x64.dylib: $(X64_OBJS) $(INTERMEDIATE)/exports-modern.txt
+	@echo "--- Linking AltivecCocoa dylib (x86_64) ---"
+	$(COMPILER_X64) $(X64_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-modern.txt \
+	  $(X64_OBJS) $(COCOA_FRAMEWORKS) -o $@
+
+$(INTERMEDIATE)/AltivecCocoa-arm64.dylib: $(ARM64_OBJS) $(INTERMEDIATE)/exports-modern.txt
+	@echo "--- Linking AltivecCocoa dylib (arm64) ---"
+	$(COMPILER_ARM64) $(ARM64_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-modern.txt \
+	  $(ARM64_OBJS) $(COCOA_FRAMEWORKS) -o $@
+
+$(INTERMEDIATE)/AltivecCocoa.dylib: $(INTERMEDIATE)/AltivecCocoa-ppc.dylib \
+                                    $(INTERMEDIATE)/AltivecCocoa-x86.dylib \
+                                    $(INTERMEDIATE)/AltivecCocoa-x64.dylib \
+                                    $(INTERMEDIATE)/AltivecCocoa-arm64.dylib
+	@echo "--- Merging Quad-Fat AltivecCocoa dylib ---"
+	$(LIPO) -create $^ -output $@
+
+$(INTERMEDIATE)/Info.plist:
+	mkdir -p $(INTERMEDIATE)
+	printf '%s\n' \
+	  '<?xml version="1.0" encoding="UTF-8"?>' \
+	  '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+	  '<plist version="1.0">' \
+	  '<dict>' \
+	  '  <key>CFBundleDevelopmentRegion</key><string>en</string>' \
+	  '  <key>CFBundleExecutable</key><string>$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundleIdentifier</key><string>com.altivec.$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>' \
+	  '  <key>CFBundleName</key><string>$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundlePackageType</key><string>FMWK</string>' \
+	  '  <key>CFBundleShortVersionString</key><string>$(FRAMEWORK_CURRENT_VER)</string>' \
+	  '  <key>CFBundleVersion</key><string>1</string>' \
+	  '</dict>' \
+	  '</plist>' > $@
+
+$(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME): $(INTERMEDIATE)/AltivecCocoa.dylib \
+                                      $(INTERMEDIATE)/Info.plist \
+                                      $(PUBLIC_INCLUDE_DIR)/.stamp \
+                                      $(PUBLIC_RESOURCE_DIR)/Fonts/.stamp
+	@echo "--- Assembling AltivecCocoa.framework bundle ---"
+	rm -rf $(FRAMEWORK_BUNDLE)
+	mkdir -p $(FRAMEWORK_VERSION_DIR)/Headers \
+	         $(FRAMEWORK_VERSION_DIR)/Resources/Fonts
+	cp $(INTERMEDIATE)/AltivecCocoa.dylib $(FRAMEWORK_VERSION_DIR)/$(FRAMEWORK_NAME)
+	cp $(INTERMEDIATE)/Info.plist $(FRAMEWORK_VERSION_DIR)/Resources/Info.plist
+	cp -R $(PUBLIC_INCLUDE_DIR)/* $(FRAMEWORK_VERSION_DIR)/Headers/
+	cp $(PUBLIC_RESOURCE_DIR)/Fonts/*.otf \
+	   $(FRAMEWORK_VERSION_DIR)/Resources/Fonts/
+	cp $(PUBLIC_RESOURCE_DIR)/Fonts/LICENSE-Font-Awesome.txt \
+	   $(FRAMEWORK_VERSION_DIR)/Resources/Fonts/
+	ln -sf $(FRAMEWORK_VERSION) $(FRAMEWORK_BUNDLE)/Versions/Current
+	ln -sf Versions/Current/$(FRAMEWORK_NAME) $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
+	ln -sf Versions/Current/Headers $(FRAMEWORK_BUNDLE)/Headers
+	ln -sf Versions/Current/Resources $(FRAMEWORK_BUNDLE)/Resources
+
+verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
+	@echo "--- Verifying AltivecCocoa.framework ---"
+	@info="`$(LIPO) -info $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null`"; \
+	echo "  > $$info"; \
+	missing=0; \
+	for arch in ppc i386 x86_64 arm64; do \
+		echo "$$info" | grep -qw "$$arch" || { \
+			echo " [!] ERROR: AltivecCocoa.framework missing $$arch"; \
+			missing=1; \
+		}; \
+	done; \
+	test -L $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) || { echo " [!] ERROR: top-level binary symlink missing"; missing=1; }; \
+	test -L $(FRAMEWORK_BUNDLE)/Headers || { echo " [!] ERROR: Headers symlink missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Info.plist || { echo " [!] ERROR: Info.plist missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AltivecCocoa.h || { echo " [!] ERROR: AltivecCocoa.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AIViewController.h || { echo " [!] ERROR: AIViewController.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AICookieCutterWindowController.h || { echo " [!] ERROR: AICookieCutterWindowController.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AIWebViewController.h || { echo " [!] ERROR: AIWebViewController.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AIFontAwesome.h || { echo " [!] ERROR: AIFontAwesome.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Fonts/FA7-Solid-900.otf || { echo " [!] ERROR: FA7-Solid-900.otf missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Fonts/FA7-Regular-400.otf || { echo " [!] ERROR: FA7-Regular-400.otf missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Fonts/FA7-Brands-400.otf || { echo " [!] ERROR: FA7-Brands-400.otf missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Fonts/LICENSE-Font-Awesome.txt || { echo " [!] ERROR: Font Awesome license notice missing"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIViewController' || { echo " [!] ERROR: AIViewController class not exported (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIFontAwesome' || { echo " [!] ERROR: AIFontAwesome class not exported (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIViewController' || { echo " [!] ERROR: AIViewController class not exported (ppc)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIFontAwesome' || { echo " [!] ERROR: AIFontAwesome class not exported (ppc)"; missing=1; }; \
+	exit $$missing
+
+prune-build-files:
+	@echo "--- Pruning Mac AltivecCocoa build intermediates ---"
+	rm -rf $(INTERMEDIATE) $(PREFIX) $(STAMP_DIR)
+
+clean:
+	rm -rf $(BUILD_ROOT)
+
+.PHONY: all static dynamic verify-static verify-dynamic prune-build-files clean

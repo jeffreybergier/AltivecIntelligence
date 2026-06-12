@@ -36,8 +36,9 @@ simply pulling a newer image.
 
 See [templates/compose.yml](templates/compose.yml) for the full template and
 notes on first-time AI assistant setup. The GHCR image ships the entire
-`/altivec/` toolchain (cross-compilers, SDKs, AltivecCore libs, sample
-apps, and AI CLIs), so your repo only needs the `compose.yml` plus your source.
+`/altivec/` toolchain (cross-compilers, SDKs, AltivecCore/AltivecCocoa libs,
+sample apps, and AI CLIs), so your repo only needs the `compose.yml` plus your
+source.
 
 ```bash
 # 0. If you do not already have a repository for your app idea,
@@ -191,9 +192,25 @@ Optional AltivecCore knobs:
 - `ALTIVECCORE_LINKAGE=dynamic|static`: choose framework or static archives.
 - `ALTIVECCORE_DIR=/path/to/altivec/libs/core/build-mac|build-phone`: override autodetect.
 
-For iPhone apps, `dynamic` keeps the sample-app workflow simple but embedded
-frameworks require iOS 8+ at runtime. Use `ALTIVECCORE_LINKAGE=static` when
-building for iOS 4.3-7 devices.
+For iPhone apps, `static` is the default because embedded frameworks require
+iOS 8+ at runtime. Use `ALTIVECCORE_LINKAGE=dynamic` only for iOS 8+ builds
+where you specifically want framework embedding.
+
+Optional AltivecCocoa knobs:
+- `ALTIVECCOCOA_REQUIRED=1`: enforce required Cocoa artifacts at validate time.
+- `ALTIVECCOCOA_LINKAGE=dynamic|static`: choose `AltivecCocoa.framework` or
+  `libAltivecCocoa.a`.
+- `ALTIVECCOCOA_DIR=/path/to/altivec/libs/cocoa/build-mac|build-phone`:
+  override autodetect.
+
+AltivecCocoa contains reusable nibless AppKit controller classes such as
+`AIViewController`, `AICookieCutterWindowController`, and `AIWebViewController`,
+plus the cross-platform `AIFontAwesome` icon helper. Static AltivecCocoa apps
+stage Font Awesome OTFs into the app bundle; dynamic apps use the fonts inside
+`AltivecCocoa.framework`. Like AltivecCore, phone apps default to
+`ALTIVECCOCOA_LINKAGE=static`; opt into `dynamic` only for iOS 8+.
+The bundled Font Awesome Free OTFs are licensed under SIL OFL 1.1; their
+notice is copied with the font files.
 
 Bundle resource knobs:
 - `RES_DIR=Resources`: blind-copy ordinary resources into the bundle resource

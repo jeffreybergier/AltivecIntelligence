@@ -260,18 +260,21 @@ CMD ["/bin/bash"]
 ENV PATH="/altivec/bin:${PATH}"
 
 # 10. GHCR image layer — bakes the Altivec runtime repo into /altivec/.
-#     Builds the shared AltivecCore artifacts and ships their build-mac and
-#     build-phone outputs in the image so GHCR consumers do NOT have to
+#     Builds the shared AltivecCore and AltivecCocoa artifacts and ships their
+#     build outputs in the image so GHCR consumers do NOT have to
 #     re-run the slow cross-compile locally. The top-level `make all`
-#     target produces BOTH:
+#     target for each library produces BOTH:
 #       - Static libs: libcurl.a, libssl.a, libcrypto.a, libz.a,
 #         libAICURLConnection.a, libsqlite3.a, libcjson.a
 #         (Mac: ppc/i386/x86_64/arm64; Phone: armv7/arm64).
 #       - Dynamic AltivecCore.framework (versioned bundle on Mac, flat
 #         bundle on iPhone) — same architectures as the static libs.
-#     The mk files in altivec_common_*.mk expect
-#     $(ALTIVEC_ROOT)/libs/core/build-{mac,phone} to exist — those
-#     paths resolve to /altivec/libs/core/build-{mac,phone} here.
+#       - Dynamic AltivecCocoa.framework and libAltivecCocoa.a for Mac
+#         (ppc/i386/x86_64/arm64) and iPhone (currently empty,
+#         armv7/arm64).
+#     The mk files in altivec_common_*.mk expect these build outputs under
+#     $(ALTIVEC_ROOT)/libs/{core,cocoa}/build-* — those paths resolve to
+#     /altivec/libs/{core,cocoa}/build-* here.
 #     Only built when explicitly targeted (docker compose skips it).
 FROM altivec-builder AS ghcr-action
 WORKDIR /altivec
@@ -289,6 +292,11 @@ COPY libs/libcurl/ ./libs/libcurl/
 COPY libs/sqlite/  ./libs/sqlite/
 COPY libs/core/    ./libs/core/
 RUN cd libs/core && make all && make prune-intermediates
+
+# Build AltivecCocoa before sample apps so CURLmac can embed the Mac
+# framework and CURLphone can statically link the phone archive.
+COPY libs/cocoa/   ./libs/cocoa/
+RUN cd libs/cocoa && make all && make prune-intermediates
 
 # Common mk fragments must land before the apps build below — each app's
 # Makefile does `include /altivec/altivec_common_{mac,phone}.mk` by
@@ -309,7 +317,18 @@ RUN set -e; \
     for app in SingleWindow SingleScreen CURLmac CURLphone; do \
       echo "=== Building $app (release) ==="; \
       make -C apps/$app release; \
-    done
+    done; \
+    test -d apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCore.framework; \
+    test -d apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework; \
+    test -f apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/FA7-Solid-900.otf; \
+    test -f apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/LICENSE-Font-Awesome.txt; \
+    test -f libs/core/build-phone/lib/AltivecCore.framework/AltivecCore; \
+    test -f libs/cocoa/build-phone/lib/AltivecCocoa.framework/AltivecCocoa; \
+    test -f libs/cocoa/build-phone/lib/AltivecCocoa.framework/Fonts/FA7-Solid-900.otf; \
+    test -f libs/cocoa/build-phone/lib/AltivecCocoa.framework/Fonts/LICENSE-Font-Awesome.txt; \
+    test -f apps/CURLphone/build-release/CURLphone.app/Fonts/FA7-Solid-900.otf; \
+    test -f apps/CURLphone/build-release/CURLphone.app/Fonts/LICENSE-Font-Awesome.txt; \
+    test ! -d apps/CURLphone/build-release/CURLphone.app/Frameworks
 
 # Bake the rest of the runtime repo into /altivec/. Build-time-only files
 # (Containerfile, compose.yml, docker/, .github/) are deliberately

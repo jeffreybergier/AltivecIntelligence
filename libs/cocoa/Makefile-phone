@@ -1,0 +1,209 @@
+include cocoa_common.mk
+
+CWD=$(shell pwd)
+BUILD_ROOT=$(CWD)/build-phone
+INTERMEDIATE=$(BUILD_ROOT)/intermediate
+PREFIX=$(BUILD_ROOT)/prefix
+STAMP_DIR=$(BUILD_ROOT)/stamps
+PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
+PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
+PUBLIC_RESOURCE_DIR=$(BUILD_ROOT)/Resources
+
+COCOA_SOURCES=AIViewController.m \
+              AICookieCutterWindowController.m \
+              AIWebViewController.m \
+              AIFontAwesome.m
+COCOA_HEADERS=AltivecCocoa.h \
+              AIViewController.h \
+              AICookieCutterWindowController.h \
+              AIWebViewController.h \
+              AIFontAwesome.h
+COCOA_FONT_FILES=Resources/Fonts/FA7-Solid-900.otf \
+                 Resources/Fonts/FA7-Regular-400.otf \
+                 Resources/Fonts/FA7-Brands-400.otf
+COCOA_FONT_NOTICE=Resources/Fonts/LICENSE-Font-Awesome.txt
+
+IOS_V7_FLAGS=-target armv7-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch armv7 -B$(BIN_DIR)
+IOS_64_FLAGS=-target arm64-apple-ios$(IOS_ARM64_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch arm64 -B$(BIN_DIR)
+
+PHONE_CFLAGS=$(OPT_FLAGS) $(CLANG_WARN_FLAGS) -fobjc-exceptions
+
+ARMV7_OBJS=$(addprefix $(INTERMEDIATE)/armv7/,$(COCOA_SOURCES:.m=.o))
+ARM64_OBJS=$(addprefix $(INTERMEDIATE)/arm64/,$(COCOA_SOURCES:.m=.o))
+
+PUBLIC_LIB=$(PUBLIC_LIB_DIR)/libAltivecCocoa.a
+
+FRAMEWORK_NAME=AltivecCocoa
+FRAMEWORK_BUNDLE=$(PUBLIC_LIB_DIR)/$(FRAMEWORK_NAME).framework
+FRAMEWORK_INSTALL_NAME=@rpath/$(FRAMEWORK_NAME).framework/$(FRAMEWORK_NAME)
+FRAMEWORK_VERSION=1.0.0
+DYLIB_LINK_FLAGS=-dynamiclib \
+                 -install_name $(FRAMEWORK_INSTALL_NAME) \
+                 -compatibility_version $(FRAMEWORK_VERSION) \
+                 -current_version $(FRAMEWORK_VERSION) \
+                 -Wl,-headerpad_max_install_names
+
+all: $(PUBLIC_LIB) $(PUBLIC_INCLUDE_DIR)/.stamp \
+     $(PUBLIC_RESOURCE_DIR)/Fonts/.stamp verify-static \
+     $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic
+	@echo "-----------------------------------------------------------"
+	@echo "PHONE ALTIVECCOCOA STATIC + FRAMEWORK BUILD SUCCESSFUL"
+	@echo "Library:   $(PUBLIC_LIB)"
+	@echo "Framework: $(FRAMEWORK_BUNDLE)"
+	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-phone prune-build-files
+
+static: $(PUBLIC_LIB) $(PUBLIC_INCLUDE_DIR)/.stamp \
+        $(PUBLIC_RESOURCE_DIR)/Fonts/.stamp verify-static
+	@echo "-----------------------------------------------------------"
+	@echo "PHONE ALTIVECCOCOA STATIC LIBRARY BUILD SUCCESSFUL"
+	@echo "Library: $(PUBLIC_LIB)"
+	@echo "Headers: $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-phone prune-build-files
+
+dynamic: $(PUBLIC_LIB) $(PUBLIC_INCLUDE_DIR)/.stamp \
+         $(PUBLIC_RESOURCE_DIR)/Fonts/.stamp \
+         $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic
+	@echo "-----------------------------------------------------------"
+	@echo "PHONE ALTIVECCOCOA FRAMEWORK BUILD SUCCESSFUL"
+	@echo "Framework: $(FRAMEWORK_BUNDLE)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-phone prune-build-files
+
+$(INTERMEDIATE)/armv7/%.o: %.m $(COCOA_HEADERS)
+	@mkdir -p $(dir $@) $(STAMP_DIR)
+	@echo "  > armv7: $<"
+	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(PHONE_CFLAGS) -c $< -o $@
+
+$(INTERMEDIATE)/arm64/%.o: %.m $(COCOA_HEADERS)
+	@mkdir -p $(dir $@) $(STAMP_DIR)
+	@echo "  > arm64: $<"
+	$(COMPILER_IOS) $(IOS_64_FLAGS) $(PHONE_CFLAGS) -c $< -o $@
+
+$(PREFIX)/armv7/lib/libAltivecCocoa.a: $(ARMV7_OBJS)
+	@echo "--- Archiving AltivecCocoa (armv7) ---"
+	mkdir -p $(PREFIX)/armv7/lib
+	$(AR_MODERN) rc $@ $^
+	$(RANLIB_MODERN) $@
+
+$(PREFIX)/arm64/lib/libAltivecCocoa.a: $(ARM64_OBJS)
+	@echo "--- Archiving AltivecCocoa (arm64) ---"
+	mkdir -p $(PREFIX)/arm64/lib
+	$(AR_MODERN) rc $@ $^
+	$(RANLIB_MODERN) $@
+
+$(PUBLIC_LIB): $(PREFIX)/armv7/lib/libAltivecCocoa.a \
+               $(PREFIX)/arm64/lib/libAltivecCocoa.a
+	@echo "--- Merging armv7 + arm64 AltivecCocoa static library ---"
+	mkdir -p $(PUBLIC_LIB_DIR)
+	$(LIPO_MODERN) -create $^ -output $@
+
+$(PUBLIC_INCLUDE_DIR)/.stamp: $(COCOA_HEADERS)
+	mkdir -p $(PUBLIC_INCLUDE_DIR)/AltivecCocoa
+	cp $(COCOA_HEADERS) $(PUBLIC_INCLUDE_DIR)/
+	cp $(COCOA_HEADERS) $(PUBLIC_INCLUDE_DIR)/AltivecCocoa/
+	touch $@
+
+$(PUBLIC_RESOURCE_DIR)/Fonts/.stamp: $(COCOA_FONT_FILES) $(COCOA_FONT_NOTICE)
+	mkdir -p $(PUBLIC_RESOURCE_DIR)/Fonts
+	cp $(COCOA_FONT_FILES) $(PUBLIC_RESOURCE_DIR)/Fonts/
+	cp $(COCOA_FONT_NOTICE) $(PUBLIC_RESOURCE_DIR)/Fonts/
+	touch $@
+
+verify-static: $(PUBLIC_LIB)
+	@echo "--- Verifying Phone AltivecCocoa static library ---"
+	@info="`$(LIPO_MODERN) -info $(PUBLIC_LIB) 2>/dev/null`"; \
+	echo "  > $$info"; \
+	missing=0; \
+	for arch in armv7 arm64; do \
+		echo "$$info" | grep -qw "$$arch" || { \
+			echo " [!] ERROR: AltivecCocoa static library missing $$arch"; \
+			missing=1; \
+		}; \
+	done; \
+	exit $$missing
+
+$(INTERMEDIATE)/AltivecCocoa-armv7.dylib: $(ARMV7_OBJS)
+	@echo "--- Linking AltivecCocoa dylib (armv7) ---"
+	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  $(ARMV7_OBJS) -framework Foundation -framework UIKit \
+	  -framework CoreText -framework CoreGraphics -lobjc -o $@
+
+$(INTERMEDIATE)/AltivecCocoa-arm64.dylib: $(ARM64_OBJS)
+	@echo "--- Linking AltivecCocoa dylib (arm64) ---"
+	$(COMPILER_IOS) $(IOS_64_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  $(ARM64_OBJS) -framework Foundation -framework UIKit \
+	  -framework CoreText -framework CoreGraphics -lobjc -o $@
+
+$(INTERMEDIATE)/AltivecCocoa.dylib: $(INTERMEDIATE)/AltivecCocoa-armv7.dylib \
+                                    $(INTERMEDIATE)/AltivecCocoa-arm64.dylib
+	@echo "--- Merging armv7 + arm64 AltivecCocoa dylib ---"
+	$(LIPO_MODERN) -create $^ -output $@
+
+$(INTERMEDIATE)/Info.plist:
+	mkdir -p $(INTERMEDIATE)
+	printf '%s\n' \
+	  '<?xml version="1.0" encoding="UTF-8"?>' \
+	  '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+	  '<plist version="1.0">' \
+	  '<dict>' \
+	  '  <key>CFBundleDevelopmentRegion</key><string>en</string>' \
+	  '  <key>CFBundleExecutable</key><string>$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundleIdentifier</key><string>com.altivec.$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>' \
+	  '  <key>CFBundleName</key><string>$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundlePackageType</key><string>FMWK</string>' \
+	  '  <key>CFBundleShortVersionString</key><string>$(FRAMEWORK_VERSION)</string>' \
+	  '  <key>CFBundleVersion</key><string>1</string>' \
+	  '  <key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>' \
+	  '  <key>MinimumOSVersion</key><string>$(IOS_ARM64_MIN_VER)</string>' \
+	  '</dict>' \
+	  '</plist>' > $@
+
+$(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME): $(INTERMEDIATE)/AltivecCocoa.dylib \
+                                      $(INTERMEDIATE)/Info.plist \
+                                      $(PUBLIC_INCLUDE_DIR)/.stamp \
+                                      $(PUBLIC_RESOURCE_DIR)/Fonts/.stamp
+	@echo "--- Assembling AltivecCocoa.framework (iOS flat layout) ---"
+	rm -rf $(FRAMEWORK_BUNDLE)
+	mkdir -p $(FRAMEWORK_BUNDLE)/Headers $(FRAMEWORK_BUNDLE)/Fonts
+	cp $(INTERMEDIATE)/AltivecCocoa.dylib $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
+	cp $(INTERMEDIATE)/Info.plist $(FRAMEWORK_BUNDLE)/Info.plist
+	cp -R $(PUBLIC_INCLUDE_DIR)/* $(FRAMEWORK_BUNDLE)/Headers/
+	cp $(PUBLIC_RESOURCE_DIR)/Fonts/*.otf $(FRAMEWORK_BUNDLE)/Fonts/
+	cp $(PUBLIC_RESOURCE_DIR)/Fonts/LICENSE-Font-Awesome.txt \
+	   $(FRAMEWORK_BUNDLE)/Fonts/
+
+verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
+	@echo "--- Verifying AltivecCocoa.framework (iOS) ---"
+	@info="`$(LIPO_MODERN) -info $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null`"; \
+	echo "  > $$info"; \
+	missing=0; \
+	for arch in armv7 arm64; do \
+		echo "$$info" | grep -qw "$$arch" || { \
+			echo " [!] ERROR: AltivecCocoa.framework missing $$arch"; \
+			missing=1; \
+		}; \
+	done; \
+	test -f $(FRAMEWORK_BUNDLE)/Info.plist || { echo " [!] ERROR: Info.plist missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/AltivecCocoa.h || { echo " [!] ERROR: AltivecCocoa.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/AIViewController.h || { echo " [!] ERROR: AIViewController.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/AICookieCutterWindowController.h || { echo " [!] ERROR: AICookieCutterWindowController.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/AIWebViewController.h || { echo " [!] ERROR: AIWebViewController.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/AIFontAwesome.h || { echo " [!] ERROR: AIFontAwesome.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Fonts/FA7-Solid-900.otf || { echo " [!] ERROR: FA7-Solid-900.otf missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Fonts/FA7-Regular-400.otf || { echo " [!] ERROR: FA7-Regular-400.otf missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Fonts/FA7-Brands-400.otf || { echo " [!] ERROR: FA7-Brands-400.otf missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Fonts/LICENSE-Font-Awesome.txt || { echo " [!] ERROR: Font Awesome license notice missing"; missing=1; }; \
+	exit $$missing
+
+prune-build-files:
+	@echo "--- Pruning Phone AltivecCocoa build intermediates ---"
+	rm -rf $(INTERMEDIATE) $(PREFIX) $(STAMP_DIR)
+
+clean:
+	rm -rf $(BUILD_ROOT)
+
+.PHONY: all static dynamic verify-static verify-dynamic prune-build-files clean

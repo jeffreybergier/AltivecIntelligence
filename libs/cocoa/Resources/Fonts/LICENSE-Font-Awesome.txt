@@ -1,0 +1,10 @@
+Font Awesome Free font files
+
+The bundled FA7-*.otf files are Font Awesome Free font files.
+Font Awesome Free fonts are licensed under the SIL Open Font License 1.1.
+
+Official license page:
+https://fontawesome.com/license/free
+
+SIL OFL 1.1:
+https://openfontlicense.org/
