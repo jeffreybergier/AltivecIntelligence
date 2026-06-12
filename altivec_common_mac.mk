@@ -102,8 +102,19 @@ endif
 # --- Target Paths ---
 BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 ZIP_FILE = $(BUILD_DIR)/$(APP_NAME).zip
+
+# --- Bundle Resources ---
+# RES_DIR is a verbatim copy root for ordinary bundle resources. Use the typed
+# variables below for resources that need platform-specific placement or
+# processing.
 RES_DIR ?= Resources
-INFO_PLIST ?= Info.plist
+# Info.plist lives under RES_DIR but is bundle metadata, so it is copied to
+# Contents/Info.plist and skipped by the blind resource copy.
+INFO_PLIST ?= $(RES_DIR)/Info.plist
+MAC_ICON ?=
+BUNDLE_FONT_DIRS ?=
+BUNDLE_LOCALIZATION_DIRS ?=
+EXTRA_BUNDLE_STEPS ?=
 
 # --- Object File Mapping ---
 # Support both .m and .c files in SOURCES and EXTRA_SOURCES
@@ -220,11 +231,46 @@ $(BUNDLE): $(UNIVERSAL_BIN)
 	@echo "  > copying binary"
 	@cp $< $@/Contents/MacOS/$(APP_NAME)
 	@echo "  > copying Info.plist"
-	@cp $(INFO_PLIST) $@/Contents/Info.plist
-	@if [ -d "$(RES_DIR)" ] && [ "$$(ls -A $(RES_DIR) 2>/dev/null)" ]; then \
-		echo "  > copying resources" ; \
-		cp -R $(RES_DIR)/* $@/Contents/Resources/ ; \
+	@cp "$(INFO_PLIST)" $@/Contents/Info.plist
+	@if [ -d "$(RES_DIR)" ]; then \
+		did_copy=0 ; \
+		for res in "$(RES_DIR)"/*; do \
+			[ -e "$$res" ] || continue ; \
+			[ "$$(basename "$$res")" = "Info.plist" ] && continue ; \
+			if [ "$$did_copy" = "0" ]; then echo "  > copying resources" ; did_copy=1 ; fi ; \
+			cp -R "$$res" $@/Contents/Resources/ ; \
+		done ; \
 	fi
+	@if [ -n "$(MAC_ICON)" ]; then \
+		if [ ! -f "$(MAC_ICON)" ]; then echo " [!] ERROR: MAC_ICON not found: $(MAC_ICON)"; exit 1; fi ; \
+		echo "  > copying Mac icon" ; \
+		cp "$(MAC_ICON)" $@/Contents/Resources/ ; \
+	fi
+	@for dir in $(BUNDLE_FONT_DIRS); do \
+		if [ -d "$$dir" ] && [ "$$(ls -A "$$dir" 2>/dev/null)" ]; then \
+			echo "  > copying fonts from $$dir" ; \
+			mkdir -p $@/Contents/Resources/Fonts ; \
+			cp -R "$$dir"/* $@/Contents/Resources/Fonts/ ; \
+		fi ; \
+	done
+	@for dir in $(BUNDLE_LOCALIZATION_DIRS); do \
+		if ls "$$dir"/*.lproj >/dev/null 2>&1; then \
+			echo "  > copying localizations from $$dir" ; \
+			for lproj in "$$dir"/*.lproj; do \
+				[ -d "$$lproj" ] || continue ; \
+				cp -R "$$lproj" $@/Contents/Resources/ ; \
+				for strings in "$$lproj"/*.strings; do \
+					[ -f "$$strings" ] || continue ; \
+					dest="$@/Contents/Resources/$$(basename "$$lproj")/$$(basename "$$strings")" ; \
+					tmp="$$dest.utf16" ; \
+					echo "  > transcoding $$(basename "$$lproj")/$$(basename "$$strings") to UTF-16 LE" ; \
+					printf '\377\376' > "$$tmp" ; \
+					iconv -f UTF-8 -t UTF-16LE "$$strings" >> "$$tmp" ; \
+					mv "$$tmp" "$$dest" ; \
+				done ; \
+			done ; \
+		fi ; \
+	done
 	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ] && [ "$(ALTIVECCORE_LINKAGE)" = "dynamic" ] && [ -d "$(ALTIVECCORE_FRAMEWORK)" ]; then \
 		echo "  > embedding AltivecCore.framework" ; \
 		mkdir -p $@/Contents/Frameworks ; \

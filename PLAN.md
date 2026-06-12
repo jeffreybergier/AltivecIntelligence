@@ -42,21 +42,22 @@ These ENIL needs are already represented in Altivec's common build files:
   - Acceptance: an app can link SQLite through AltivecCore without carrying
     local SQLite build recipes or generated outputs.
 
-- [ ] **Phone bundle extension hooks**
+- [x] **Phone bundle extension hooks**
   - Source: `/repo/ENIL-cocoa/source/iOS/Makefile`.
-  - Add a phone-side equivalent to macOS `EXTRA_BUNDLE_STEPS`.
-  - Support staging shared directories such as fonts and `.lproj` resources
-    before IPA packaging.
-  - Consider an optional `ldid` signing hook with entitlements, but keep it
-    opt-in so normal unsigned builds still work.
+  - Added a phone-side equivalent to macOS `EXTRA_BUNDLE_STEPS`, with
+    `PHONE_EXTRA_BUNDLE_STEPS` for phone-only staging.
+  - Added `BUNDLE_FONT_DIRS` and `BUNDLE_LOCALIZATION_DIRS` so shared fonts and
+    `.lproj` resources can be staged before IPA packaging.
+  - Added opt-in `PHONE_LDID_SIGN` / `PHONE_LDID_ENTITLEMENTS` support so
+    normal unsigned builds still work.
   - Acceptance: ENIL's iOS font/localization/signing hooks can be expressed
     through common Altivec variables instead of order-only local Make rules.
 
-- [ ] **Shared localization/resource staging pattern**
+- [x] **Shared localization/resource staging pattern**
   - Source: ENIL macOS and iOS Makefiles.
-  - Document or implement a helper for shared resource directories used by both
-    Mac and iPhone targets.
-  - Preserve the important platform split:
+  - Implemented `BUNDLE_LOCALIZATION_DIRS` for shared resource directories used
+    by both Mac and iPhone targets.
+  - Preserved the important platform split:
     - Mac Tiger/Leopard bundle copies of `Localizable.strings` need UTF-16 LE
       with BOM.
     - iOS can copy UTF-8 `.strings` files verbatim.

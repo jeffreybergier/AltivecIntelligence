@@ -3,7 +3,16 @@
 
 APP_NAME = MyMacApp
 SOURCES = main.m AppDelegate.m
+
+# Blind-copy ordinary resources into Contents/Resources. Info.plist must live
+# here; the common Makefile stages it to Contents/Info.plist.
 RES_DIR = Resources
+
+# Optional typed bundle resources:
+# MAC_ICON = AppIcon.icns
+# BUNDLE_FONT_DIRS = ../shared/Resources/Fonts
+# BUNDLE_LOCALIZATION_DIRS = ../shared/Resources
+# EXTRA_BUNDLE_STEPS = ...
 
 # Optional override if AltivecCore is required for this app:
 # ALTIVECCORE_REQUIRED = 1

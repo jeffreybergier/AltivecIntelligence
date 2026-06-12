@@ -18,9 +18,33 @@ BUILD_DIR ?= build-release
 INT_DIR = $(BUILD_DIR)/Intermediates
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 PHONE_IPA = $(BUILD_DIR)/$(APP_NAME).ipa
-RES_DIR ?= Resources
-INFO_PLIST ?= Info.plist
 OPT_FLAGS ?= -O3
+
+# --- Bundle Resources ---
+# iPhone bundles have a flat resource root. RES_DIR is a verbatim copy root
+# for ordinary resources, including app icons and launch images referenced by
+# Info.plist. Use the typed variables below for resources that need explicit
+# placement or platform-specific handling.
+RES_DIR ?= Resources
+# Info.plist lives under RES_DIR but is bundle metadata, so it is copied to
+# the app bundle root and skipped by the blind resource copy.
+INFO_PLIST ?= $(RES_DIR)/Info.plist
+BUNDLE_FONT_DIRS ?=
+BUNDLE_LOCALIZATION_DIRS ?=
+EXTRA_BUNDLE_STEPS ?=
+PHONE_EXTRA_BUNDLE_STEPS ?=
+
+# Optional jailbreak-style pseudo-signing. Set PHONE_LDID_SIGN=1 to sign with
+# no entitlements, or set PHONE_LDID_ENTITLEMENTS to sign with an entitlements
+# plist. Signing happens before the binary is copied into the app bundle.
+PHONE_LDID ?= ldid
+PHONE_LDID_SIGN ?= 0
+PHONE_LDID_ENTITLEMENTS ?=
+
+PHONE_BUNDLE_DEPS =
+ifneq ($(strip $(PHONE_LDID_ENTITLEMENTS)),)
+  PHONE_BUNDLE_DEPS += $(PHONE_LDID_ENTITLEMENTS)
+endif
 
 # --- Object Mapping ---
 # Support both .m and .c files in SOURCES and EXTRA_SOURCES
@@ -201,17 +225,48 @@ $(PHONE_IPA): $(APP_BUNDLE)
 	@cd $(INT_DIR) && zip -rq ../../$@ Payload
 	@rm -rf $(INT_DIR)/Payload
 
-$(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin
+$(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin $(PHONE_BUNDLE_DEPS)
 	@echo " [3/4] Building app package..."
 	@mkdir -p $@
+	@if [ "$(PHONE_LDID_SIGN)" = "1" ] || [ -n "$(PHONE_LDID_ENTITLEMENTS)" ]; then \
+		flags="-S" ; \
+		if [ -n "$(PHONE_LDID_ENTITLEMENTS)" ]; then flags="-S$(PHONE_LDID_ENTITLEMENTS)" ; fi ; \
+		if [ -n "$(PHONE_LDID_ENTITLEMENTS)" ]; then \
+			echo "  > ldid-signing $(APP_NAME) with $(PHONE_LDID_ENTITLEMENTS)" ; \
+		else \
+			echo "  > ldid-signing $(APP_NAME)" ; \
+		fi ; \
+		$(PHONE_LDID) "$$flags" $< ; \
+	fi
 	@echo "  > copying binary"
 	@cp $< $@/$(APP_NAME)
 	@echo "  > copying Info.plist"
-	@cp $(INFO_PLIST) $@/Info.plist
-	@if [ -d "$(RES_DIR)" ] && [ "$$(ls -A $(RES_DIR) 2>/dev/null)" ]; then \
-		echo "  > copying resources" ; \
-		cp -R $(RES_DIR)/* $@/ ; \
+	@cp "$(INFO_PLIST)" $@/Info.plist
+	@if [ -d "$(RES_DIR)" ]; then \
+		did_copy=0 ; \
+		for res in "$(RES_DIR)"/*; do \
+			[ -e "$$res" ] || continue ; \
+			[ "$$(basename "$$res")" = "Info.plist" ] && continue ; \
+			if [ "$$did_copy" = "0" ]; then echo "  > copying resources" ; did_copy=1 ; fi ; \
+			cp -R "$$res" $@/ ; \
+		done ; \
 	fi
+	@for dir in $(BUNDLE_FONT_DIRS); do \
+		if [ -d "$$dir" ] && [ "$$(ls -A "$$dir" 2>/dev/null)" ]; then \
+			echo "  > copying fonts from $$dir" ; \
+			mkdir -p $@/Fonts ; \
+			cp -R "$$dir"/* $@/Fonts/ ; \
+		fi ; \
+	done
+	@for dir in $(BUNDLE_LOCALIZATION_DIRS); do \
+		if ls "$$dir"/*.lproj >/dev/null 2>&1; then \
+			echo "  > copying localizations from $$dir" ; \
+			for lproj in "$$dir"/*.lproj; do \
+				[ -d "$$lproj" ] || continue ; \
+				cp -R "$$lproj" $@/ ; \
+			done ; \
+		fi ; \
+	done
 	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ] && [ "$(ALTIVECCORE_LINKAGE)" = "dynamic" ] && [ -d "$(ALTIVECCORE_FRAMEWORK)" ]; then \
 		echo "  > embedding AltivecCore.framework" ; \
 		mkdir -p $@/Frameworks ; \
@@ -223,6 +278,8 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin
 	@echo "  > extracting symbols"
 	@$(DSYMUTIL) $< -o $(BUILD_DIR)/$(APP_NAME).dSYM
 	@echo -n "APPL????" > $@/PkgInfo
+	$(EXTRA_BUNDLE_STEPS)
+	$(PHONE_EXTRA_BUNDLE_STEPS)
 
 # Compile and Link in two steps to preserve .o files for dsymutil
 $(INT_DIR)/$(APP_NAME)-bin: $(OBJS)

@@ -195,6 +195,25 @@ For iPhone apps, `dynamic` keeps the sample-app workflow simple but embedded
 frameworks require iOS 8+ at runtime. Use `ALTIVECCORE_LINKAGE=static` when
 building for iOS 4.3-7 devices.
 
+Bundle resource knobs:
+- `RES_DIR=Resources`: blind-copy ordinary resources into the bundle resource
+  root. For iPhone this includes icon and launch image PNGs referenced by
+  `Info.plist`.
+- `INFO_PLIST=$(RES_DIR)/Info.plist`: copied to the real bundle plist location.
+  `Info.plist` is required to live under `RES_DIR` by default, and is skipped
+  by the blind resource copy.
+- `MAC_ICON=AppIcon.icns`: copy a Mac `.icns` file into
+  `Contents/Resources`.
+- `BUNDLE_FONT_DIRS=../shared/Resources/Fonts`: copy font directory contents
+  into the bundle's `Fonts/` directory.
+- `BUNDLE_LOCALIZATION_DIRS=../shared/Resources`: copy `*.lproj` directories.
+  Mac builds transcode `.strings` files to UTF-16 LE with BOM for Tiger and
+  Leopard; iPhone builds copy UTF-8 `.strings` files verbatim.
+- `EXTRA_BUNDLE_STEPS=...`: run app-specific bundle staging after common
+  resource processing. Phone builds also support `PHONE_EXTRA_BUNDLE_STEPS`.
+- `PHONE_LDID_SIGN=1` or `PHONE_LDID_ENTITLEMENTS=Entitlements.plist`: opt in
+  to `ldid` pseudo-signing before IPA packaging.
+
 ## 🔧 Customizing the Container
 
 Everything above uses the **prebuilt GHCR image** and never requires a clone.

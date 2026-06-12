@@ -3,7 +3,16 @@
 
 APP_NAME = MyPhoneApp
 SOURCES = main.m AppDelegate.m
+
+# Blind-copy ordinary root resources, including iOS icons and launch images.
+# Info.plist must live here; the common Makefile stages it to the app root.
 RES_DIR = Resources
+
+# Optional typed bundle resources:
+# BUNDLE_FONT_DIRS = ../shared/Resources/Fonts
+# BUNDLE_LOCALIZATION_DIRS = ../shared/Resources
+# PHONE_LDID_ENTITLEMENTS = Entitlements.plist
+# EXTRA_BUNDLE_STEPS = ...
 
 # Optional override if AltivecCore is required for this app:
 # ALTIVECCORE_REQUIRED = 1
