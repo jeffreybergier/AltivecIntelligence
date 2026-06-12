@@ -53,39 +53,13 @@ PUBLIC_LIBS=$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
             $(PUBLIC_LIB_DIR)/libcrypto.a \
             $(PUBLIC_LIB_DIR)/libz.a
 
-# --- AltivecCURL Framework Settings ---
-FRAMEWORK_NAME=AltivecCURL
-FRAMEWORK_VERSION=A
-FRAMEWORK_BUNDLE=$(PUBLIC_LIB_DIR)/$(FRAMEWORK_NAME).framework
-FRAMEWORK_VERSION_DIR=$(FRAMEWORK_BUNDLE)/Versions/$(FRAMEWORK_VERSION)
-FRAMEWORK_INSTALL_NAME=@executable_path/../Frameworks/$(FRAMEWORK_NAME).framework/Versions/$(FRAMEWORK_VERSION)/$(FRAMEWORK_NAME)
-FRAMEWORK_COMPAT_VER=1.0.0
-FRAMEWORK_CURRENT_VER=1.0.0
-DYLIB_LINK_FLAGS=-dynamiclib \
-                 -install_name $(FRAMEWORK_INSTALL_NAME) \
-                 -compatibility_version $(FRAMEWORK_COMPAT_VER) \
-                 -current_version $(FRAMEWORK_CURRENT_VER) \
-                 -Wl,-headerpad_max_install_names
-
-all: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem $(PUBLIC_INCLUDE_DIR)/.stamp $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-mac verify-dynamic prune-build-files
-	@echo "-----------------------------------------------------------"
-	@echo "MAC QUAD-FAT STATIC + ALTIVECCURL FRAMEWORK BUILD SUCCESSFUL"
-	@echo "Libraries: $(PUBLIC_LIB_DIR)"
-	@echo "Framework: $(FRAMEWORK_BUNDLE)"
-	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
-	@echo "-----------------------------------------------------------"
+all: static
 
 static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem $(PUBLIC_INCLUDE_DIR)/.stamp verify-mac prune-build-files
 	@echo "-----------------------------------------------------------"
 	@echo "MAC QUAD-FAT (ppc, x86, x64, arm64) STATIC BUILD SUCCESSFUL"
 	@echo "Libraries: $(PUBLIC_LIB_DIR)"
 	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
-	@echo "-----------------------------------------------------------"
-
-dynamic: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem $(PUBLIC_INCLUDE_DIR)/.stamp $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic prune-build-files
-	@echo "-----------------------------------------------------------"
-	@echo "MAC ALTIVECCURL FRAMEWORK BUILD SUCCESSFUL"
-	@echo "Framework: $(FRAMEWORK_BUNDLE)"
 	@echo "-----------------------------------------------------------"
 
 aicc: static
@@ -437,187 +411,14 @@ $(PUBLIC_LIB_DIR)/lib%.a: $(PREFIX)/lib/lib%.a
 $(PUBLIC_INCLUDE_DIR)/.stamp: $(PREFIX)/lib/libcurl.a \
                               $(PREFIX)/lib/libcrypto.a \
                               $(PREFIX)/lib/libz.a \
-                              AICURLConnection.h \
-                              AltivecCURL.h
+                              AICURLConnection.h
 	mkdir -p $(PUBLIC_INCLUDE_DIR)
 	rm -rf $(PUBLIC_INCLUDE_DIR)/curl $(PUBLIC_INCLUDE_DIR)/openssl
 	cp -R $(PREFIX)/include/* $(PUBLIC_INCLUDE_DIR)/
 	cp AICURLConnection.h $(PUBLIC_INCLUDE_DIR)/
-	cp AltivecCURL.h $(PUBLIC_INCLUDE_DIR)/
 	touch $@
-
-# ============================================================
-# AltivecCURL.framework — bundles AICURLConnection + curl + ssl
-# + crypto + z into a single self-contained dynamic library.
-# Public ABI: AICURLConnection ObjC class + all curl_* C API.
-# ============================================================
-
-# Combined public C-API exports: curl + openssl (libssl + libcrypto) + zlib.
-# Two important filters applied:
-#   1. Intersection across all 4 arches — openssl ships arch-specific ASM
-#      optimizations (_aes_v8_* arm64, _ecp_nistz256_* x64/arm64). We only
-#      export symbols present in EVERY arch so apps see a stable cross-arch ABI.
-#   2. nm -m + grep -v 'private external' — drops zlib internal helpers
-#      (_inflate_fast, _zcalloc, etc.) that have extern linkage between zlib
-#      .o files but are explicitly NOT public API.
-$(INTERMEDIATE)/c-exports.txt: $(STAMP_DIR)/curl-universal.done \
-                                $(STAMP_DIR)/openssl-universal.done \
-                                $(STAMP_DIR)/zlib-universal.done
-	@echo "--- Extracting public C exports (intersection of all 4 arches) ---"
-	mkdir -p $(INTERMEDIATE)
-	{ \
-	  for arch in ppc x86 x64 arm64; do \
-	    { \
-	      $(NM) -gm $(PREFIX)/$$arch/lib/libcurl.a 2>/dev/null \
-	        | awk '!/private external/ && / external / && $$NF ~ /^_curl_/ {print $$NF}'; \
-	      $(NM) -gm $(PREFIX)/$$arch/lib/libssl.a 2>/dev/null \
-	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
-	      $(NM) -gm $(PREFIX)/$$arch/lib/libcrypto.a 2>/dev/null \
-	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
-	      $(NM) -gm $(PREFIX)/$$arch/lib/libz.a 2>/dev/null \
-	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
-	    } | sort -u; \
-	  done; \
-	} | sort | uniq -c | awk '$$1 == 4 {print $$2}' > $@
-
-# Per-runtime exports lists — ObjC class symbol naming differs
-$(INTERMEDIATE)/exports-legacy.txt: $(INTERMEDIATE)/c-exports.txt
-	cp $< $@
-	echo '.objc_class_name_AICURLConnection' >> $@
-	echo '.objc_class_name_AIHTTPURLResponse' >> $@
-
-$(INTERMEDIATE)/exports-modern.txt: $(INTERMEDIATE)/c-exports.txt
-	cp $< $@
-	echo '_OBJC_CLASS_$$_AICURLConnection' >> $@
-	echo '_OBJC_METACLASS_$$_AICURLConnection' >> $@
-	echo '_OBJC_CLASS_$$_AIHTTPURLResponse' >> $@
-	echo '_OBJC_METACLASS_$$_AIHTTPURLResponse' >> $@
-
-# Per-arch dylib link — force_load every static archive so all symbols ship
-$(INTERMEDIATE)/AltivecCURL-ppc.dylib: $(INTERMEDIATE)/exports-legacy.txt $(STAMP_DIR)/aicc-ppc.done
-	@echo "--- Linking AltivecCURL dylib (ppc) ---"
-	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) \
-	  $(PPC_FLAGS) $(DYLIB_LINK_FLAGS) \
-	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-legacy.txt \
-	  -Wl,-force_load,$(PREFIX)/ppc/lib/libAICURLConnection.a \
-	  -Wl,-force_load,$(PREFIX)/ppc/lib/libcurl.a \
-	  -Wl,-force_load,$(PREFIX)/ppc/lib/libssl.a \
-	  -Wl,-force_load,$(PREFIX)/ppc/lib/libcrypto.a \
-	  -Wl,-force_load,$(PREFIX)/ppc/lib/libz.a \
-	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
-	  -o $@
-
-$(INTERMEDIATE)/AltivecCURL-x86.dylib: $(INTERMEDIATE)/exports-legacy.txt $(STAMP_DIR)/aicc-x86.done
-	@echo "--- Linking AltivecCURL dylib (i386) ---"
-	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) \
-	  $(X86_FLAGS) $(DYLIB_LINK_FLAGS) \
-	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-legacy.txt \
-	  -Wl,-force_load,$(PREFIX)/x86/lib/libAICURLConnection.a \
-	  -Wl,-force_load,$(PREFIX)/x86/lib/libcurl.a \
-	  -Wl,-force_load,$(PREFIX)/x86/lib/libssl.a \
-	  -Wl,-force_load,$(PREFIX)/x86/lib/libcrypto.a \
-	  -Wl,-force_load,$(PREFIX)/x86/lib/libz.a \
-	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
-	  -o $@
-
-$(INTERMEDIATE)/AltivecCURL-x64.dylib: $(INTERMEDIATE)/exports-modern.txt $(STAMP_DIR)/aicc-x64.done
-	@echo "--- Linking AltivecCURL dylib (x86_64) ---"
-	$(COMPILER_X64) \
-	  $(X64_FLAGS) $(DYLIB_LINK_FLAGS) \
-	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-modern.txt \
-	  -Wl,-force_load,$(PREFIX)/x64/lib/libAICURLConnection.a \
-	  -Wl,-force_load,$(PREFIX)/x64/lib/libcurl.a \
-	  -Wl,-force_load,$(PREFIX)/x64/lib/libssl.a \
-	  -Wl,-force_load,$(PREFIX)/x64/lib/libcrypto.a \
-	  -Wl,-force_load,$(PREFIX)/x64/lib/libz.a \
-	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
-	  -o $@
-
-$(INTERMEDIATE)/AltivecCURL-arm64.dylib: $(INTERMEDIATE)/exports-modern.txt $(STAMP_DIR)/aicc-arm64.done
-	@echo "--- Linking AltivecCURL dylib (arm64) ---"
-	$(COMPILER_ARM64) \
-	  $(ARM64_FLAGS) $(DYLIB_LINK_FLAGS) \
-	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-modern.txt \
-	  -Wl,-force_load,$(PREFIX)/arm64/lib/libAICURLConnection.a \
-	  -Wl,-force_load,$(PREFIX)/arm64/lib/libcurl.a \
-	  -Wl,-force_load,$(PREFIX)/arm64/lib/libssl.a \
-	  -Wl,-force_load,$(PREFIX)/arm64/lib/libcrypto.a \
-	  -Wl,-force_load,$(PREFIX)/arm64/lib/libz.a \
-	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
-	  -o $@
-
-# Quad-Fat universal dylib
-$(INTERMEDIATE)/AltivecCURL.dylib: $(INTERMEDIATE)/AltivecCURL-ppc.dylib \
-                                   $(INTERMEDIATE)/AltivecCURL-x86.dylib \
-                                   $(INTERMEDIATE)/AltivecCURL-x64.dylib \
-                                   $(INTERMEDIATE)/AltivecCURL-arm64.dylib
-	@echo "--- Merging Quad-Fat AltivecCURL dylib ---"
-	$(LIPO) -create $^ -output $@
-
-# Framework Info.plist (minimal FMWK descriptor)
-$(INTERMEDIATE)/Info.plist:
-	mkdir -p $(INTERMEDIATE)
-	printf '%s\n' \
-	  '<?xml version="1.0" encoding="UTF-8"?>' \
-	  '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
-	  '<plist version="1.0">' \
-	  '<dict>' \
-	  '  <key>CFBundleDevelopmentRegion</key><string>en</string>' \
-	  '  <key>CFBundleExecutable</key><string>$(FRAMEWORK_NAME)</string>' \
-	  '  <key>CFBundleIdentifier</key><string>com.altivec.$(FRAMEWORK_NAME)</string>' \
-	  '  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>' \
-	  '  <key>CFBundleName</key><string>$(FRAMEWORK_NAME)</string>' \
-	  '  <key>CFBundlePackageType</key><string>FMWK</string>' \
-	  '  <key>CFBundleShortVersionString</key><string>$(FRAMEWORK_CURRENT_VER)</string>' \
-	  '  <key>CFBundleVersion</key><string>1</string>' \
-	  '</dict>' \
-	  '</plist>' > $@
-
-# Assemble the .framework bundle with versioned layout + symlinks
-$(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME): $(INTERMEDIATE)/AltivecCURL.dylib \
-                                      $(INTERMEDIATE)/Info.plist \
-                                      $(PUBLIC_LIB_DIR)/cacert.pem \
-                                      $(PUBLIC_INCLUDE_DIR)/.stamp
-	@echo "--- Assembling AltivecCURL.framework bundle ---"
-	rm -rf $(FRAMEWORK_BUNDLE)
-	mkdir -p $(FRAMEWORK_VERSION_DIR)/Headers $(FRAMEWORK_VERSION_DIR)/Resources
-	cp $(INTERMEDIATE)/AltivecCURL.dylib $(FRAMEWORK_VERSION_DIR)/$(FRAMEWORK_NAME)
-	cp $(INTERMEDIATE)/Info.plist $(FRAMEWORK_VERSION_DIR)/Resources/Info.plist
-	cp $(PUBLIC_LIB_DIR)/cacert.pem $(FRAMEWORK_VERSION_DIR)/Resources/cacert.pem
-	cp -R $(PUBLIC_INCLUDE_DIR)/* $(FRAMEWORK_VERSION_DIR)/Headers/
-	ln -sf $(FRAMEWORK_VERSION) $(FRAMEWORK_BUNDLE)/Versions/Current
-	ln -sf Versions/Current/$(FRAMEWORK_NAME) $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
-	ln -sf Versions/Current/Headers $(FRAMEWORK_BUNDLE)/Headers
-	ln -sf Versions/Current/Resources $(FRAMEWORK_BUNDLE)/Resources
-
-verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
-	@echo "--- Verifying AltivecCURL.framework ---"
-	@info="`$(LIPO) -info $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null`"; \
-	echo "  > $$info"; \
-	missing=0; \
-	for arch in ppc i386 x86_64 arm64; do \
-		echo "$$info" | grep -qw "$$arch" || { \
-			echo " [!] ERROR: AltivecCURL missing $$arch"; \
-			missing=1; \
-		}; \
-	done; \
-	test -L $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) || { echo " [!] ERROR: top-level binary symlink missing"; missing=1; }; \
-	test -L $(FRAMEWORK_BUNDLE)/Headers || { echo " [!] ERROR: Headers symlink missing"; missing=1; }; \
-	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Info.plist || { echo " [!] ERROR: Info.plist missing"; missing=1; }; \
-	test -f $(FRAMEWORK_VERSION_DIR)/Resources/cacert.pem || { echo " [!] ERROR: cacert.pem missing"; missing=1; }; \
-	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AltivecCURL.h || { echo " [!] ERROR: AltivecCURL.h umbrella missing"; missing=1; }; \
-	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AICURLConnection.h || { echo " [!] ERROR: AICURLConnection.h missing"; missing=1; }; \
-	test -d $(FRAMEWORK_VERSION_DIR)/Headers/curl || { echo " [!] ERROR: curl/ headers missing"; missing=1; }; \
-	test -f $(FRAMEWORK_VERSION_DIR)/Headers/openssl/ssl.h || { echo " [!] ERROR: openssl/ headers missing"; missing=1; }; \
-	test -f $(FRAMEWORK_VERSION_DIR)/Headers/zlib.h || { echo " [!] ERROR: zlib.h missing"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _SSL_new' || { echo " [!] ERROR: _SSL_new not exported"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _deflate' || { echo " [!] ERROR: _deflate not exported"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: _curl_easy_init not exported"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported (ppc)"; missing=1; }; \
-	exit $$missing
 
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: all static dynamic aicc aicc-analyze verify-mac verify-dynamic prune-build-files clean
+.PHONY: all static aicc aicc-analyze verify-mac prune-build-files clean

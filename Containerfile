@@ -260,33 +260,35 @@ CMD ["/bin/bash"]
 ENV PATH="/altivec/bin:${PATH}"
 
 # 10. GHCR image layer — bakes the Altivec runtime repo into /altivec/.
-#     Builds the (slow) libcurl artifacts and ships their build-mac and
+#     Builds the shared AltivecCore artifacts and ships their build-mac and
 #     build-phone outputs in the image so GHCR consumers do NOT have to
-#     re-run the 5+ hour cross-compile locally. The top-level `make all`
+#     re-run the slow cross-compile locally. The top-level `make all`
 #     target produces BOTH:
-#       - Static quad-fat libs: libcurl.a, libssl.a, libcrypto.a, libz.a,
-#         libAICURLConnection.a (Mac: ppc/i386/x86_64/arm64;
-#         Phone: armv7/arm64).
-#       - Dynamic AltivecCURL.framework (versioned bundle on Mac, flat
+#       - Static libs: libcurl.a, libssl.a, libcrypto.a, libz.a,
+#         libAICURLConnection.a, libsqlite3.a, libcjson.a
+#         (Mac: ppc/i386/x86_64/arm64; Phone: armv7/arm64).
+#       - Dynamic AltivecCore.framework (versioned bundle on Mac, flat
 #         bundle on iPhone) — same architectures as the static libs.
 #     The mk files in altivec_common_*.mk expect
-#     $(ALTIVEC_ROOT)/libs/libcurl/build-{mac,phone} to exist — those
-#     paths resolve to /altivec/libs/libcurl/build-{mac,phone} here.
+#     $(ALTIVEC_ROOT)/libs/core/build-{mac,phone} to exist — those
+#     paths resolve to /altivec/libs/core/build-{mac,phone} here.
 #     Only built when explicitly targeted (docker compose skips it).
 FROM altivec-builder AS ghcr-action
 WORKDIR /altivec
 
-# Build libcurl first so this slow layer is not invalidated by trivial
+# Build AltivecCore first so this slow layer is not invalidated by trivial
 # changes elsewhere in the repo. `make all` builds both the static .a
-# libs AND the dynamic AltivecCURL.framework into build-{mac,phone}/lib/
+# libs AND the dynamic AltivecCore.framework into build-{mac,phone}/lib/
 # (alongside headers in build-{mac,phone}/include/). Those trees are
 # preserved in the final image — that is the whole point of this stage.
-# prune-intermediates drops sources/objects/stamps while keeping the
+# prune-intermediates drops Core sources/objects/stamps while keeping the
 # build-*/lib (static libs + framework bundle + cacert.pem) and
 # build-*/include trees apps actually link against; done in the same
 # RUN so the intermediates never form their own layer.
 COPY libs/libcurl/ ./libs/libcurl/
-RUN cd libs/libcurl && make all && make prune-intermediates
+COPY libs/sqlite/  ./libs/sqlite/
+COPY libs/core/    ./libs/core/
+RUN cd libs/core && make all && make prune-intermediates
 
 # Common mk fragments must land before the apps build below — each app's
 # Makefile does `include /altivec/altivec_common_{mac,phone}.mk` by
@@ -297,7 +299,7 @@ COPY altivec_common_phone.mk ./
 # Bake prebuilt sample apps into the image so consumers get ready-to-run
 # .app bundles (Mac quad-fat: ppc/i386/x86_64/arm64; Phone dual:
 # armv7/arm64) without needing to compile anything. This also doubles as
-# an end-to-end CI smoke test — any regression in libcurl, the mk
+# an end-to-end CI smoke test — any regression in AltivecCore, the mk
 # fragments, or the toolchain will fail this step long before users hit
 # it. Outputs land in apps/*/build-release/ and survive in the final
 # image. Kept as a separate RUN from the libcurl build above so trivial
@@ -323,4 +325,3 @@ COPY templates/              ./templates/
 # Recreate the AGENTS.md aliases that AI agents look for by name.
 RUN ln -sf AGENTS.md CLAUDE.md \
  && ln -sf AGENTS.md GEMINI.md
-

@@ -6,11 +6,11 @@
 #import <UIKit/UIKit.h>
 #import "DownloadViewController.h"
 #import "CrossPlatform.h"
-#import <AltivecCURL/AICURLConnection.h>
+#import <AltivecCore/AICURLConnection.h>
 
 // --- KeyValueTableViewController Interface ---
 // A table view controller that displays the versions of the linked 
-// libraries (libcurl, openssl, etc.) in a grouped style.
+// libraries (libcurl, OpenSSL, SQLite, cJSON, etc.) in a grouped style.
 @interface KeyValueTableViewController : UITableViewController {
  @private
   NSDictionary *versions_;

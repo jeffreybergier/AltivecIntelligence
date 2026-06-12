@@ -1,5 +1,5 @@
 #import "DownloadWindowController.h"
-#import <AltivecCURL/AICURLConnection.h>
+#import <AltivecCore/AICURLConnection.h>
 
 #pragma mark - Cross-Platform Implementations
 

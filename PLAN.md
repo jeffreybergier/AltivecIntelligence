@@ -22,24 +22,25 @@ These ENIL needs are already represented in Altivec's common build files:
 - [x] Mixed `.m` and `.c` support through `SOURCES` and `EXTRA_SOURCES`.
 - [x] `ANALYZE_DIRS` source resolution for files found through `vpath`.
 - [x] `VALIDATE_PATHS` preflight checks.
-- [x] libcurl auto-detection and `LIBCURL_REQUIRED` bootstrap.
-- [x] libcurl static/dynamic linkage selection.
+- [x] AltivecCore auto-detection and `ALTIVECCORE_REQUIRED` bootstrap.
+- [x] AltivecCore static/dynamic linkage selection.
+- [x] AltivecCore framework bundle for libcurl, OpenSSL, zlib, SQLite, and cJSON.
 - [x] macOS `EXTRA_BUNDLE_STEPS` for app-specific bundle staging.
 
 ## Migration Backlog
 
-- [ ] **SQLite library builder**
+- [x] **SQLite library builder**
   - Source: `/repo/ENIL-cocoa/source/deps/sqlite/`.
-  - Move the quad-fat Mac and universal iPhone SQLite recipes into
+  - Moved the quad-fat Mac and universal iPhone SQLite recipes into
     `/repo/altivec/libs/sqlite/`.
-  - Add Altivec-level outputs at `libs/sqlite/build-mac` and
+  - Added Altivec-level outputs at `libs/sqlite/build-mac` and
     `libs/sqlite/build-phone`.
-  - Add app-facing variables similar to libcurl, for example `SQLITE_REQUIRED`
-    and `SQLITE_DIR`.
-  - Preserve legacy flags, especially `HAVE_STDATOMIC_H=0` for PPC/i386 GCC.
-  - Update templates or docs with a minimal SQLite-consuming app example.
-  - Acceptance: an app can link SQLite without carrying local SQLite build
-    recipes or generated outputs.
+  - Folded SQLite into app-facing `ALTIVECCORE_REQUIRED`,
+    `ALTIVECCORE_LINKAGE`, and `ALTIVECCORE_DIR` instead of adding a separate
+    `SQLITE_REQUIRED` path.
+  - Preserved legacy flags, especially `HAVE_STDATOMIC_H=0` for PPC/i386 GCC.
+  - Acceptance: an app can link SQLite through AltivecCore without carrying
+    local SQLite build recipes or generated outputs.
 
 - [ ] **Phone bundle extension hooks**
   - Source: `/repo/ENIL-cocoa/source/iOS/Makefile`.

@@ -8,6 +8,8 @@ apps/*/build-*
 apps/*/Intermediates
 libs/*/build-*
 libs/*/tarballs
+!libs/sqlite/tarballs/
+!libs/sqlite/tarballs/sqlite-amalgamation-3430200.zip
 
 # Git / CI metadata
 .git/

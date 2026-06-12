@@ -1,4 +1,4 @@
-# AltivecIntelligence Common Build Settings for libcurl
+# AltivecIntelligence Common Build Settings for AltivecCore
 # Included by Makefile-phone and Makefile-mac
 
 # --- Toolchain Paths ---
@@ -21,24 +21,21 @@ SDK_ARM64_PATH=$(SDK_DIR)/MacOSX11.3.sdk
 SDK_IOS_PATH=$(SDK_DIR)/iPhoneOS8.4.sdk
 
 # --- Cross Tools ---
-# Use darwin9 tools for legacy slices (PPC, X86)
 AR_LEGACY=$(BIN_DIR)/i386-apple-darwin9-ar
 RANLIB_LEGACY=$(BIN_DIR)/i386-apple-darwin9-ranlib
+LIPO=$(BIN_DIR)/i386-apple-darwin9-lipo
 
-# Use modern LLVM 14 tools for modern slices (X64, ARM64, iOS)
 AR_MODERN=/usr/bin/llvm-ar-14
 RANLIB_MODERN=/usr/bin/llvm-ranlib-14
 LIPO_MODERN=/usr/bin/llvm-lipo-14
-LIBTOOL_MODERN=/usr/bin/llvm-libtool-darwin-14
 NM=/usr/bin/llvm-nm-14
 
-LIPO=$(BIN_DIR)/i386-apple-darwin9-lipo
-LIBTOOL=$(BIN_DIR)/i386-apple-darwin9-libtool
 LD64_LLD=$(BIN_DIR)/ld64.lld
 
 # --- Standard Flags ---
 OPT_FLAGS=-O3
 COMMON_WARN_FLAGS=-Wall -Wimplicit-function-declaration
+LEGACY_GCC_FLAGS=-fno-stack-protector -fno-common -fno-zero-initialized-in-bss -fPIC
 
 # --- Deployment Targets ---
 MAC_MIN_PPC=10.4
@@ -46,12 +43,6 @@ MAC_MIN_X86=10.4
 MAC_MIN_X64=10.9
 MAC_MIN_ARM64=11.0
 IOS_MIN_VER=4.3
+IOS_ARM64_MIN_VER=7.0
 
-# PPC specific flags from altivec_common_mac.mk
-# -fPIC: required so static .o files can be re-linked into AltivecCore.dylib.
-#        Modern (x64/arm64) arches default to PIC; legacy GCC needs it explicit.
-LEGACY_GCC_FLAGS=-fno-stack-protector -fno-common -fno-zero-initialized-in-bss -fPIC
-PPC_COMPAT_FLAGS=$(LEGACY_GCC_FLAGS)
-
-# Jobs for parallel make
 JOBS=$(shell getconf _NPROCESSORS_ONLN)

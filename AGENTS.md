@@ -33,7 +33,7 @@ deprecation warnings as those will be common when dealing with these old API's.
 - **Primary Toolchain:** OSXCross 0.13 (ppc-test branch)
 - **Host Architecture:** Ubuntu 22 (aarch64/x86_64)
 - **Toolchain Path:** `/osxcross/target/bin` (on `PATH`)
-- **Altivec Root:** `/altivec` (toolchain repo baked into the image — `altivec_common_*.mk`, example `apps/`, `libs/libcurl/build-{mac,phone}` prebuilt outputs, `templates/`, `bin/`)
+- **Altivec Root:** `/altivec` (toolchain repo baked into the image — `altivec_common_*.mk`, example `apps/`, `libs/core/build-{mac,phone}` prebuilt outputs, `templates/`, `bin/`)
 - **User Root:** `/repo/user` (the user's app project, mounted from the host)
 - **Altivec Scripts on PATH:** `/altivec/bin` provides `altivec-deploy` (push/run an app on real hardware) and `altivec-chooser` (interactive AI CLI launcher)
 
@@ -52,9 +52,10 @@ Located in /osxcross/target/SDK/:
 | **Mac (Modern)**| `clang-14` | 11.3 | x86_64, arm64 (64-bit) | -O3 / -O0 |
 | **iPhone** | `clang-14` | 8.4 | armv7, arm64 | -O3 / -O0 |
 
-## 🔗 Library Build System (libcurl)
-Libraries (libcurl, openssl, zlib) are built as "Quad-Fat" static binaries (`.a`).
-- **Orchestration:** `/altivec/libs/libcurl/Makefile` manages separate `Makefile-mac` and `Makefile-phone` builds. Prebuilt outputs ship in the GHCR image at `/altivec/libs/libcurl/build-{mac,phone}` — user apps link against these by default via `$(ALTIVEC_ROOT)` auto-resolution.
+## 🔗 Library Build System (AltivecCore)
+Libraries (libcurl, OpenSSL, zlib, SQLite, cJSON) are built as static binaries (`.a`) and bundled into `AltivecCore.framework`.
+- **Orchestration:** `/altivec/libs/core/Makefile` manages separate `Makefile-mac` and `Makefile-phone` builds. Prebuilt outputs ship in the GHCR image at `/altivec/libs/core/build-{mac,phone}` — user apps opt in with `ALTIVECCORE_REQUIRED=1`.
+- **iPhone Linkage:** `ALTIVECCORE_LINKAGE=dynamic` embeds `AltivecCore.framework` and is an iOS 8+ runtime path. Use `ALTIVECCORE_LINKAGE=static` for iOS 4.3-7 devices.
 - **AICURLConnection**: A robust `libcurl` wrapper with full `NSURLConnection` parity for asynchronous transfers and header parsing.
 - **Certificate Handling**: `cacert.pem` is automatically bundled with apps to ensure SSL verification works.
 

@@ -36,7 +36,7 @@ simply pulling a newer image.
 
 See [templates/compose.yml](templates/compose.yml) for the full template and
 notes on first-time AI assistant setup. The GHCR image ships the entire
-`/altivec/` toolchain (cross-compilers, SDKs, libcurl static libs, sample
+`/altivec/` toolchain (cross-compilers, SDKs, AltivecCore libs, sample
 apps, and AI CLIs), so your repo only needs the `compose.yml` plus your source.
 
 ```bash
@@ -87,7 +87,7 @@ run it to make sure it works.
 **Note:** you can change the example app as the source depending on if you want
 an iPhone app or Mac app. Also, if you want to do networking, you may consider
 using the CURLmac or CURLphone app as starting place because those have
-libcurl linked.
+AltivecCore linked.
 
 ## Deploying to Hardware
 
@@ -163,7 +163,8 @@ open CURLmac.app
 
 `CURLmac.app` is a Quad-Fat universal binary, so the same bundle runs on
 PowerPC, 32-bit Intel, 64-bit Intel, and Apple Silicon Macs (10.4 Tiger and
-newer). CURLmac links libcurl so this app has modern TLS 1.2 networking even on Mac OS X Tiger.
+newer). CURLmac links AltivecCore, so this app has modern TLS 1.2
+networking, SQLite, and cJSON even on Mac OS X Tiger.
 
 > **Note:** To copy a freshly compiled build instead of the prebuilt one, run
 > `docker compose run --rm altivec "cd /altivec/apps/CURLmac && make"` first,
@@ -185,16 +186,21 @@ Use these thin templates in your app repo:
 - [`templates/Makefile.mac`](./templates/Makefile.mac)
 - [`templates/Makefile.phone`](./templates/Makefile.phone)
 
-Optional libcurl knobs:
-- `LIBCURL_REQUIRED=1`: enforce required curl artifacts at validate time.
-- `LIBCURL_DIR=/path/to/altivec/libs/libcurl/build-mac|build-phone`: override autodetect.
+Optional AltivecCore knobs:
+- `ALTIVECCORE_REQUIRED=1`: enforce required Core artifacts at validate time.
+- `ALTIVECCORE_LINKAGE=dynamic|static`: choose framework or static archives.
+- `ALTIVECCORE_DIR=/path/to/altivec/libs/core/build-mac|build-phone`: override autodetect.
+
+For iPhone apps, `dynamic` keeps the sample-app workflow simple but embedded
+frameworks require iOS 8+ at runtime. Use `ALTIVECCORE_LINKAGE=static` when
+building for iOS 4.3-7 devices.
 
 ## 🔧 Customizing the Container
 
 Everything above uses the **prebuilt GHCR image** and never requires a clone.
 You only need this section if you want to **modify the engine itself** — change
 build rules in `altivec_common_*.mk`, edit the `bin/` scripts, add a new
-library, or rebuild `libcurl` from source.
+library, or rebuild `AltivecCore` and its dependencies from source.
 
 ### 1. Prerequisites
 - [**Git**](https://git-scm.com/install/) (to clone the engine repo)
@@ -233,7 +239,7 @@ edits. To make engine changes take effect you must either:
 
 ## 🚧 To-Do List
 1. [ ] Enable on-device debugging for iOS
-1. [X] Add libraries as dynamic frameworks (e.g. `AltivecCURL.framework`)
+1. [X] Add libraries as dynamic frameworks (e.g. `AltivecCore.framework`)
 1. [ ] Add `libgit` as a dependency for file syncing
 1. [ ] Setup Github Actions
    1. [ ] Build release apps and save in artifact storage

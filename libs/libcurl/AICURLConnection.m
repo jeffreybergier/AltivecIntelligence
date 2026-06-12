@@ -145,7 +145,7 @@ static size_t AIHeaderCallback(void *contents,
 
 + (NSString *)certPath;
 {
-  // Try the framework bundle first (AltivecCURL.framework/Resources/),
+  // Try the framework bundle first (AltivecCore.framework/Resources/),
   // then fall back to the app's main bundle for static-link callers.
   NSString *certPath = [[NSBundle bundleForClass:self] pathForResource:@"cacert"
                                                                 ofType:@"pem"];
@@ -456,11 +456,12 @@ static size_t AIHeaderCallback(void *contents,
 
 // Clang emits calls to __isPlatformVersionAtLeast for @available() checks.
 // Normally provided by libclang_rt.osx.a, which OSXCross does not ship —
-// stub it here so AltivecCURL.dylib is self-contained.
+// stub it here so AltivecCore.dylib is self-contained.
 #include <sys/sysctl.h>
 #include <stdlib.h>
 #include <stdint.h>
 
+__attribute__((weak))
 int32_t __isPlatformVersionAtLeast(uint32_t platform, uint32_t major,
                                    uint32_t minor, uint32_t subminor) {
   (void)subminor;

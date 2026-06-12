@@ -27,40 +27,54 @@ OPT_FLAGS ?= -O3
 ALL_SOURCES = $(SOURCES) $(EXTRA_SOURCES)
 OBJS = $(addprefix $(INT_DIR)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) $(EXTRA_SOURCES:.m=.o) $(EXTRA_SOURCES:.c=.o)))
 
-# --- Auto-detect libcurl ---
-# LIBCURL_LINKAGE picks how libcurl is linked into the app.
-#   static  (default): link the five .a archives directly into the binary.
-#   dynamic          : link against AltivecCURL.framework; the framework
+# --- Auto-detect AltivecCore ---
+# ALTIVECCORE_LINKAGE picks how the core networking stack is linked.
+#   dynamic (default): link against AltivecCore.framework; the framework
 #                      is copied into <App>.app/Frameworks/ (iOS flat layout).
-LIBCURL_LINKAGE ?= static
-LIBCURL_DIR ?=
-LIBCURL_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/libcurl/build-phone
-ifeq ($(strip $(LIBCURL_DIR)),)
-  LIBCURL_PATH = $(firstword $(wildcard $(addsuffix /lib/libcurl.a, $(LIBCURL_SEARCH_PATHS))))
-  ifneq ($(LIBCURL_PATH),)
-    LIBCURL_DIR = $(patsubst %/lib/libcurl.a,%,$(LIBCURL_PATH))
+#                      Embedded iOS frameworks require iOS 8+ at runtime.
+#   static           : link the .a archives directly into the binary.
+#                      Use this for iOS 4.3-7 device compatibility.
+ALTIVECCORE_LINKAGE ?= dynamic
+ALTIVECCORE_REQUIRED ?= 0
+ALTIVECCORE_DIR ?=
+ALTIVECCORE_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/core/build-phone
+ifeq ($(strip $(ALTIVECCORE_DIR)),)
+  ALTIVECCORE_PATH = $(firstword $(wildcard $(addsuffix /lib/AltivecCore.framework/AltivecCore, $(ALTIVECCORE_SEARCH_PATHS))))
+  ifneq ($(ALTIVECCORE_PATH),)
+    ALTIVECCORE_DIR = $(patsubst %/lib/AltivecCore.framework/AltivecCore,%,$(ALTIVECCORE_PATH))
+  else ifeq ($(ALTIVECCORE_REQUIRED),1)
+    ALTIVECCORE_DIR = $(firstword $(ALTIVECCORE_SEARCH_PATHS))
   endif
 endif
-ifneq ($(strip $(LIBCURL_DIR)),)
-  ifeq ($(LIBCURL_LINKAGE),dynamic)
-    LIBCURL_FRAMEWORK = $(LIBCURL_DIR)/lib/AltivecCURL.framework
-    EXTRA_FLAGS += -F$(LIBCURL_DIR)/lib
-  else
-    EXTRA_FLAGS += -I$(LIBCURL_DIR)/include
+ifeq ($(ALTIVECCORE_REQUIRED),1)
+  ifneq ($(strip $(ALTIVECCORE_DIR)),)
+    ifeq ($(ALTIVECCORE_LINKAGE),dynamic)
+      ALTIVECCORE_FRAMEWORK = $(ALTIVECCORE_DIR)/lib/AltivecCore.framework
+      EXTRA_FLAGS += -F$(ALTIVECCORE_DIR)/lib
+    else
+      EXTRA_FLAGS += -I$(ALTIVECCORE_DIR)/include
+    endif
   endif
 endif
 
-LIBCURL_REQUIRED ?= 0
-ifeq ($(LIBCURL_LINKAGE),dynamic)
-  LIBCURL_REQUIRED_FILES = $(LIBCURL_DIR)/lib/AltivecCURL.framework/AltivecCURL \
-                           $(LIBCURL_DIR)/lib/AltivecCURL.framework/cacert.pem
+ifeq ($(ALTIVECCORE_LINKAGE),dynamic)
+  ALTIVECCORE_REQUIRED_FILES = $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/AltivecCore \
+                               $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/cacert.pem \
+                               $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/Headers/AltivecCore.h \
+                               $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/Headers/sqlite3.h \
+                               $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/Headers/cJSON.h
 else
-  LIBCURL_REQUIRED_FILES = $(LIBCURL_DIR)/lib/libAICURLConnection.a \
-                           $(LIBCURL_DIR)/lib/libcurl.a \
-                           $(LIBCURL_DIR)/lib/libssl.a \
-                           $(LIBCURL_DIR)/lib/libcrypto.a \
-                           $(LIBCURL_DIR)/lib/libz.a \
-                           $(LIBCURL_DIR)/lib/cacert.pem
+  ALTIVECCORE_REQUIRED_FILES = $(ALTIVECCORE_DIR)/lib/libAICURLConnection.a \
+                               $(ALTIVECCORE_DIR)/lib/libcurl.a \
+                               $(ALTIVECCORE_DIR)/lib/libssl.a \
+                               $(ALTIVECCORE_DIR)/lib/libcrypto.a \
+                               $(ALTIVECCORE_DIR)/lib/libz.a \
+                               $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
+                               $(ALTIVECCORE_DIR)/lib/libcjson.a \
+                               $(ALTIVECCORE_DIR)/lib/cacert.pem \
+                               $(ALTIVECCORE_DIR)/include/AltivecCore.h \
+                               $(ALTIVECCORE_DIR)/include/sqlite3.h \
+                               $(ALTIVECCORE_DIR)/include/cJSON.h
 endif
 
 # --- Flags ---
@@ -71,16 +85,20 @@ IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wco
             -B$(BIN_DIR)
 
 IOS_FRAMEWORKS = -framework UIKit -framework Foundation -framework CoreGraphics
-ifneq ($(strip $(LIBCURL_DIR)),)
-  ifeq ($(LIBCURL_LINKAGE),dynamic)
-    IOS_FRAMEWORKS += -F$(LIBCURL_DIR)/lib -framework AltivecCURL \
-                      -Wl,-rpath,@executable_path/Frameworks
-  else
-    IOS_FRAMEWORKS += $(LIBCURL_DIR)/lib/libAICURLConnection.a \
-                      $(LIBCURL_DIR)/lib/libcurl.a \
-                      $(LIBCURL_DIR)/lib/libssl.a \
-                      $(LIBCURL_DIR)/lib/libcrypto.a \
-                      $(LIBCURL_DIR)/lib/libz.a
+ifeq ($(ALTIVECCORE_REQUIRED),1)
+  ifneq ($(strip $(ALTIVECCORE_DIR)),)
+    ifeq ($(ALTIVECCORE_LINKAGE),dynamic)
+      IOS_FRAMEWORKS += -F$(ALTIVECCORE_DIR)/lib -framework AltivecCore \
+                        -Wl,-rpath,@executable_path/Frameworks
+    else
+      IOS_FRAMEWORKS += $(ALTIVECCORE_DIR)/lib/libAICURLConnection.a \
+                        $(ALTIVECCORE_DIR)/lib/libcurl.a \
+                        $(ALTIVECCORE_DIR)/lib/libssl.a \
+                        $(ALTIVECCORE_DIR)/lib/libcrypto.a \
+                        $(ALTIVECCORE_DIR)/lib/libz.a \
+                        $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
+                        $(ALTIVECCORE_DIR)/lib/libcjson.a
+    endif
   endif
 endif
 
@@ -131,8 +149,8 @@ VALIDATE_PATHS ?=
 
 validate:
 	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi
-	@if [ "$(LIBCURL_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libcurl-bootstrap; fi
-	@if [ "$(LIBCURL_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libs-ready; fi
+	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory altiveccore-bootstrap; fi
+	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libs-ready; fi
 	@for dir in $(VALIDATE_PATHS); do \
 		if [ ! -d "$$dir" ]; then \
 			echo " [!] ERROR: Project directory missing: $$dir"; \
@@ -140,36 +158,36 @@ validate:
 		fi; \
 	done
 
-libcurl-bootstrap:
-	@if [ "$(LIBCURL_REQUIRED)" != "1" ]; then exit 0; fi
-	@if [ -z "$(LIBCURL_DIR)" ]; then \
-		echo " [!] ERROR: libcurl is required but LIBCURL_DIR is not set or auto-detected."; \
-		echo "     Set LIBCURL_DIR=/path/to/libs/libcurl/build-phone or build at $(ALTIVEC_ROOT)/libs/libcurl/build-phone."; \
+altiveccore-bootstrap:
+	@if [ "$(ALTIVECCORE_REQUIRED)" != "1" ]; then exit 0; fi
+	@if [ -z "$(ALTIVECCORE_DIR)" ]; then \
+		echo " [!] ERROR: AltivecCore is required but ALTIVECCORE_DIR is not set."; \
+		echo "     Set ALTIVECCORE_DIR=/path/to/libs/core/build-phone or build at $(ALTIVEC_ROOT)/libs/core/build-phone."; \
 		exit 1; \
 	fi
-	@probe="$(LIBCURL_DIR)/lib/libcurl.a"; target=phone-static; \
-	if [ "$(LIBCURL_LINKAGE)" = "dynamic" ]; then \
-		probe="$(LIBCURL_DIR)/lib/AltivecCURL.framework/AltivecCURL"; target=phone-all; \
+	@probe="$(ALTIVECCORE_DIR)/lib/libcjson.a"; target=phone-static; \
+	if [ "$(ALTIVECCORE_LINKAGE)" = "dynamic" ]; then \
+		probe="$(ALTIVECCORE_DIR)/lib/AltivecCore.framework/AltivecCore"; target=phone-all; \
 	fi; \
 	if [ ! -e "$$probe" ]; then \
-		echo " [!] Missing libcurl artifact ($$probe), running bootstrap build ($$target)..."; \
-		$(MAKE) -C $(ALTIVEC_ROOT)/libs/libcurl $$target; \
+		echo " [!] Missing AltivecCore artifact ($$probe), running bootstrap build ($$target)..."; \
+		$(MAKE) -C $(ALTIVEC_ROOT)/libs/core $$target; \
 	fi
 
 libs-ready:
-	@if [ "$(LIBCURL_REQUIRED)" != "1" ]; then exit 0; fi
-	@if [ -z "$(LIBCURL_DIR)" ]; then \
-		echo " [!] ERROR: libcurl is required but LIBCURL_DIR is not set or auto-detected."; \
-		echo "     Set LIBCURL_DIR=/path/to/libs/libcurl/build-phone."; \
+	@if [ "$(ALTIVECCORE_REQUIRED)" != "1" ]; then exit 0; fi
+	@if [ -z "$(ALTIVECCORE_DIR)" ]; then \
+		echo " [!] ERROR: AltivecCore is required but ALTIVECCORE_DIR is not set."; \
+		echo "     Set ALTIVECCORE_DIR=/path/to/libs/core/build-phone."; \
 		exit 1; \
 	fi
 	@missing=""; \
-	for f in $(LIBCURL_REQUIRED_FILES); do \
+	for f in $(ALTIVECCORE_REQUIRED_FILES); do \
 		if [ ! -f "$$f" ]; then missing="$$missing $$f"; fi; \
 	done; \
 	if [ -n "$$missing" ]; then \
-		echo " [!] ERROR: Missing required libcurl artifacts:$$missing"; \
-		echo "     Build them with: make -C $(ALTIVEC_ROOT)/libs/libcurl phone-static"; \
+		echo " [!] ERROR: Missing required AltivecCore artifacts:$$missing"; \
+		echo "     Build them with: make -C $(ALTIVEC_ROOT)/libs/core phone"; \
 		exit 1; \
 	fi
 
@@ -194,13 +212,13 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin
 		echo "  > copying resources" ; \
 		cp -R $(RES_DIR)/* $@/ ; \
 	fi
-	@if [ "$(LIBCURL_LINKAGE)" = "dynamic" ] && [ -d "$(LIBCURL_FRAMEWORK)" ]; then \
-		echo "  > embedding AltivecCURL.framework" ; \
+	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ] && [ "$(ALTIVECCORE_LINKAGE)" = "dynamic" ] && [ -d "$(ALTIVECCORE_FRAMEWORK)" ]; then \
+		echo "  > embedding AltivecCore.framework" ; \
 		mkdir -p $@/Frameworks ; \
-		cp -RP $(LIBCURL_FRAMEWORK) $@/Frameworks/ ; \
-	elif [ -f "$(LIBCURL_DIR)/lib/cacert.pem" ]; then \
+		cp -RP $(ALTIVECCORE_FRAMEWORK) $@/Frameworks/ ; \
+	elif [ "$(ALTIVECCORE_REQUIRED)" = "1" ] && [ -f "$(ALTIVECCORE_DIR)/lib/cacert.pem" ]; then \
 		echo "  > copying cacert.pem" ; \
-		cp "$(LIBCURL_DIR)/lib/cacert.pem" $@/ ; \
+		cp "$(ALTIVECCORE_DIR)/lib/cacert.pem" $@/ ; \
 	fi
 	@echo "  > extracting symbols"
 	@$(DSYMUTIL) $< -o $(BUILD_DIR)/$(APP_NAME).dSYM
@@ -231,4 +249,4 @@ $(INT_DIR)/%.o: %.c
 	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
 	           $(IOS_FLAGS) -c $< -o $@
 
-.PHONY: release debug clean analyze validate libcurl-bootstrap libs-ready
+.PHONY: release debug clean analyze validate altiveccore-bootstrap libs-ready

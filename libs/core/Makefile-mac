@@ -1,0 +1,407 @@
+include core_common.mk
+
+CWD=$(shell pwd)
+BUILD_ROOT=$(CWD)/build-mac
+INTERMEDIATE=$(BUILD_ROOT)/intermediate
+PREFIX=$(BUILD_ROOT)/prefix
+STAMP_DIR=$(BUILD_ROOT)/stamps
+PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
+PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
+
+CURL_DIR ?= $(CWD)/../libcurl/build-mac
+SQLITE_DIR ?= $(CWD)/../sqlite/build-mac
+CJSON_DIR=third_party/cJSON
+
+PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(LEGACY_GCC_FLAGS)
+X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH) $(LEGACY_GCC_FLAGS)
+X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_X64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
+ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
+X64_COMPILE_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -B$(BIN_DIR)
+ARM64_COMPILE_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -B$(BIN_DIR)
+
+CJSON_CFLAGS=$(OPT_FLAGS) $(COMMON_WARN_FLAGS) -std=c99 -I$(CJSON_DIR)
+
+CORE_STATIC_LIBS=libAICURLConnection.a \
+                 libcurl.a \
+                 libssl.a \
+                 libcrypto.a \
+                 libz.a \
+                 libsqlite3.a \
+                 libcjson.a
+PUBLIC_LIBS=$(addprefix $(PUBLIC_LIB_DIR)/,$(CORE_STATIC_LIBS))
+
+FRAMEWORK_NAME=AltivecCore
+FRAMEWORK_VERSION=A
+FRAMEWORK_BUNDLE=$(PUBLIC_LIB_DIR)/$(FRAMEWORK_NAME).framework
+FRAMEWORK_VERSION_DIR=$(FRAMEWORK_BUNDLE)/Versions/$(FRAMEWORK_VERSION)
+FRAMEWORK_INSTALL_NAME=@executable_path/../Frameworks/$(FRAMEWORK_NAME).framework/Versions/$(FRAMEWORK_VERSION)/$(FRAMEWORK_NAME)
+FRAMEWORK_COMPAT_VER=1.0.0
+FRAMEWORK_CURRENT_VER=1.0.0
+DYLIB_LINK_FLAGS=-dynamiclib \
+                 -install_name $(FRAMEWORK_INSTALL_NAME) \
+                 -compatibility_version $(FRAMEWORK_COMPAT_VER) \
+                 -current_version $(FRAMEWORK_CURRENT_VER) \
+                 -Wl,-headerpad_max_install_names
+
+all: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
+     $(PUBLIC_INCLUDE_DIR)/.stamp verify-mac \
+     $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic
+	@echo "-----------------------------------------------------------"
+	@echo "MAC QUAD-FAT STATIC + ALTIVECCORE FRAMEWORK BUILD SUCCESSFUL"
+	@echo "Libraries: $(PUBLIC_LIB_DIR)"
+	@echo "Framework: $(FRAMEWORK_BUNDLE)"
+	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-mac prune-build-files
+
+static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
+        $(PUBLIC_INCLUDE_DIR)/.stamp verify-mac
+	@echo "-----------------------------------------------------------"
+	@echo "MAC ALTIVECCORE STATIC LIBS BUILD SUCCESSFUL"
+	@echo "Libraries: $(PUBLIC_LIB_DIR)"
+	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-mac prune-build-files
+
+dynamic: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
+         $(PUBLIC_INCLUDE_DIR)/.stamp \
+         $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic
+	@echo "-----------------------------------------------------------"
+	@echo "MAC ALTIVECCORE FRAMEWORK BUILD SUCCESSFUL"
+	@echo "Framework: $(FRAMEWORK_BUNDLE)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-mac prune-build-files
+
+curl-ready:
+	@if [ ! -f "$(CURL_DIR)/lib/libAICURLConnection.a" ] || \
+	    [ ! -f "$(CURL_DIR)/lib/libcurl.a" ] || \
+	    [ ! -f "$(CURL_DIR)/lib/libssl.a" ] || \
+	    [ ! -f "$(CURL_DIR)/lib/libcrypto.a" ] || \
+	    [ ! -f "$(CURL_DIR)/lib/libz.a" ] || \
+	    [ ! -f "$(CURL_DIR)/lib/cacert.pem" ] || \
+	    [ ! -f "$(CURL_DIR)/include/AICURLConnection.h" ]; then \
+		echo "--- Building Mac libcurl static dependency ---"; \
+		$(MAKE) -C $(CWD)/../libcurl mac-static; \
+	fi
+
+sqlite-ready:
+	@if [ ! -f "$(SQLITE_DIR)/lib/libsqlite3.a" ] || \
+	    [ ! -f "$(SQLITE_DIR)/include/sqlite3.h" ]; then \
+		echo "--- Building Mac SQLite static dependency ---"; \
+		$(MAKE) -C $(CWD)/../sqlite mac; \
+	fi
+
+$(PUBLIC_LIB_DIR)/libAICURLConnection.a: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/libAICURLConnection.a $@
+
+$(PUBLIC_LIB_DIR)/libcurl.a: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/libcurl.a $@
+
+$(PUBLIC_LIB_DIR)/libssl.a: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/libssl.a $@
+
+$(PUBLIC_LIB_DIR)/libcrypto.a: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/libcrypto.a $@
+
+$(PUBLIC_LIB_DIR)/libz.a: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/libz.a $@
+
+$(PUBLIC_LIB_DIR)/libsqlite3.a: | sqlite-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(SQLITE_DIR)/lib/libsqlite3.a $@
+
+$(PUBLIC_LIB_DIR)/cacert.pem: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/cacert.pem $@
+
+$(STAMP_DIR)/cjson-ppc.done: $(CJSON_DIR)/cJSON.c $(CJSON_DIR)/cJSON_Utils.c \
+                              $(CJSON_DIR)/cJSON.h $(CJSON_DIR)/cJSON_Utils.h
+	@echo "--- Building cJSON (ppc) ---"
+	mkdir -p $(INTERMEDIATE) $(PREFIX)/ppc/lib $(STAMP_DIR)
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) $(PPC_FLAGS) \
+	  $(CJSON_CFLAGS) -c $(CJSON_DIR)/cJSON.c \
+	  -o $(INTERMEDIATE)/cJSON-ppc.o
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) $(PPC_FLAGS) \
+	  $(CJSON_CFLAGS) -c $(CJSON_DIR)/cJSON_Utils.c \
+	  -o $(INTERMEDIATE)/cJSON_Utils-ppc.o
+	$(AR_LEGACY) rc $(PREFIX)/ppc/lib/libcjson.a \
+	  $(INTERMEDIATE)/cJSON-ppc.o $(INTERMEDIATE)/cJSON_Utils-ppc.o
+	$(RANLIB_LEGACY) $(PREFIX)/ppc/lib/libcjson.a
+	touch $@
+
+$(STAMP_DIR)/cjson-x86.done: $(CJSON_DIR)/cJSON.c $(CJSON_DIR)/cJSON_Utils.c \
+                              $(CJSON_DIR)/cJSON.h $(CJSON_DIR)/cJSON_Utils.h
+	@echo "--- Building cJSON (i386) ---"
+	mkdir -p $(INTERMEDIATE) $(PREFIX)/x86/lib $(STAMP_DIR)
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) $(X86_FLAGS) \
+	  $(CJSON_CFLAGS) -c $(CJSON_DIR)/cJSON.c \
+	  -o $(INTERMEDIATE)/cJSON-x86.o
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) $(X86_FLAGS) \
+	  $(CJSON_CFLAGS) -c $(CJSON_DIR)/cJSON_Utils.c \
+	  -o $(INTERMEDIATE)/cJSON_Utils-x86.o
+	$(AR_LEGACY) rc $(PREFIX)/x86/lib/libcjson.a \
+	  $(INTERMEDIATE)/cJSON-x86.o $(INTERMEDIATE)/cJSON_Utils-x86.o
+	$(RANLIB_LEGACY) $(PREFIX)/x86/lib/libcjson.a
+	touch $@
+
+$(STAMP_DIR)/cjson-x64.done: $(CJSON_DIR)/cJSON.c $(CJSON_DIR)/cJSON_Utils.c \
+                              $(CJSON_DIR)/cJSON.h $(CJSON_DIR)/cJSON_Utils.h
+	@echo "--- Building cJSON (x86_64) ---"
+	mkdir -p $(INTERMEDIATE) $(PREFIX)/x64/lib $(STAMP_DIR)
+	$(COMPILER_X64) $(X64_COMPILE_FLAGS) $(CJSON_CFLAGS) \
+	  -c $(CJSON_DIR)/cJSON.c \
+	  -o $(INTERMEDIATE)/cJSON-x64.o
+	$(COMPILER_X64) $(X64_COMPILE_FLAGS) $(CJSON_CFLAGS) \
+	  -c $(CJSON_DIR)/cJSON_Utils.c \
+	  -o $(INTERMEDIATE)/cJSON_Utils-x64.o
+	$(AR_MODERN) rc $(PREFIX)/x64/lib/libcjson.a \
+	  $(INTERMEDIATE)/cJSON-x64.o $(INTERMEDIATE)/cJSON_Utils-x64.o
+	$(RANLIB_MODERN) $(PREFIX)/x64/lib/libcjson.a
+	touch $@
+
+$(STAMP_DIR)/cjson-arm64.done: $(CJSON_DIR)/cJSON.c $(CJSON_DIR)/cJSON_Utils.c \
+                                $(CJSON_DIR)/cJSON.h $(CJSON_DIR)/cJSON_Utils.h
+	@echo "--- Building cJSON (arm64) ---"
+	mkdir -p $(INTERMEDIATE) $(PREFIX)/arm64/lib $(STAMP_DIR)
+	$(COMPILER_ARM64) $(ARM64_COMPILE_FLAGS) $(CJSON_CFLAGS) \
+	  -c $(CJSON_DIR)/cJSON.c \
+	  -o $(INTERMEDIATE)/cJSON-arm64.o
+	$(COMPILER_ARM64) $(ARM64_COMPILE_FLAGS) $(CJSON_CFLAGS) \
+	  -c $(CJSON_DIR)/cJSON_Utils.c \
+	  -o $(INTERMEDIATE)/cJSON_Utils-arm64.o
+	$(AR_MODERN) rc $(PREFIX)/arm64/lib/libcjson.a \
+	  $(INTERMEDIATE)/cJSON-arm64.o $(INTERMEDIATE)/cJSON_Utils-arm64.o
+	$(RANLIB_MODERN) $(PREFIX)/arm64/lib/libcjson.a
+	touch $@
+
+$(PREFIX)/lib/libcjson.a: $(STAMP_DIR)/cjson-ppc.done \
+                           $(STAMP_DIR)/cjson-x86.done \
+                           $(STAMP_DIR)/cjson-x64.done \
+                           $(STAMP_DIR)/cjson-arm64.done
+	mkdir -p $(PREFIX)/lib
+	$(LIPO) -create $(PREFIX)/ppc/lib/libcjson.a \
+	                 $(PREFIX)/x86/lib/libcjson.a \
+	                 $(PREFIX)/x64/lib/libcjson.a \
+	                 $(PREFIX)/arm64/lib/libcjson.a \
+	                 -output $@
+
+$(PUBLIC_LIB_DIR)/libcjson.a: $(PREFIX)/lib/libcjson.a
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $< $@
+
+$(PUBLIC_INCLUDE_DIR)/.stamp: AltivecCore.h | curl-ready sqlite-ready
+	mkdir -p $(PUBLIC_INCLUDE_DIR)
+	rm -rf $(PUBLIC_INCLUDE_DIR)/curl $(PUBLIC_INCLUDE_DIR)/openssl \
+	       $(PUBLIC_INCLUDE_DIR)/AltivecCore
+	cp -R $(CURL_DIR)/include/* $(PUBLIC_INCLUDE_DIR)/
+	rm -f $(PUBLIC_INCLUDE_DIR)/AltivecCURL.h
+	cp $(SQLITE_DIR)/include/sqlite3.h $(PUBLIC_INCLUDE_DIR)/
+	cp $(CJSON_DIR)/cJSON.h $(PUBLIC_INCLUDE_DIR)/
+	cp $(CJSON_DIR)/cJSON_Utils.h $(PUBLIC_INCLUDE_DIR)/
+	cp AltivecCore.h $(PUBLIC_INCLUDE_DIR)/
+	mkdir -p $(PUBLIC_INCLUDE_DIR)/AltivecCore
+	cp $(PUBLIC_INCLUDE_DIR)/AltivecCore.h \
+	   $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h \
+	   $(PUBLIC_INCLUDE_DIR)/zlib.h \
+	   $(PUBLIC_INCLUDE_DIR)/sqlite3.h \
+	   $(PUBLIC_INCLUDE_DIR)/cJSON.h \
+	   $(PUBLIC_INCLUDE_DIR)/cJSON_Utils.h \
+	   $(PUBLIC_INCLUDE_DIR)/AltivecCore/
+	cp -R $(PUBLIC_INCLUDE_DIR)/curl $(PUBLIC_INCLUDE_DIR)/openssl \
+	   $(PUBLIC_INCLUDE_DIR)/AltivecCore/
+	touch $@
+
+verify-mac: $(PUBLIC_LIBS)
+	@echo "--- Verifying Mac AltivecCore static libraries ---"
+	@missing=0; \
+	for lib in $(PUBLIC_LIBS); do \
+		info="`$(LIPO) -info $$lib 2>/dev/null`"; \
+		echo "  > $$info"; \
+		for arch in ppc i386 x86_64 arm64; do \
+			echo "$$info" | grep -qw "$$arch" || { \
+				echo " [!] ERROR: $$lib missing $$arch"; \
+				missing=1; \
+			}; \
+		done; \
+	done; \
+	exit $$missing
+
+$(INTERMEDIATE)/c-exports.txt: $(PUBLIC_LIBS)
+	@echo "--- Extracting AltivecCore public C exports (intersection of all 4 arches) ---"
+	mkdir -p $(INTERMEDIATE)
+	{ \
+	  for arch in ppc i386 x86_64 arm64; do \
+	    { \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libcurl.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_curl_/ {print $$NF}'; \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libssl.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libcrypto.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ && $$NF != "_OPENSSL_armcap_P" {print $$NF}'; \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libz.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libsqlite3.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_sqlite3_/ {print $$NF}'; \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libcjson.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_cJSON/ {print $$NF}'; \
+	    } | sort -u; \
+	  done; \
+	} | sort | uniq -c | awk '$$1 == 4 {print $$2}' > $@
+
+$(INTERMEDIATE)/exports-legacy.txt: $(INTERMEDIATE)/c-exports.txt
+	cp $< $@
+	echo '.objc_class_name_AICURLConnection' >> $@
+	echo '.objc_class_name_AIHTTPURLResponse' >> $@
+
+$(INTERMEDIATE)/exports-modern.txt: $(INTERMEDIATE)/c-exports.txt
+	cp $< $@
+	echo '_OBJC_CLASS_$$_AICURLConnection' >> $@
+	echo '_OBJC_METACLASS_$$_AICURLConnection' >> $@
+	echo '_OBJC_CLASS_$$_AIHTTPURLResponse' >> $@
+	echo '_OBJC_METACLASS_$$_AIHTTPURLResponse' >> $@
+
+$(INTERMEDIATE)/AltivecCore-ppc.dylib: $(INTERMEDIATE)/exports-legacy.txt $(PUBLIC_LIBS)
+	@echo "--- Linking AltivecCore dylib (ppc) ---"
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) \
+	  $(PPC_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-legacy.txt \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcurl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libssl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcrypto.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libz.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libsqlite3.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcjson.a \
+	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
+	  -o $@
+
+$(INTERMEDIATE)/AltivecCore-x86.dylib: $(INTERMEDIATE)/exports-legacy.txt $(PUBLIC_LIBS)
+	@echo "--- Linking AltivecCore dylib (i386) ---"
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) \
+	  $(X86_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-legacy.txt \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcurl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libssl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcrypto.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libz.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libsqlite3.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcjson.a \
+	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
+	  -o $@
+
+$(INTERMEDIATE)/AltivecCore-x64.dylib: $(INTERMEDIATE)/exports-modern.txt $(PUBLIC_LIBS)
+	@echo "--- Linking AltivecCore dylib (x86_64) ---"
+	$(COMPILER_X64) \
+	  $(X64_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-modern.txt \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcurl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libssl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcrypto.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libz.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libsqlite3.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcjson.a \
+	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
+	  -o $@
+
+$(INTERMEDIATE)/AltivecCore-arm64.dylib: $(INTERMEDIATE)/exports-modern.txt $(PUBLIC_LIBS)
+	@echo "--- Linking AltivecCore dylib (arm64) ---"
+	$(COMPILER_ARM64) \
+	  $(ARM64_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-modern.txt \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcurl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libssl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcrypto.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libz.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libsqlite3.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcjson.a \
+	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
+	  -o $@
+
+$(INTERMEDIATE)/AltivecCore.dylib: $(INTERMEDIATE)/AltivecCore-ppc.dylib \
+                                   $(INTERMEDIATE)/AltivecCore-x86.dylib \
+                                   $(INTERMEDIATE)/AltivecCore-x64.dylib \
+                                   $(INTERMEDIATE)/AltivecCore-arm64.dylib
+	@echo "--- Merging Quad-Fat AltivecCore dylib ---"
+	$(LIPO) -create $^ -output $@
+
+$(INTERMEDIATE)/Info.plist:
+	mkdir -p $(INTERMEDIATE)
+	printf '%s\n' \
+	  '<?xml version="1.0" encoding="UTF-8"?>' \
+	  '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+	  '<plist version="1.0">' \
+	  '<dict>' \
+	  '  <key>CFBundleDevelopmentRegion</key><string>en</string>' \
+	  '  <key>CFBundleExecutable</key><string>$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundleIdentifier</key><string>com.altivec.$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>' \
+	  '  <key>CFBundleName</key><string>$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundlePackageType</key><string>FMWK</string>' \
+	  '  <key>CFBundleShortVersionString</key><string>$(FRAMEWORK_CURRENT_VER)</string>' \
+	  '  <key>CFBundleVersion</key><string>1</string>' \
+	  '</dict>' \
+	  '</plist>' > $@
+
+$(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME): $(INTERMEDIATE)/AltivecCore.dylib \
+                                      $(INTERMEDIATE)/Info.plist \
+                                      $(PUBLIC_LIB_DIR)/cacert.pem \
+                                      $(PUBLIC_INCLUDE_DIR)/.stamp
+	@echo "--- Assembling AltivecCore.framework bundle ---"
+	rm -rf $(FRAMEWORK_BUNDLE)
+	mkdir -p $(FRAMEWORK_VERSION_DIR)/Headers $(FRAMEWORK_VERSION_DIR)/Resources
+	cp $(INTERMEDIATE)/AltivecCore.dylib $(FRAMEWORK_VERSION_DIR)/$(FRAMEWORK_NAME)
+	cp $(INTERMEDIATE)/Info.plist $(FRAMEWORK_VERSION_DIR)/Resources/Info.plist
+	cp $(PUBLIC_LIB_DIR)/cacert.pem $(FRAMEWORK_VERSION_DIR)/Resources/cacert.pem
+	cp -R $(PUBLIC_INCLUDE_DIR)/* $(FRAMEWORK_VERSION_DIR)/Headers/
+	ln -sf $(FRAMEWORK_VERSION) $(FRAMEWORK_BUNDLE)/Versions/Current
+	ln -sf Versions/Current/$(FRAMEWORK_NAME) $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
+	ln -sf Versions/Current/Headers $(FRAMEWORK_BUNDLE)/Headers
+	ln -sf Versions/Current/Resources $(FRAMEWORK_BUNDLE)/Resources
+
+verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
+	@echo "--- Verifying AltivecCore.framework ---"
+	@info="`$(LIPO) -info $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null`"; \
+	echo "  > $$info"; \
+	missing=0; \
+	for arch in ppc i386 x86_64 arm64; do \
+		echo "$$info" | grep -qw "$$arch" || { \
+			echo " [!] ERROR: AltivecCore missing $$arch"; \
+			missing=1; \
+		}; \
+	done; \
+	test -L $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) || { echo " [!] ERROR: top-level binary symlink missing"; missing=1; }; \
+	test -L $(FRAMEWORK_BUNDLE)/Headers || { echo " [!] ERROR: Headers symlink missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Info.plist || { echo " [!] ERROR: Info.plist missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Resources/cacert.pem || { echo " [!] ERROR: cacert.pem missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AltivecCore.h || { echo " [!] ERROR: AltivecCore.h umbrella missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AICURLConnection.h || { echo " [!] ERROR: AICURLConnection.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/sqlite3.h || { echo " [!] ERROR: sqlite3.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/cJSON.h || { echo " [!] ERROR: cJSON.h missing"; missing=1; }; \
+	test -d $(FRAMEWORK_VERSION_DIR)/Headers/curl || { echo " [!] ERROR: curl/ headers missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/openssl/ssl.h || { echo " [!] ERROR: openssl/ headers missing"; missing=1; }; \
+	test -f $(FRAMEWORK_VERSION_DIR)/Headers/zlib.h || { echo " [!] ERROR: zlib.h missing"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _SSL_new' || { echo " [!] ERROR: _SSL_new not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _deflate' || { echo " [!] ERROR: _deflate not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: _curl_easy_init not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: _sqlite3_open not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: _cJSON_Parse not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported (ppc)"; missing=1; }; \
+	exit $$missing
+
+prune-build-files:
+	@echo "--- Pruning Mac AltivecCore build intermediates ---"
+	rm -rf $(INTERMEDIATE) $(PREFIX) $(STAMP_DIR)
+
+clean:
+	rm -rf $(BUILD_ROOT)
+
+.PHONY: all static dynamic curl-ready sqlite-ready verify-mac verify-dynamic prune-build-files clean

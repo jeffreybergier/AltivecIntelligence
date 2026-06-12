@@ -1,7 +1,7 @@
 ## AltivecIntelligence: Parent Project Setup
 # Use this file to "activate" the Altivec toolchain in your new repository.
 # No submodule needed — the GHCR image ships the full /altivec/ toolchain
-# (cross-compilers, SDKs, libcurl static libs, AI CLIs, example apps).
+# (cross-compilers, SDKs, AltivecCore libs, AI CLIs, example apps).
 #
 # Project rules and conventions for AI agents are documented at
 # /altivec/AGENTS.md inside the image (symlinked as CLAUDE.md / GEMINI.md

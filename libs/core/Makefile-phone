@@ -1,0 +1,322 @@
+include core_common.mk
+
+CWD=$(shell pwd)
+BUILD_ROOT=$(CWD)/build-phone
+INTERMEDIATE=$(BUILD_ROOT)/intermediate
+PREFIX=$(BUILD_ROOT)/prefix
+STAMP_DIR=$(BUILD_ROOT)/stamps
+PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
+PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
+
+CURL_DIR ?= $(CWD)/../libcurl/build-phone
+SQLITE_DIR ?= $(CWD)/../sqlite/build-phone
+CJSON_DIR=third_party/cJSON
+
+IOS_V7_FLAGS=-target armv7-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch armv7 -B$(BIN_DIR)
+IOS_64_FLAGS=-target arm64-apple-ios$(IOS_ARM64_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch arm64 -B$(BIN_DIR)
+CJSON_CFLAGS=$(OPT_FLAGS) $(COMMON_WARN_FLAGS) -std=c99 -I$(CJSON_DIR)
+
+CORE_STATIC_LIBS=libAICURLConnection.a \
+                 libcurl.a \
+                 libssl.a \
+                 libcrypto.a \
+                 libz.a \
+                 libsqlite3.a \
+                 libcjson.a
+PUBLIC_LIBS=$(addprefix $(PUBLIC_LIB_DIR)/,$(CORE_STATIC_LIBS))
+
+FRAMEWORK_NAME=AltivecCore
+FRAMEWORK_BUNDLE=$(PUBLIC_LIB_DIR)/$(FRAMEWORK_NAME).framework
+FRAMEWORK_INSTALL_NAME=@rpath/$(FRAMEWORK_NAME).framework/$(FRAMEWORK_NAME)
+FRAMEWORK_VERSION=1.0.0
+DYLIB_LINK_FLAGS=-dynamiclib \
+                 -install_name $(FRAMEWORK_INSTALL_NAME) \
+                 -compatibility_version $(FRAMEWORK_VERSION) \
+                 -current_version $(FRAMEWORK_VERSION) \
+                 -Wl,-headerpad_max_install_names
+
+all: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
+     $(PUBLIC_INCLUDE_DIR)/.stamp verify-phone \
+     $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic
+	@echo "-----------------------------------------------------------"
+	@echo "PHONE STATIC + ALTIVECCORE FRAMEWORK BUILD SUCCESSFUL"
+	@echo "Libraries: $(PUBLIC_LIB_DIR)"
+	@echo "Framework: $(FRAMEWORK_BUNDLE)"
+	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-phone prune-build-files
+
+static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
+        $(PUBLIC_INCLUDE_DIR)/.stamp verify-phone
+	@echo "-----------------------------------------------------------"
+	@echo "PHONE ALTIVECCORE STATIC LIBS BUILD SUCCESSFUL"
+	@echo "Libraries: $(PUBLIC_LIB_DIR)"
+	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-phone prune-build-files
+
+dynamic: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
+         $(PUBLIC_INCLUDE_DIR)/.stamp \
+         $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic
+	@echo "-----------------------------------------------------------"
+	@echo "PHONE ALTIVECCORE FRAMEWORK BUILD SUCCESSFUL"
+	@echo "Framework: $(FRAMEWORK_BUNDLE)"
+	@echo "-----------------------------------------------------------"
+	@$(MAKE) --no-print-directory -f Makefile-phone prune-build-files
+
+curl-ready:
+	@if [ ! -f "$(CURL_DIR)/lib/libAICURLConnection.a" ] || \
+	    [ ! -f "$(CURL_DIR)/lib/libcurl.a" ] || \
+	    [ ! -f "$(CURL_DIR)/lib/libssl.a" ] || \
+	    [ ! -f "$(CURL_DIR)/lib/libcrypto.a" ] || \
+	    [ ! -f "$(CURL_DIR)/lib/libz.a" ] || \
+	    [ ! -f "$(CURL_DIR)/lib/cacert.pem" ] || \
+	    [ ! -f "$(CURL_DIR)/include/AICURLConnection.h" ]; then \
+		echo "--- Building Phone libcurl static dependency ---"; \
+		$(MAKE) -C $(CWD)/../libcurl phone-static; \
+	fi
+
+sqlite-ready:
+	@if [ ! -f "$(SQLITE_DIR)/lib/libsqlite3.a" ] || \
+	    [ ! -f "$(SQLITE_DIR)/include/sqlite3.h" ]; then \
+		echo "--- Building Phone SQLite static dependency ---"; \
+		$(MAKE) -C $(CWD)/../sqlite phone; \
+	fi
+
+$(PUBLIC_LIB_DIR)/libAICURLConnection.a: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/libAICURLConnection.a $@
+
+$(PUBLIC_LIB_DIR)/libcurl.a: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/libcurl.a $@
+
+$(PUBLIC_LIB_DIR)/libssl.a: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/libssl.a $@
+
+$(PUBLIC_LIB_DIR)/libcrypto.a: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/libcrypto.a $@
+
+$(PUBLIC_LIB_DIR)/libz.a: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/libz.a $@
+
+$(PUBLIC_LIB_DIR)/libsqlite3.a: | sqlite-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(SQLITE_DIR)/lib/libsqlite3.a $@
+
+$(PUBLIC_LIB_DIR)/cacert.pem: | curl-ready
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $(CURL_DIR)/lib/cacert.pem $@
+
+$(STAMP_DIR)/cjson-armv7: $(CJSON_DIR)/cJSON.c $(CJSON_DIR)/cJSON_Utils.c \
+                           $(CJSON_DIR)/cJSON.h $(CJSON_DIR)/cJSON_Utils.h
+	@echo "--- Building cJSON (armv7) ---"
+	mkdir -p $(INTERMEDIATE) $(PREFIX)/armv7/lib $(STAMP_DIR)
+	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(CJSON_CFLAGS) \
+	  -c $(CJSON_DIR)/cJSON.c \
+	  -o $(INTERMEDIATE)/cJSON-armv7.o
+	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(CJSON_CFLAGS) \
+	  -c $(CJSON_DIR)/cJSON_Utils.c \
+	  -o $(INTERMEDIATE)/cJSON_Utils-armv7.o
+	$(AR_MODERN) rc $(PREFIX)/armv7/lib/libcjson.a \
+	  $(INTERMEDIATE)/cJSON-armv7.o $(INTERMEDIATE)/cJSON_Utils-armv7.o
+	$(RANLIB_MODERN) $(PREFIX)/armv7/lib/libcjson.a
+	touch $@
+
+$(STAMP_DIR)/cjson-arm64: $(CJSON_DIR)/cJSON.c $(CJSON_DIR)/cJSON_Utils.c \
+                           $(CJSON_DIR)/cJSON.h $(CJSON_DIR)/cJSON_Utils.h
+	@echo "--- Building cJSON (arm64) ---"
+	mkdir -p $(INTERMEDIATE) $(PREFIX)/arm64/lib $(STAMP_DIR)
+	$(COMPILER_IOS) $(IOS_64_FLAGS) $(CJSON_CFLAGS) \
+	  -c $(CJSON_DIR)/cJSON.c \
+	  -o $(INTERMEDIATE)/cJSON-arm64.o
+	$(COMPILER_IOS) $(IOS_64_FLAGS) $(CJSON_CFLAGS) \
+	  -c $(CJSON_DIR)/cJSON_Utils.c \
+	  -o $(INTERMEDIATE)/cJSON_Utils-arm64.o
+	$(AR_MODERN) rc $(PREFIX)/arm64/lib/libcjson.a \
+	  $(INTERMEDIATE)/cJSON-arm64.o $(INTERMEDIATE)/cJSON_Utils-arm64.o
+	$(RANLIB_MODERN) $(PREFIX)/arm64/lib/libcjson.a
+	touch $@
+
+$(PREFIX)/lib/libcjson.a: $(STAMP_DIR)/cjson-armv7 \
+                           $(STAMP_DIR)/cjson-arm64
+	mkdir -p $(PREFIX)/lib
+	$(LIPO_MODERN) -create \
+	  $(PREFIX)/arm64/lib/libcjson.a \
+	  $(PREFIX)/armv7/lib/libcjson.a \
+	  -output $@
+
+$(PUBLIC_LIB_DIR)/libcjson.a: $(PREFIX)/lib/libcjson.a
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $< $@
+
+$(PUBLIC_INCLUDE_DIR)/.stamp: AltivecCore.h | curl-ready sqlite-ready
+	mkdir -p $(PUBLIC_INCLUDE_DIR)
+	rm -rf $(PUBLIC_INCLUDE_DIR)/curl $(PUBLIC_INCLUDE_DIR)/openssl \
+	       $(PUBLIC_INCLUDE_DIR)/AltivecCore
+	cp -R $(CURL_DIR)/include/* $(PUBLIC_INCLUDE_DIR)/
+	rm -f $(PUBLIC_INCLUDE_DIR)/AltivecCURL.h
+	cp $(SQLITE_DIR)/include/sqlite3.h $(PUBLIC_INCLUDE_DIR)/
+	cp $(CJSON_DIR)/cJSON.h $(PUBLIC_INCLUDE_DIR)/
+	cp $(CJSON_DIR)/cJSON_Utils.h $(PUBLIC_INCLUDE_DIR)/
+	cp AltivecCore.h $(PUBLIC_INCLUDE_DIR)/
+	mkdir -p $(PUBLIC_INCLUDE_DIR)/AltivecCore
+	cp $(PUBLIC_INCLUDE_DIR)/AltivecCore.h \
+	   $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h \
+	   $(PUBLIC_INCLUDE_DIR)/zlib.h \
+	   $(PUBLIC_INCLUDE_DIR)/sqlite3.h \
+	   $(PUBLIC_INCLUDE_DIR)/cJSON.h \
+	   $(PUBLIC_INCLUDE_DIR)/cJSON_Utils.h \
+	   $(PUBLIC_INCLUDE_DIR)/AltivecCore/
+	cp -R $(PUBLIC_INCLUDE_DIR)/curl $(PUBLIC_INCLUDE_DIR)/openssl \
+	   $(PUBLIC_INCLUDE_DIR)/AltivecCore/
+	touch $@
+
+verify-phone: $(PUBLIC_LIBS)
+	@echo "--- Verifying Phone AltivecCore static libraries ---"
+	@missing=0; \
+	for lib in $(PUBLIC_LIBS); do \
+		info="`$(LIPO_MODERN) -info $$lib 2>/dev/null`"; \
+		echo "  > $$info"; \
+		for arch in armv7 arm64; do \
+			echo "$$info" | grep -qw "$$arch" || { \
+				echo " [!] ERROR: $$lib missing $$arch"; \
+				missing=1; \
+			}; \
+		done; \
+	done; \
+	exit $$missing
+
+$(INTERMEDIATE)/c-exports.txt: $(PUBLIC_LIBS)
+	@echo "--- Extracting AltivecCore public C exports (intersection of armv7 + arm64) ---"
+	mkdir -p $(INTERMEDIATE)
+	{ \
+	  for arch in armv7 arm64; do \
+	    { \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libcurl.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_curl_/ {print $$NF}'; \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libssl.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libcrypto.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ && $$NF != "_OPENSSL_armcap_P" {print $$NF}'; \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libz.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libsqlite3.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_sqlite3_/ {print $$NF}'; \
+	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libcjson.a 2>/dev/null \
+	        | awk '!/private external/ && / external / && $$NF ~ /^_cJSON/ {print $$NF}'; \
+	    } | sort -u; \
+	  done; \
+	} | sort | uniq -c | awk '$$1 == 2 {print $$2}' > $@
+
+$(INTERMEDIATE)/exports.txt: $(INTERMEDIATE)/c-exports.txt
+	cp $< $@
+	echo '_OBJC_CLASS_$$_AICURLConnection' >> $@
+	echo '_OBJC_METACLASS_$$_AICURLConnection' >> $@
+	echo '_OBJC_CLASS_$$_AIHTTPURLResponse' >> $@
+	echo '_OBJC_METACLASS_$$_AIHTTPURLResponse' >> $@
+
+$(INTERMEDIATE)/AltivecCore-armv7.dylib: $(INTERMEDIATE)/exports.txt $(PUBLIC_LIBS)
+	@echo "--- Linking AltivecCore dylib (armv7) ---"
+	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports.txt \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcurl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libssl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcrypto.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libz.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libsqlite3.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcjson.a \
+	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
+	  -o $@
+
+$(INTERMEDIATE)/AltivecCore-arm64.dylib: $(INTERMEDIATE)/exports.txt $(PUBLIC_LIBS)
+	@echo "--- Linking AltivecCore dylib (arm64) ---"
+	$(COMPILER_IOS) $(IOS_64_FLAGS) $(DYLIB_LINK_FLAGS) \
+	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports.txt \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcurl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libssl.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcrypto.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libz.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libsqlite3.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcjson.a \
+	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
+	  -o $@
+
+$(INTERMEDIATE)/AltivecCore.dylib: $(INTERMEDIATE)/AltivecCore-armv7.dylib \
+                                   $(INTERMEDIATE)/AltivecCore-arm64.dylib
+	@echo "--- Merging armv7 + arm64 AltivecCore dylib ---"
+	$(LIPO_MODERN) -create $^ -output $@
+
+$(INTERMEDIATE)/Info.plist:
+	mkdir -p $(INTERMEDIATE)
+	printf '%s\n' \
+	  '<?xml version="1.0" encoding="UTF-8"?>' \
+	  '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+	  '<plist version="1.0">' \
+	  '<dict>' \
+	  '  <key>CFBundleDevelopmentRegion</key><string>en</string>' \
+	  '  <key>CFBundleExecutable</key><string>$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundleIdentifier</key><string>com.altivec.$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>' \
+	  '  <key>CFBundleName</key><string>$(FRAMEWORK_NAME)</string>' \
+	  '  <key>CFBundlePackageType</key><string>FMWK</string>' \
+	  '  <key>CFBundleShortVersionString</key><string>$(FRAMEWORK_VERSION)</string>' \
+	  '  <key>CFBundleVersion</key><string>1</string>' \
+	  '  <key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>' \
+	  '  <key>MinimumOSVersion</key><string>$(IOS_ARM64_MIN_VER)</string>' \
+	  '</dict>' \
+	  '</plist>' > $@
+
+$(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME): $(INTERMEDIATE)/AltivecCore.dylib \
+                                      $(INTERMEDIATE)/Info.plist \
+                                      $(PUBLIC_LIB_DIR)/cacert.pem \
+                                      $(PUBLIC_INCLUDE_DIR)/.stamp
+	@echo "--- Assembling AltivecCore.framework (iOS flat layout) ---"
+	rm -rf $(FRAMEWORK_BUNDLE)
+	mkdir -p $(FRAMEWORK_BUNDLE)/Headers
+	cp $(INTERMEDIATE)/AltivecCore.dylib $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
+	cp $(INTERMEDIATE)/Info.plist $(FRAMEWORK_BUNDLE)/Info.plist
+	cp $(PUBLIC_LIB_DIR)/cacert.pem $(FRAMEWORK_BUNDLE)/cacert.pem
+	cp -R $(PUBLIC_INCLUDE_DIR)/* $(FRAMEWORK_BUNDLE)/Headers/
+
+verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
+	@echo "--- Verifying AltivecCore.framework (iOS) ---"
+	@info="`$(LIPO_MODERN) -info $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null`"; \
+	echo "  > $$info"; \
+	missing=0; \
+	for arch in armv7 arm64; do \
+		echo "$$info" | grep -qw "$$arch" || { \
+			echo " [!] ERROR: AltivecCore missing $$arch"; \
+			missing=1; \
+		}; \
+	done; \
+	test -f $(FRAMEWORK_BUNDLE)/Info.plist || { echo " [!] ERROR: Info.plist missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/cacert.pem || { echo " [!] ERROR: cacert.pem missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/AltivecCore.h || { echo " [!] ERROR: AltivecCore.h umbrella missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/AICURLConnection.h || { echo " [!] ERROR: AICURLConnection.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/sqlite3.h || { echo " [!] ERROR: sqlite3.h missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/cJSON.h || { echo " [!] ERROR: cJSON.h missing"; missing=1; }; \
+	test -d $(FRAMEWORK_BUNDLE)/Headers/curl || { echo " [!] ERROR: curl/ headers missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/openssl/ssl.h || { echo " [!] ERROR: openssl/ headers missing"; missing=1; }; \
+	test -f $(FRAMEWORK_BUNDLE)/Headers/zlib.h || { echo " [!] ERROR: zlib.h missing"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _SSL_new' || { echo " [!] ERROR: _SSL_new not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _deflate' || { echo " [!] ERROR: _deflate not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: _curl_easy_init not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: _sqlite3_open not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: _cJSON_Parse not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported"; missing=1; }; \
+	exit $$missing
+
+prune-build-files:
+	@echo "--- Pruning Phone AltivecCore build intermediates ---"
+	rm -rf $(INTERMEDIATE) $(PREFIX) $(STAMP_DIR)
+
+clean:
+	rm -rf $(BUILD_ROOT)
+
+.PHONY: all static dynamic curl-ready sqlite-ready verify-phone verify-dynamic prune-build-files clean

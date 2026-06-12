@@ -1,7 +1,7 @@
 # AltivecIntelligence libcurl Master Makefile
 # This Makefile orchestrates the build for Phone and Mac
 
-all: phone-all mac-all
+all: phone-static mac-static
 
 # --- Static Targets ---
 phone-static:
@@ -16,35 +16,9 @@ mac-static:
 	@echo "==========================================================="
 	$(MAKE) -f Makefile-mac static
 
-# --- Dynamic Targets ---
-mac-dynamic:
-	@echo "==========================================================="
-	@echo "BUILDING MAC ALTIVECCURL.framework (ppc, x86, x64, arm64)"
-	@echo "==========================================================="
-	$(MAKE) -f Makefile-mac dynamic
-
-phone-dynamic:
-	@echo "==========================================================="
-	@echo "BUILDING PHONE ALTIVECCURL.framework (armv7, arm64)"
-	@echo "==========================================================="
-	$(MAKE) -f Makefile-phone dynamic
-
-# --- Combined: Static Libraries + AltivecCURL.framework ---
-mac-all:
-	@echo "==========================================================="
-	@echo "BUILDING MAC STATIC LIBS + ALTIVECCURL.framework"
-	@echo "==========================================================="
-	$(MAKE) -f Makefile-mac all
-
-phone-all:
-	@echo "==========================================================="
-	@echo "BUILDING PHONE STATIC LIBS + ALTIVECCURL.framework"
-	@echo "==========================================================="
-	$(MAKE) -f Makefile-phone all
-
 # --- Aliases ---
-phone: phone-all
-mac: mac-all
+phone: phone-static
+mac: mac-static
 
 # --- AICURLConnection Only Targets ---
 aicc: aicc-mac
@@ -80,4 +54,4 @@ prune-intermediates:
 	       build-phone/stamps \
 	       build-phone/prefix
 
-.PHONY: all phone-static mac-static mac-dynamic phone-dynamic mac-all phone-all phone mac aicc aicc-mac aicc-phone aicc-analyze clean prune-intermediates
+.PHONY: all phone-static mac-static phone mac aicc aicc-mac aicc-phone aicc-analyze clean prune-intermediates

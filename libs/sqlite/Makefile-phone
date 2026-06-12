@@ -1,0 +1,59 @@
+include sqlite_common.mk
+
+SQLITE_ZIP  = sqlite-amalgamation-$(SQLITE_VER).zip
+SQLITE_URL  = https://www.sqlite.org/$(SQLITE_YEAR)/$(SQLITE_ZIP)
+SQLITE_DIR  = sqlite-amalgamation-$(SQLITE_VER)
+
+CWD          = $(shell pwd)
+BUILD_ROOT   = $(CWD)/build-phone
+INTERMEDIATE = $(BUILD_ROOT)/intermediate
+PREFIX       = $(BUILD_ROOT)/prefix
+
+IOS_V7_FLAGS = -target armv7-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch armv7 -B$(BIN_DIR)
+IOS_64_FLAGS = -target arm64-apple-ios$(IOS_ARM64_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch arm64 -B$(BIN_DIR)
+
+SRC = $(INTERMEDIATE)/$(SQLITE_DIR)/sqlite3.c
+
+SQLITE_CFLAGS += -DHAVE_GETHOSTUUID=0
+
+all: static
+
+static: $(BUILD_ROOT)/lib/libsqlite3.a
+	@echo "-----------------------------------------------------------"
+	@echo "PHONE UNIVERSAL (armv7 + arm64) BUILD SUCCESSFUL"
+	@echo "Libraries: $(BUILD_ROOT)/lib"
+	@echo "Headers:   $(BUILD_ROOT)/include"
+	@echo "-----------------------------------------------------------"
+
+$(BUILD_ROOT)/lib/libsqlite3.a: $(PREFIX)/lib/libsqlite3.a
+	mkdir -p $(BUILD_ROOT)/lib $(BUILD_ROOT)/include
+	cp $(PREFIX)/lib/libsqlite3.a $(BUILD_ROOT)/lib/
+	cp $(INTERMEDIATE)/$(SQLITE_DIR)/sqlite3.h $(BUILD_ROOT)/include/
+
+$(INTERMEDIATE)/$(SQLITE_DIR):
+	mkdir -p $(INTERMEDIATE)
+	[ -f tarballs/$(SQLITE_ZIP) ] || (mkdir -p tarballs && curl -sL $(SQLITE_URL) -o tarballs/$(SQLITE_ZIP))
+	cd $(INTERMEDIATE) && unzip -q $(CWD)/tarballs/$(SQLITE_ZIP)
+
+$(PREFIX)/lib/libsqlite3.a: $(INTERMEDIATE)/$(SQLITE_DIR)
+	mkdir -p $(PREFIX)/armv7/lib $(PREFIX)/arm64/lib $(PREFIX)/lib
+	@echo "--- Building SQLite $(SQLITE_VER) (armv7) ---"
+	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(OPT_FLAGS) \
+	  $(SQLITE_CFLAGS) -c $(SRC) -o $(INTERMEDIATE)/sqlite3-armv7.o
+	$(AR_MODERN) rc $(PREFIX)/armv7/lib/libsqlite3.a $(INTERMEDIATE)/sqlite3-armv7.o
+	$(RANLIB_MODERN) $(PREFIX)/armv7/lib/libsqlite3.a
+	@echo "--- Building SQLite $(SQLITE_VER) (arm64) ---"
+	$(COMPILER_IOS) $(IOS_64_FLAGS) $(OPT_FLAGS) \
+	  $(SQLITE_CFLAGS) -c $(SRC) -o $(INTERMEDIATE)/sqlite3-arm64.o
+	$(AR_MODERN) rc $(PREFIX)/arm64/lib/libsqlite3.a $(INTERMEDIATE)/sqlite3-arm64.o
+	$(RANLIB_MODERN) $(PREFIX)/arm64/lib/libsqlite3.a
+	@echo "--- Merging universal libsqlite3.a ---"
+	$(LIPO_MODERN) -create \
+	  $(PREFIX)/armv7/lib/libsqlite3.a \
+	  $(PREFIX)/arm64/lib/libsqlite3.a \
+	  -output $(PREFIX)/lib/libsqlite3.a
+
+clean:
+	rm -rf $(BUILD_ROOT)
+
+.PHONY: all static clean

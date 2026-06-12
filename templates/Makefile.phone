@@ -5,8 +5,11 @@ APP_NAME = MyPhoneApp
 SOURCES = main.m AppDelegate.m
 RES_DIR = Resources
 
-# Optional override if libcurl is required for this app:
-# LIBCURL_REQUIRED = 1
-# LIBCURL_DIR = /altivec/libs/libcurl/build-phone
+# Optional override if AltivecCore is required for this app:
+# ALTIVECCORE_REQUIRED = 1
+# ALTIVECCORE_LINKAGE = dynamic
+# Use ALTIVECCORE_LINKAGE = static for iOS 4.3-7 devices; embedded
+# iOS frameworks require iOS 8+ at runtime.
+# ALTIVECCORE_DIR = /altivec/libs/core/build-phone
 
 include /altivec/altivec_common_phone.mk
