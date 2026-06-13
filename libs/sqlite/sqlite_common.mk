@@ -59,3 +59,24 @@ SQLITE_CFLAGS = \
 LEGACY_SQLITE_CFLAGS = $(SQLITE_CFLAGS) -DHAVE_STDATOMIC_H=0
 
 JOBS = $(shell getconf _NPROCESSORS_ONLN)
+
+# Network downloads are part of dependency bootstrapping. Use retries and a
+# temporary output file so transient CDN errors do not leave corrupt archives.
+CURL_RETRY_FLAGS = --fail --location --retry 5 --retry-delay 2 \
+                   --retry-all-errors --connect-timeout 30
+
+define download_to_target
+	@set -e; \
+	tmp="$@.tmp"; \
+	rm -f "$$tmp"; \
+	for url in $(1); do \
+	  echo "  > downloading $$url"; \
+	  if curl $(CURL_RETRY_FLAGS) "$$url" -o "$$tmp"; then \
+	    mv "$$tmp" "$@"; \
+	    exit 0; \
+	  fi; \
+	  rm -f "$$tmp"; \
+	done; \
+	echo " [!] ERROR: failed to download $@"; \
+	exit 1
+endef

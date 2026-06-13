@@ -11,6 +11,12 @@ TEMP_DIR="$BASE_DIR/temp_build_assets"
 OSXCROSS_GIT="https://github.com/tpoechtrager/osxcross.git"
 OSXCROSS_BRANCH="ppc-test"
 
+curl_retry() {
+    curl --fail --location --silent --show-error \
+         --retry 5 --retry-delay 2 --retry-all-errors \
+         --connect-timeout 30 "$@"
+}
+
 # Ensure cleanup on exit
 trap 'echo "Cleaning up..."; rm -rf "$TEMP_DIR"' EXIT
 
@@ -30,8 +36,8 @@ echo "--- Repairing Build Scripts ---"
 sed -i '/pushd $OSXCROSS_BUILD_DIR/i mkdir -p $OSXCROSS_BUILD_DIR' build_gcc.sh
 
 # Update config.guess/sub to support modern architectures (like aarch64) during GCC build
-curl -sL 'https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess' -o config.guess.new
-curl -sL 'https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub' -o config.sub.new
+curl_retry 'https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess' -o config.guess.new
+curl_retry 'https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub' -o config.sub.new
 sed -i '/extract "$OSXCROSS_TARBALL_DIR\/gcc-$APPLE_GCC_VERSION.tar.gz" 1/a \  find . -name "config.guess" -exec cp ../config.guess.new {} \\; \n  find . -name "config.sub" -exec cp ../config.sub.new {} \\;' build_gcc.sh
 
 # 3. Apply Global OSXCross patches
@@ -57,13 +63,13 @@ ln -sf /usr/bin/python3 /usr/local/bin/python
 echo "--- Downloading SDKs ---"
 
 echo "> Mac OS X 10.5  SDK"
-curl -sL https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.5.sdk.tar.xz -o "$TARBALLS_DIR/MacOSX10.5.sdk.tar.xz"
+curl_retry https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.5.sdk.tar.xz -o "$TARBALLS_DIR/MacOSX10.5.sdk.tar.xz"
 
 echo ">    macOS 11.3  SDK"
-curl -sL https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz -o "$TARBALLS_DIR/MacOSX11.3.sdk.tar.xz"
+curl_retry https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz -o "$TARBALLS_DIR/MacOSX11.3.sdk.tar.xz"
 
 echo ">      iOS  8.4  SDK"
-curl -sL https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS8.4.sdk.tar.gz -o "$TARBALLS_DIR/iPhoneOS8.4.sdk.tar.gz"
+curl_retry https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS8.4.sdk.tar.gz -o "$TARBALLS_DIR/iPhoneOS8.4.sdk.tar.gz"
 
 # Finalize
 cp docker/postbuild.sh ./

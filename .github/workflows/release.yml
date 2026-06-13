@@ -187,6 +187,16 @@ jobs:
           ref: refs/tags/${{ needs.prepare.outputs.release_tag }}
           submodules: recursive
 
+      - name: Restore source tarball cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            libs/libcurl/tarballs
+            libs/sqlite/tarballs
+          key: release-source-tarballs-${{ runner.os }}-${{ hashFiles('libs/libcurl/Makefile*', 'libs/libcurl/libcurl_common.mk', 'libs/sqlite/Makefile*', 'libs/sqlite/sqlite_common.mk') }}
+          restore-keys: |
+            release-source-tarballs-${{ runner.os }}-
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -210,6 +220,7 @@ jobs:
           docker run --rm \
             --entrypoint /bin/bash \
             -e IS_SANDBOX=1 \
+            -e ALTIVEC_RELEASE_PREBUILT_ROOT=/altivec \
             -v "${{ github.workspace }}:/repo/user" \
             -w /repo/user \
             "$BUILD_IMAGE" \

@@ -97,6 +97,8 @@ RUN apt-get update && apt-get install -y \
     wabt \
     && rm -rf /var/lib/apt/lists/*
 
+ENV CURL_RETRY_FLAGS="--fail --silent --show-error --location --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 30"
+
 # 1b. Bundler — install the current release from RubyGems. apt's
 #      `bundler` is pinned to an older version that newer Gemfile.lock
 #      files (via their `BUNDLED WITH` line) frequently refuse to accept.
@@ -129,13 +131,14 @@ ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib"
 # NOTE: use the acr copy-install, NOT sys/install.sh — the latter is a
 # developer install that symlinks /usr/local/bin/* back into the build
 # tree, which the `rm -rf` below then deletes (→ dangling symlinks).
-RUN curl -Ls https://github.com/radareorg/radare2/releases/download/6.1.4/radare2-6.1.4.tar.xz \
-    | tar xJ \
+RUN curl $CURL_RETRY_FLAGS -o /tmp/radare2.tar.xz \
+      https://github.com/radareorg/radare2/releases/download/6.1.4/radare2-6.1.4.tar.xz \
+    && tar xJf /tmp/radare2.tar.xz \
     && cd radare2-6.1.4 \
     && ./configure --prefix=/usr \
     && make -j"$JOBS" \
     && make install \
-    && cd / && rm -rf radare2-6.1.4 \
+    && cd / && rm -rf radare2-6.1.4 /tmp/radare2.tar.xz \
     && ldconfig \
     && radare2 -v
 
@@ -172,12 +175,16 @@ RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sh
 ENV PATH="/osxcross/target/bin:${PATH}"
 
 # 6. Node.js 22 LTS (matches wrangler's supported runtime)
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+RUN curl $CURL_RETRY_FLAGS -o /tmp/nodesource-setup.sh \
+      https://deb.nodesource.com/setup_22.x \
+    && bash /tmp/nodesource-setup.sh \
+    && rm -f /tmp/nodesource-setup.sh \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # 7. Fix broken npm bundled with nodesource, then install globals
-RUN curl -fsSL https://registry.npmjs.org/npm/-/npm-11.14.1.tgz -o /tmp/npm.tgz \
+RUN curl $CURL_RETRY_FLAGS -o /tmp/npm.tgz \
+      https://registry.npmjs.org/npm/-/npm-11.14.1.tgz \
     && mkdir -p /tmp/npm-install \
     && tar xzf /tmp/npm.tgz -C /tmp/npm-install \
     && node /tmp/npm-install/package/bin/npm-cli.js install -g npm@11.14.1 \
@@ -196,7 +203,10 @@ RUN npm install -g \
       webcrack
 
 # 7b. Antigravity CLI (Google's replacement for Gemini CLI)
-RUN curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --dir /usr/local/bin
+RUN curl $CURL_RETRY_FLAGS -o /tmp/antigravity-install.sh \
+      https://antigravity.google/cli/install.sh \
+    && bash /tmp/antigravity-install.sh --dir /usr/local/bin \
+    && rm -f /tmp/antigravity-install.sh
 
 # 8. rcodesign — real Apple code signer (osxcross only ships
 #    codesign_allocate, which reserves space but cannot sign).
@@ -211,7 +221,7 @@ RUN set -eux; \
       arm64) RC_ARCH=aarch64-unknown-linux-musl ;; \
       *) echo "unsupported arch for rcodesign" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL -o /tmp/rcodesign.tar.gz \
+    curl $CURL_RETRY_FLAGS -o /tmp/rcodesign.tar.gz \
       "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}/apple-codesign-${RCODESIGN_VERSION}-${RC_ARCH}.tar.gz"; \
     tar -xzf /tmp/rcodesign.tar.gz -C /tmp; \
     install -m 0755 "/tmp/apple-codesign-${RCODESIGN_VERSION}-${RC_ARCH}/rcodesign" /usr/local/bin/rcodesign; \
@@ -230,7 +240,7 @@ RUN set -eux; \
       arm64) LDID_ASSET=ldid_linux_aarch64 ;; \
       *) echo "unsupported arch for ldid" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL -o /usr/local/bin/ldid \
+    curl $CURL_RETRY_FLAGS -o /usr/local/bin/ldid \
       "https://github.com/ProcursusTeam/ldid/releases/download/${LDID_VERSION}/${LDID_ASSET}"; \
     chmod +x /usr/local/bin/ldid; \
     ldid 2>&1 | grep -q "Link Identity Editor"
@@ -251,7 +261,7 @@ RUN set -eux; \
       *) echo "unsupported arch for ipsw" >&2; exit 1 ;; \
     esac; \
     mkdir -p /tmp/ipsw-install; \
-    curl -fsSL -o /tmp/ipsw.tar.gz \
+    curl $CURL_RETRY_FLAGS -o /tmp/ipsw.tar.gz \
       "https://github.com/blacktop/ipsw/releases/download/v${IPSW_VERSION}/ipsw_${IPSW_VERSION}_linux_${IPSW_ARCH}.tar.gz"; \
     tar -xzf /tmp/ipsw.tar.gz -C /tmp/ipsw-install; \
     install -m 0755 "$(find /tmp/ipsw-install -type f -name ipsw | head -n1)" /usr/local/bin/ipsw; \
@@ -298,20 +308,22 @@ WORKDIR /altivec
 # Build AltivecCore first so this slow layer is not invalidated by trivial
 # changes elsewhere in the repo. `make all` builds the aggregate static
 # archives, the Mac framework, headers, and cacert.pem into build-* trees.
-# The component archives and dependency build trees are pruned afterward:
-# apps link against libAltivecCore.a, not the individual curl/OpenSSL/etc
-# archives.
+# Dependency build trees are pruned afterward, but the component archives in
+# libs/core/build-* are retained so release asset staging can package the same
+# static library contents a direct `make all` build would produce.
 COPY libs/libcurl/ ./libs/libcurl/
 COPY libs/sqlite/  ./libs/sqlite/
 COPY libs/core/    ./libs/core/
-RUN set -e; \
+RUN --mount=type=cache,id=altivec-libcurl-tarballs,target=/altivec/libs/libcurl/tarballs,sharing=locked \
+    --mount=type=cache,id=altivec-sqlite-tarballs,target=/altivec/libs/sqlite/tarballs,sharing=locked \
+    set -e; \
     cd libs/core; \
     make all; \
     make prune-intermediates; \
-    find build-mac/lib build-phone/lib -maxdepth 1 -type f -name '*.a' ! -name libAltivecCore.a -delete; \
     cd ../..; \
-    rm -rf libs/libcurl/build-mac libs/libcurl/build-phone libs/libcurl/tarballs \
-           libs/sqlite/build-mac libs/sqlite/build-phone libs/sqlite/tarballs
+    rm -rf libs/libcurl/build-mac libs/libcurl/build-phone \
+           libs/sqlite/build-mac libs/sqlite/build-phone
+RUN rm -rf libs/libcurl/tarballs libs/sqlite/tarballs
 
 # Build AltivecCocoa before sample apps so CURLmac can embed the Mac framework
 # and CURLphone can statically link the phone archive and stage its fonts.
@@ -345,8 +357,8 @@ RUN set -e; \
     test -f apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/LICENSE-Font-Awesome.txt; \
     test -f libs/core/build-mac/lib/libAltivecCore.a; \
     test -f libs/core/build-phone/lib/libAltivecCore.a; \
-    test ! -f libs/core/build-mac/lib/libAICURLConnection.a; \
-    test ! -f libs/core/build-phone/lib/libAICURLConnection.a; \
+    test -f libs/core/build-mac/lib/libAICURLConnection.a; \
+    test -f libs/core/build-phone/lib/libAICURLConnection.a; \
     test ! -d libs/libcurl/build-mac; \
     test ! -d libs/libcurl/build-phone; \
     test ! -d libs/sqlite/build-mac; \

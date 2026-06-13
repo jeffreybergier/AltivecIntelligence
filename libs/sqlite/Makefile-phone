@@ -2,7 +2,9 @@ include sqlite_common.mk
 
 SQLITE_ZIP  = sqlite-amalgamation-$(SQLITE_VER).zip
 SQLITE_URL  = https://www.sqlite.org/$(SQLITE_YEAR)/$(SQLITE_ZIP)
+SQLITE_URLS = $(SQLITE_URL) https://sqlite.org/$(SQLITE_YEAR)/$(SQLITE_ZIP)
 SQLITE_DIR  = sqlite-amalgamation-$(SQLITE_VER)
+TARBALL_DIR = tarballs
 
 CWD          = $(shell pwd)
 BUILD_ROOT   = $(CWD)/build-phone
@@ -30,10 +32,15 @@ $(BUILD_ROOT)/lib/libsqlite3.a: $(PREFIX)/lib/libsqlite3.a
 	cp $(PREFIX)/lib/libsqlite3.a $(BUILD_ROOT)/lib/
 	cp $(INTERMEDIATE)/$(SQLITE_DIR)/sqlite3.h $(BUILD_ROOT)/include/
 
-$(INTERMEDIATE)/$(SQLITE_DIR):
+$(TARBALL_DIR):
+	mkdir -p $@
+
+$(TARBALL_DIR)/$(SQLITE_ZIP): | $(TARBALL_DIR)
+	$(call download_to_target,$(SQLITE_URLS))
+
+$(INTERMEDIATE)/$(SQLITE_DIR): $(TARBALL_DIR)/$(SQLITE_ZIP)
 	mkdir -p $(INTERMEDIATE)
-	[ -f tarballs/$(SQLITE_ZIP) ] || (mkdir -p tarballs && curl -sL $(SQLITE_URL) -o tarballs/$(SQLITE_ZIP))
-	cd $(INTERMEDIATE) && unzip -q $(CWD)/tarballs/$(SQLITE_ZIP)
+	cd $(INTERMEDIATE) && unzip -q $(CWD)/$(TARBALL_DIR)/$(SQLITE_ZIP)
 
 $(PREFIX)/lib/libsqlite3.a: $(INTERMEDIATE)/$(SQLITE_DIR)
 	mkdir -p $(PREFIX)/armv7/lib $(PREFIX)/arm64/lib $(PREFIX)/lib

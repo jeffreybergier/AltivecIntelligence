@@ -16,6 +16,13 @@ TARBALL_DIR=tarballs
 ZLIB_URL=https://zlib.net/fossils/zlib-$(ZLIB_VER).tar.gz
 OPENSSL_URL=https://www.openssl.org/source/openssl-$(OPENSSL_VER).tar.gz
 CURL_URL=https://curl.se/download/curl-$(CURL_VER).tar.gz
+ZLIB_URLS=$(ZLIB_URL) \
+          https://github.com/madler/zlib/releases/download/v$(ZLIB_VER)/zlib-$(ZLIB_VER).tar.gz
+OPENSSL_URLS=$(OPENSSL_URL) \
+             https://www.openssl.org/source/old/1.1.1/openssl-$(OPENSSL_VER).tar.gz
+CURL_URLS=$(CURL_URL) \
+          https://github.com/curl/curl/releases/download/curl-7_88_1/curl-$(CURL_VER).tar.gz
+CACERT_URLS=https://curl.se/ca/cacert.pem
 
 IOS_ARM64_MIN_VER=7.0
 IOS_V7_FLAGS=-target armv7-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch armv7 -B$(BIN_DIR)
@@ -70,16 +77,16 @@ $(TARBALL_DIR):
 	mkdir -p $@
 
 $(ZLIB_TARBALL): | $(TARBALL_DIR)
-	curl -fL $(ZLIB_URL) -o $@
+	$(call download_to_target,$(ZLIB_URLS))
 
 $(OPENSSL_TARBALL): | $(TARBALL_DIR)
-	curl -fL $(OPENSSL_URL) -o $@
+	$(call download_to_target,$(OPENSSL_URLS))
 
 $(CURL_TARBALL): | $(TARBALL_DIR)
-	curl -fL $(CURL_URL) -o $@
+	$(call download_to_target,$(CURL_URLS))
 
 $(TARBALL_DIR)/cacert.pem: | $(TARBALL_DIR)
-	curl -fL https://curl.se/ca/cacert.pem -o $@
+	$(call download_to_target,$(CACERT_URLS))
 
 $(PUBLIC_LIB_DIR)/cacert.pem: $(TARBALL_DIR)/cacert.pem
 	mkdir -p $(PUBLIC_LIB_DIR)
