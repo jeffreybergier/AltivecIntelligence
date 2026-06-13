@@ -62,9 +62,9 @@ ALTIVECCORE_REQUIRED ?= 0
 ALTIVECCORE_DIR ?=
 ALTIVECCORE_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/core/build-phone
 ifeq ($(strip $(ALTIVECCORE_DIR)),)
-  ALTIVECCORE_PATH = $(firstword $(wildcard $(addsuffix /lib/libAICURLConnection.a, $(ALTIVECCORE_SEARCH_PATHS))))
+  ALTIVECCORE_PATH = $(firstword $(wildcard $(addsuffix /lib/libAltivecCore.a, $(ALTIVECCORE_SEARCH_PATHS))))
   ifneq ($(ALTIVECCORE_PATH),)
-    ALTIVECCORE_DIR = $(patsubst %/lib/libAICURLConnection.a,%,$(ALTIVECCORE_PATH))
+    ALTIVECCORE_DIR = $(patsubst %/lib/libAltivecCore.a,%,$(ALTIVECCORE_PATH))
   else ifeq ($(ALTIVECCORE_REQUIRED),1)
     ALTIVECCORE_DIR = $(firstword $(ALTIVECCORE_SEARCH_PATHS))
   endif
@@ -75,13 +75,7 @@ ifeq ($(ALTIVECCORE_REQUIRED),1)
   endif
 endif
 
-ALTIVECCORE_REQUIRED_FILES = $(ALTIVECCORE_DIR)/lib/libAICURLConnection.a \
-                             $(ALTIVECCORE_DIR)/lib/libcurl.a \
-                             $(ALTIVECCORE_DIR)/lib/libssl.a \
-                             $(ALTIVECCORE_DIR)/lib/libcrypto.a \
-                             $(ALTIVECCORE_DIR)/lib/libz.a \
-                             $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
-                             $(ALTIVECCORE_DIR)/lib/libcjson.a \
+ALTIVECCORE_REQUIRED_FILES = $(ALTIVECCORE_DIR)/lib/libAltivecCore.a \
                              $(ALTIVECCORE_DIR)/lib/cacert.pem \
                              $(ALTIVECCORE_DIR)/include/AltivecCore.h \
                              $(ALTIVECCORE_DIR)/include/sqlite3.h \
@@ -133,13 +127,7 @@ IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wco
 IOS_FRAMEWORKS = -framework UIKit -framework Foundation -framework CoreGraphics
 ifeq ($(ALTIVECCORE_REQUIRED),1)
   ifneq ($(strip $(ALTIVECCORE_DIR)),)
-    IOS_FRAMEWORKS += $(ALTIVECCORE_DIR)/lib/libAICURLConnection.a \
-                      $(ALTIVECCORE_DIR)/lib/libcurl.a \
-                      $(ALTIVECCORE_DIR)/lib/libssl.a \
-                      $(ALTIVECCORE_DIR)/lib/libcrypto.a \
-                      $(ALTIVECCORE_DIR)/lib/libz.a \
-                      $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
-                      $(ALTIVECCORE_DIR)/lib/libcjson.a
+    IOS_FRAMEWORKS += $(ALTIVECCORE_DIR)/lib/libAltivecCore.a
   endif
 endif
 ifeq ($(ALTIVECCOCOA_REQUIRED),1)
@@ -214,7 +202,7 @@ altiveccore-bootstrap:
 		echo "     Set ALTIVECCORE_DIR=/path/to/libs/core/build-phone or build at $(ALTIVEC_ROOT)/libs/core/build-phone."; \
 		exit 1; \
 	fi
-	@probe="$(ALTIVECCORE_DIR)/lib/libcjson.a"; target=phone-static; \
+	@probe="$(ALTIVECCORE_DIR)/lib/libAltivecCore.a"; target=phone-static; \
 	if [ ! -e "$$probe" ]; then \
 		echo " [!] Missing AltivecCore artifact ($$probe), running bootstrap build ($$target)..."; \
 		$(MAKE) -C $(ALTIVEC_ROOT)/libs/core $$target; \

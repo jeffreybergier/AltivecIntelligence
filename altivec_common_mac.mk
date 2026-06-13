@@ -68,13 +68,7 @@ ifeq ($(ALTIVECCORE_REQUIRED),1)
     else
       MAC_FLAGS += -I$(ALTIVECCORE_DIR)/include
       MAC_LIBS  += -framework SystemConfiguration \
-                   $(ALTIVECCORE_DIR)/lib/libAICURLConnection.a \
-                   $(ALTIVECCORE_DIR)/lib/libcurl.a \
-                   $(ALTIVECCORE_DIR)/lib/libssl.a \
-                   $(ALTIVECCORE_DIR)/lib/libcrypto.a \
-                   $(ALTIVECCORE_DIR)/lib/libz.a \
-                   $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
-                   $(ALTIVECCORE_DIR)/lib/libcjson.a
+                   $(ALTIVECCORE_DIR)/lib/libAltivecCore.a
     endif
   endif
 endif
@@ -86,13 +80,7 @@ ifeq ($(ALTIVECCORE_LINKAGE),dynamic)
                                $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/Headers/sqlite3.h \
                                $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/Headers/cJSON.h
 else
-  ALTIVECCORE_REQUIRED_FILES = $(ALTIVECCORE_DIR)/lib/libAICURLConnection.a \
-                               $(ALTIVECCORE_DIR)/lib/libcurl.a \
-                               $(ALTIVECCORE_DIR)/lib/libssl.a \
-                               $(ALTIVECCORE_DIR)/lib/libcrypto.a \
-                               $(ALTIVECCORE_DIR)/lib/libz.a \
-                               $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
-                               $(ALTIVECCORE_DIR)/lib/libcjson.a \
+  ALTIVECCORE_REQUIRED_FILES = $(ALTIVECCORE_DIR)/lib/libAltivecCore.a \
                                $(ALTIVECCORE_DIR)/lib/cacert.pem \
                                $(ALTIVECCORE_DIR)/include/AltivecCore.h \
                                $(ALTIVECCORE_DIR)/include/sqlite3.h \
@@ -252,7 +240,7 @@ altiveccore-bootstrap:
 		echo "     Set ALTIVECCORE_DIR=/path/to/libs/core/build-mac or build at $(ALTIVEC_ROOT)/libs/core/build-mac."; \
 		exit 1; \
 	fi
-	@probe="$(ALTIVECCORE_DIR)/lib/libcjson.a"; target=mac-static; \
+	@probe="$(ALTIVECCORE_DIR)/lib/libAltivecCore.a"; target=mac-static; \
 	if [ "$(ALTIVECCORE_LINKAGE)" = "dynamic" ]; then \
 		probe="$(ALTIVECCORE_DIR)/lib/AltivecCore.framework/AltivecCore"; target=mac-all; \
 	fi; \

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM ubuntu:22.04 AS altivec-builder
 
 # 1. Install Dependencies
@@ -24,6 +25,8 @@ RUN apt-get update && apt-get install -y \
     libmpfr-dev \
     libmpc-dev \
     # --- Core libraries / dev headers ---
+    libcurl4-openssl-dev \
+    libsqlite3-dev \
     libxml2-dev \
     libssl-dev \
     libz-dev \
@@ -141,23 +144,30 @@ WORKDIR /osxcross
 COPY docker/ ./docker/
 
 # 5. Build OSXCross and Compilers
+# Keep SDK/GCC source tarballs out of committed image layers. They are large,
+# and leaving them in an early layer can make the final image export fail even
+# when a later layer deletes /osxcross/tarballs.
 
-RUN echo "Pre-Build: Altivec Intelligence" \
+RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
+    echo "Pre-Build: Altivec Intelligence" \
       && ./docker/prebuild.sh
 
-RUN echo "Build: osxcross" \
+RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
+    echo "Build: osxcross" \
       && ./build.sh
 
-RUN echo "Build: Apple GCC 4.2 (PPC)" \
+RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
+    echo "Build: Apple GCC 4.2 (PPC)" \
       && POWERPC=1 ./build_gcc_ppc.sh \
       && rm -rf build
-RUN echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
+RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
+    echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
       && ./build_gcc.sh \
       && rm -rf build
 
-RUN echo "Post-Build: Altivec Intelligence" \
-      && ./postbuild.sh \
-      && rm -rf tarballs
+RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
+    echo "Post-Build: Altivec Intelligence" \
+      && ./postbuild.sh
 
 ENV PATH="/osxcross/target/bin:${PATH}"
 
@@ -286,18 +296,22 @@ FROM altivec-builder AS ghcr-action
 WORKDIR /altivec
 
 # Build AltivecCore first so this slow layer is not invalidated by trivial
-# changes elsewhere in the repo. `make all` builds static phone artifacts and
-# static/framework Mac artifacts into build-{mac,phone}/lib/ (alongside
-# headers in build-{mac,phone}/include/). Those trees are
-# preserved in the final image — that is the whole point of this stage.
-# prune-intermediates drops Core sources/objects/stamps while keeping the
-# build-*/lib (static libs, Mac framework bundle, and cacert.pem) and
-# build-*/include trees apps actually link against; done in the same
-# RUN so the intermediates never form their own layer.
+# changes elsewhere in the repo. `make all` builds the aggregate static
+# archives, the Mac framework, headers, and cacert.pem into build-* trees.
+# The component archives and dependency build trees are pruned afterward:
+# apps link against libAltivecCore.a, not the individual curl/OpenSSL/etc
+# archives.
 COPY libs/libcurl/ ./libs/libcurl/
 COPY libs/sqlite/  ./libs/sqlite/
 COPY libs/core/    ./libs/core/
-RUN cd libs/core && make all && make prune-intermediates
+RUN set -e; \
+    cd libs/core; \
+    make all; \
+    make prune-intermediates; \
+    find build-mac/lib build-phone/lib -maxdepth 1 -type f -name '*.a' ! -name libAltivecCore.a -delete; \
+    cd ../..; \
+    rm -rf libs/libcurl/build-mac libs/libcurl/build-phone libs/libcurl/tarballs \
+           libs/sqlite/build-mac libs/sqlite/build-phone libs/sqlite/tarballs
 
 # Build AltivecCocoa before sample apps so CURLmac can embed the Mac framework
 # and CURLphone can statically link the phone archive and stage its fonts.
@@ -328,7 +342,15 @@ RUN set -e; \
     test -d apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework; \
     test -f apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/FA7-Solid-900.otf; \
     test -f apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/LICENSE-Font-Awesome.txt; \
-    test -f libs/core/build-phone/lib/libAICURLConnection.a; \
+    test -f libs/core/build-mac/lib/libAltivecCore.a; \
+    test -f libs/core/build-phone/lib/libAltivecCore.a; \
+    test ! -f libs/core/build-mac/lib/libAICURLConnection.a; \
+    test ! -f libs/core/build-phone/lib/libAICURLConnection.a; \
+    test ! -d libs/libcurl/build-mac; \
+    test ! -d libs/libcurl/build-phone; \
+    test ! -d libs/sqlite/build-mac; \
+    test ! -d libs/sqlite/build-phone; \
+    test ! -d libs/sqlite/tarballs; \
     test -f libs/core/build-phone/lib/cacert.pem; \
     test ! -d libs/core/build-phone/lib/AltivecCore.framework; \
     test -f libs/cocoa/build-phone/lib/libAltivecCocoa.a; \

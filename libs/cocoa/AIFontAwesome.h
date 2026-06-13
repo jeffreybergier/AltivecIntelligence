@@ -1420,15 +1420,24 @@ typedef enum {
   AIFACaravan                    = 0xF8FF
 } AIFontAwesomeIcon;
 
-/* Font weight. FA7 Free ships Solid (full set, ~1400 glyphs) and Regular
- * (outline, ~226 glyphs). Both OTFs are bundled; a glyph only renders in
- * Regular if it exists in FA7-Regular-400.otf. */
+/* Font face. FA7 ships Solid (full set, ~1400 glyphs), Regular (outline,
+ * ~226 glyphs), and Brands. A glyph only renders in a face if that face's
+ * OTF contains it. */
 typedef enum {
   AIFontAwesomeStyleSolid   = 0,
-  AIFontAwesomeStyleRegular = 1
+  AIFontAwesomeStyleRegular = 1,
+  AIFontAwesomeStyleBrands  = 2
 } AIFontAwesomeStyle;
 
 @interface AIFontAwesome : NSObject
+
+/* Bundled OTF paths. These search [NSBundle bundleForClass:] first, then
+ * [NSBundle mainBundle] for static-library clients. Missing resources raise
+ * NSInternalInconsistencyException. */
++ (NSString *)solidFontPath;
++ (NSString *)regularFontPath;
++ (NSString *)brandsFontPath;
++ (NSString *)fontPathForStyle:(AIFontAwesomeStyle)style;
 
 #if !TARGET_OS_IPHONE
 /* Render `codePoint` (e.g. 0xF013 = fa-gear) as a `pointSize` x `pointSize`

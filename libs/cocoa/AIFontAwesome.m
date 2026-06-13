@@ -39,14 +39,32 @@ static void AIFALog(NSString *tag, NSString *format, ...)
 /* PostScript names from each bundled OTF's name table. */
 static NSString *ai_fa_postscript_name(AIFontAwesomeStyle style)
 {
-  return (style == AIFontAwesomeStyleRegular) ? @"FontAwesome7Free-Regular"
-                                              : @"FontAwesome7Free-Solid";
+  switch (style) {
+    case AIFontAwesomeStyleSolid:
+      return @"FontAwesome7Free-Solid";
+    case AIFontAwesomeStyleRegular:
+      return @"FontAwesome7Free-Regular";
+    case AIFontAwesomeStyleBrands:
+      return @"FontAwesome7Brands-Regular";
+  }
+  [NSException raise:NSInvalidArgumentException
+              format:@"[AIFontAwesome] unknown style %d", (int)style];
+  return nil;
 }
 
 static NSString *ai_fa_file_name(AIFontAwesomeStyle style)
 {
-  return (style == AIFontAwesomeStyleRegular) ? @"FA7-Regular-400.otf"
-                                              : @"FA7-Solid-900.otf";
+  switch (style) {
+    case AIFontAwesomeStyleSolid:
+      return @"FA7-Solid-900.otf";
+    case AIFontAwesomeStyleRegular:
+      return @"FA7-Regular-400.otf";
+    case AIFontAwesomeStyleBrands:
+      return @"FA7-Brands-400.otf";
+  }
+  [NSException raise:NSInvalidArgumentException
+              format:@"[AIFontAwesome] unknown style %d", (int)style];
+  return nil;
 }
 
 static NSString *ai_fa_path_in_bundle(NSBundle *bundle, NSString *name)
@@ -60,15 +78,23 @@ static NSString *ai_fa_path_in_bundle(NSBundle *bundle, NSString *name)
   return path;
 }
 
-static NSString *ai_fa_font_path(AIFontAwesomeStyle style)
+static NSString *ai_fa_required_font_path(NSString *name)
 {
-  NSString *name = ai_fa_file_name(style);
   NSBundle *classBundle = [NSBundle bundleForClass:[AIFontAwesome class]];
   NSBundle *mainBundle = [NSBundle mainBundle];
   NSString *path = ai_fa_path_in_bundle(classBundle, name);
   if (!path && mainBundle != classBundle)
     path = ai_fa_path_in_bundle(mainBundle, name);
+  if (!path) {
+    [NSException raise:NSInternalInconsistencyException
+                format:@"AIFontAwesome missing bundled font file %@", name];
+  }
   return path;
+}
+
+static NSString *ai_fa_font_path(AIFontAwesomeStyle style)
+{
+  return ai_fa_required_font_path(ai_fa_file_name(style));
 }
 
 static CGFontRef ai_fa_create_cgfont(AIFontAwesomeStyle style)
@@ -76,15 +102,19 @@ static CGFontRef ai_fa_create_cgfont(AIFontAwesomeStyle style)
   NSString *path = ai_fa_font_path(style);
   CGDataProviderRef provider;
   CGFontRef font;
-  if (path) {
-    provider = CGDataProviderCreateWithFilename([path fileSystemRepresentation]);
-    if (provider) {
-      font = CGFontCreateWithDataProvider(provider);
-      CGDataProviderRelease(provider);
-      if (font) return font;
-    }
+  provider = CGDataProviderCreateWithFilename([path fileSystemRepresentation]);
+  if (!provider) {
+    [NSException raise:NSInternalInconsistencyException
+                format:@"AIFontAwesome cannot open font file %@", path];
+    return NULL;
   }
-  return CGFontCreateWithFontName((CFStringRef)ai_fa_postscript_name(style));
+  font = CGFontCreateWithDataProvider(provider);
+  CGDataProviderRelease(provider);
+  if (!font) {
+    [NSException raise:NSInternalInconsistencyException
+                format:@"AIFontAwesome cannot load font file %@", path];
+  }
+  return font;
 }
 
 static CGContextRef ai_fa_make_context(size_t px, CGColorRef fill)
@@ -195,16 +225,30 @@ static BOOL ai_fa_draw_atsui(CGContextRef ctx, uint32_t cp,
   NSString *psname = ai_fa_postscript_name(style);
   static BOOL solidTried = NO;
   static BOOL regularTried = NO;
+  static BOOL brandsTried = NO;
   static NSData *solidData = nil;
   static NSData *regularData = nil;
+  static NSData *brandsData = nil;
   static ATSFontContainerRef solidContainer = 0;
   static ATSFontContainerRef regularContainer = 0;
-  BOOL *tried = (style == AIFontAwesomeStyleRegular)
-      ? &regularTried : &solidTried;
-  NSData **dataSlot = (style == AIFontAwesomeStyleRegular)
-      ? &regularData : &solidData;
-  ATSFontContainerRef *container = (style == AIFontAwesomeStyleRegular)
-      ? &regularContainer : &solidContainer;
+  static ATSFontContainerRef brandsContainer = 0;
+  BOOL *tried = &solidTried;
+  NSData **dataSlot = &solidData;
+  ATSFontContainerRef *container = &solidContainer;
+  switch (style) {
+    case AIFontAwesomeStyleRegular:
+      tried = &regularTried;
+      dataSlot = &regularData;
+      container = &regularContainer;
+      break;
+    case AIFontAwesomeStyleBrands:
+      tried = &brandsTried;
+      dataSlot = &brandsData;
+      container = &brandsContainer;
+      break;
+    case AIFontAwesomeStyleSolid:
+      break;
+  }
 
   if (!*tried) {
     NSString *path = ai_fa_font_path(style);
@@ -300,6 +344,26 @@ static int ai_fa_have_coretext(void)
 #endif
 
 @implementation AIFontAwesome
+
++ (NSString *)solidFontPath;
+{
+  return ai_fa_required_font_path(@"FA7-Solid-900.otf");
+}
+
++ (NSString *)regularFontPath;
+{
+  return ai_fa_required_font_path(@"FA7-Regular-400.otf");
+}
+
++ (NSString *)brandsFontPath;
+{
+  return ai_fa_required_font_path(@"FA7-Brands-400.otf");
+}
+
++ (NSString *)fontPathForStyle:(AIFontAwesomeStyle)style;
+{
+  return ai_fa_font_path(style);
+}
 
 + (CGImageRef)_newImageForCodePoint:(uint32_t)codePoint
                               style:(AIFontAwesomeStyle)style
@@ -447,14 +511,11 @@ static int ai_fa_have_coretext(void)
 #if TARGET_OS_IPHONE
 + (void)registerBundledFonts
 {
-  NSArray *files = [NSArray arrayWithObjects:@"FA7-Solid-900.otf",
-                    @"FA7-Regular-400.otf", @"FA7-Brands-400.otf", nil];
-  NSEnumerator *e = [files objectEnumerator];
-  NSString *name;
-  while ((name = [e nextObject])) {
-    NSString *path = ai_fa_path_in_bundle(
-        [NSBundle bundleForClass:[AIFontAwesome class]], name);
-    if (!path) path = ai_fa_path_in_bundle([NSBundle mainBundle], name);
+  NSArray *paths = [NSArray arrayWithObjects:[self solidFontPath],
+                    [self regularFontPath], [self brandsFontPath], nil];
+  NSEnumerator *e = [paths objectEnumerator];
+  NSString *path;
+  while ((path = [e nextObject])) {
     if (path) [self registerFontFile:path];
   }
 }

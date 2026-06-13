@@ -4,6 +4,16 @@
 #ifndef AltivecCore_h
 #define AltivecCore_h
 
+#import <Foundation/Foundation.h>
+
+// Root utility class for AltivecCore-wide resources.
+@interface AltivecCore : NSObject
+
+// Returns the path to the bundled CA certificates file.
++ (NSString *)certPath;
+
+@end
+
 #import <AltivecCore/AICURLConnection.h>
 
 #import <AltivecCore/curl/curl.h>

@@ -16,14 +16,19 @@ IOS_V7_FLAGS=-target armv7-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -ar
 IOS_64_FLAGS=-target arm64-apple-ios$(IOS_ARM64_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch arm64 -B$(BIN_DIR)
 CJSON_CFLAGS=$(OPT_FLAGS) $(COMMON_WARN_FLAGS) -std=c99 -I$(CJSON_DIR)
 
-CORE_STATIC_LIBS=libAICURLConnection.a \
-                 libcurl.a \
-                 libssl.a \
-                 libcrypto.a \
-                 libz.a \
-                 libsqlite3.a \
-                 libcjson.a
+CORE_COMPONENT_LIBS=libAICURLConnection.a \
+                    libcurl.a \
+                    libssl.a \
+                    libcrypto.a \
+                    libz.a \
+                    libsqlite3.a \
+                    libcjson.a
+CORE_STATIC_LIBS=libAltivecCore.a $(CORE_COMPONENT_LIBS)
 PUBLIC_LIBS=$(addprefix $(PUBLIC_LIB_DIR)/,$(CORE_STATIC_LIBS))
+CORE_INPUTS_ARMV7=$(INTERMEDIATE)/thin/armv7/libAltivecCoreWrapper.a \
+                  $(addprefix $(INTERMEDIATE)/thin/armv7/,$(CORE_COMPONENT_LIBS))
+CORE_INPUTS_ARM64=$(INTERMEDIATE)/thin/arm64/libAltivecCoreWrapper.a \
+                  $(addprefix $(INTERMEDIATE)/thin/arm64/,$(CORE_COMPONENT_LIBS))
 
 REMOVED_FRAMEWORK_BUNDLE=$(PUBLIC_LIB_DIR)/AltivecCore.framework
 
@@ -98,6 +103,61 @@ $(PUBLIC_LIB_DIR)/libsqlite3.a: | sqlite-ready
 $(PUBLIC_LIB_DIR)/cacert.pem: | curl-ready
 	mkdir -p $(PUBLIC_LIB_DIR)
 	cp $(CURL_DIR)/lib/cacert.pem $@
+
+define thin_component_rule
+$(INTERMEDIATE)/thin/$1/%.a: $(PUBLIC_LIB_DIR)/%.a
+	mkdir -p $$(dir $$@)
+	$(LIPO_MODERN) $$< -thin $2 -output $$@
+endef
+
+$(eval $(call thin_component_rule,armv7,armv7))
+$(eval $(call thin_component_rule,arm64,arm64))
+
+$(INTERMEDIATE)/thin/armv7/libAltivecCoreWrapper.a: AltivecCore.m \
+                                                    AltivecCore.h \
+                                                    $(PUBLIC_INCLUDE_DIR)/.stamp
+	@echo "--- Building AltivecCore wrapper (armv7) ---"
+	mkdir -p $(INTERMEDIATE) $(INTERMEDIATE)/thin/armv7
+	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(OPT_FLAGS) $(COMMON_WARN_FLAGS) \
+	  -I$(PUBLIC_INCLUDE_DIR) -c AltivecCore.m \
+	  -o $(INTERMEDIATE)/AltivecCore-armv7.o
+	$(AR_MODERN) rc $@ \
+	  $(INTERMEDIATE)/AltivecCore-armv7.o
+	$(RANLIB_MODERN) $@
+
+$(INTERMEDIATE)/thin/arm64/libAltivecCoreWrapper.a: AltivecCore.m \
+                                                    AltivecCore.h \
+                                                    $(PUBLIC_INCLUDE_DIR)/.stamp
+	@echo "--- Building AltivecCore wrapper (arm64) ---"
+	mkdir -p $(INTERMEDIATE) $(INTERMEDIATE)/thin/arm64
+	$(COMPILER_IOS) $(IOS_64_FLAGS) $(OPT_FLAGS) $(COMMON_WARN_FLAGS) \
+	  -I$(PUBLIC_INCLUDE_DIR) -c AltivecCore.m \
+	  -o $(INTERMEDIATE)/AltivecCore-arm64.o
+	$(AR_MODERN) rc $@ \
+	  $(INTERMEDIATE)/AltivecCore-arm64.o
+	$(RANLIB_MODERN) $@
+
+$(PREFIX)/armv7/lib/libAltivecCore.a: $(CORE_INPUTS_ARMV7)
+	@echo "--- Aggregating AltivecCore static archive (armv7) ---"
+	mkdir -p $(PREFIX)/armv7/lib
+	$(LIBTOOL_MODERN) -static --no_warning_for_no_symbols -o $@ $^
+
+$(PREFIX)/arm64/lib/libAltivecCore.a: $(CORE_INPUTS_ARM64)
+	@echo "--- Aggregating AltivecCore static archive (arm64) ---"
+	mkdir -p $(PREFIX)/arm64/lib
+	$(LIBTOOL_MODERN) -static --no_warning_for_no_symbols -o $@ $^
+
+$(PREFIX)/lib/libAltivecCore.a: $(PREFIX)/armv7/lib/libAltivecCore.a \
+                                $(PREFIX)/arm64/lib/libAltivecCore.a
+	mkdir -p $(PREFIX)/lib
+	$(LIPO_MODERN) -create \
+	  $(PREFIX)/arm64/lib/libAltivecCore.a \
+	  $(PREFIX)/armv7/lib/libAltivecCore.a \
+	  -output $@
+
+$(PUBLIC_LIB_DIR)/libAltivecCore.a: $(PREFIX)/lib/libAltivecCore.a
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $< $@
 
 $(STAMP_DIR)/cjson-armv7: $(CJSON_DIR)/cJSON.c $(CJSON_DIR)/cJSON_Utils.c \
                            $(CJSON_DIR)/cJSON.h $(CJSON_DIR)/cJSON_Utils.h
@@ -176,6 +236,10 @@ verify-phone: $(PUBLIC_LIBS)
 			}; \
 		done; \
 	done; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (arm64)"; missing=1; }; \
 	exit $$missing
 
 prune-build-files:

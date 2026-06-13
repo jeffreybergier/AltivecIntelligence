@@ -29,6 +29,8 @@ AR_MODERN=/usr/bin/llvm-ar-14
 RANLIB_MODERN=/usr/bin/llvm-ranlib-14
 LIPO_MODERN=/usr/bin/llvm-lipo-14
 NM=/usr/bin/llvm-nm-14
+LIBTOOL_LEGACY=$(BIN_DIR)/i386-apple-darwin9-libtool
+LIBTOOL_MODERN=/usr/bin/llvm-libtool-darwin-14
 
 LD64_LLD=$(BIN_DIR)/ld64.lld
 

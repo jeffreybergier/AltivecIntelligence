@@ -21,14 +21,24 @@ ARM64_COMPILE_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_AR
 
 CJSON_CFLAGS=$(OPT_FLAGS) $(COMMON_WARN_FLAGS) -std=c99 -I$(CJSON_DIR)
 
-CORE_STATIC_LIBS=libAICURLConnection.a \
-                 libcurl.a \
-                 libssl.a \
-                 libcrypto.a \
-                 libz.a \
-                 libsqlite3.a \
-                 libcjson.a
+CORE_COMPONENT_LIBS=libAICURLConnection.a \
+                    libcurl.a \
+                    libssl.a \
+                    libcrypto.a \
+                    libz.a \
+                    libsqlite3.a \
+                    libcjson.a
+CORE_STATIC_LIBS=libAltivecCore.a $(CORE_COMPONENT_LIBS)
 PUBLIC_LIBS=$(addprefix $(PUBLIC_LIB_DIR)/,$(CORE_STATIC_LIBS))
+PUBLIC_COMPONENT_LIBS=$(addprefix $(PUBLIC_LIB_DIR)/,$(CORE_COMPONENT_LIBS))
+CORE_INPUTS_PPC=$(INTERMEDIATE)/thin/ppc/libAltivecCoreWrapper.a \
+                $(addprefix $(INTERMEDIATE)/thin/ppc/,$(CORE_COMPONENT_LIBS))
+CORE_INPUTS_X86=$(INTERMEDIATE)/thin/x86/libAltivecCoreWrapper.a \
+                $(addprefix $(INTERMEDIATE)/thin/x86/,$(CORE_COMPONENT_LIBS))
+CORE_INPUTS_X64=$(INTERMEDIATE)/thin/x64/libAltivecCoreWrapper.a \
+                $(addprefix $(INTERMEDIATE)/thin/x64/,$(CORE_COMPONENT_LIBS))
+CORE_INPUTS_ARM64=$(INTERMEDIATE)/thin/arm64/libAltivecCoreWrapper.a \
+                  $(addprefix $(INTERMEDIATE)/thin/arm64/,$(CORE_COMPONENT_LIBS))
 
 FRAMEWORK_NAME=AltivecCore
 FRAMEWORK_INFO_PLIST=Resources/Info-mac.plist
@@ -119,6 +129,100 @@ $(PUBLIC_LIB_DIR)/libsqlite3.a: | sqlite-ready
 $(PUBLIC_LIB_DIR)/cacert.pem: | curl-ready
 	mkdir -p $(PUBLIC_LIB_DIR)
 	cp $(CURL_DIR)/lib/cacert.pem $@
+
+define thin_component_rule
+$(INTERMEDIATE)/thin/$1/%.a: $(PUBLIC_LIB_DIR)/%.a
+	mkdir -p $$(dir $$@)
+	$2 $$< -thin $3 -output $$@
+endef
+
+$(eval $(call thin_component_rule,ppc,$(LIPO),ppc))
+$(eval $(call thin_component_rule,x86,$(LIPO),i386))
+$(eval $(call thin_component_rule,x64,$(LIPO),x86_64))
+$(eval $(call thin_component_rule,arm64,$(LIPO),arm64))
+
+$(INTERMEDIATE)/thin/ppc/libAltivecCoreWrapper.a: AltivecCore.m \
+                                                  AltivecCore.h \
+                                                  $(PUBLIC_INCLUDE_DIR)/.stamp
+	@echo "--- Building AltivecCore wrapper (ppc) ---"
+	mkdir -p $(INTERMEDIATE) $(INTERMEDIATE)/thin/ppc
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) $(PPC_FLAGS) \
+	  $(OPT_FLAGS) $(COMMON_WARN_FLAGS) -I$(PUBLIC_INCLUDE_DIR) \
+	  -c AltivecCore.m -o $(INTERMEDIATE)/AltivecCore-ppc.o
+	$(AR_LEGACY) rc $@ \
+	  $(INTERMEDIATE)/AltivecCore-ppc.o
+	$(RANLIB_LEGACY) $@
+
+$(INTERMEDIATE)/thin/x86/libAltivecCoreWrapper.a: AltivecCore.m \
+                                                  AltivecCore.h \
+                                                  $(PUBLIC_INCLUDE_DIR)/.stamp
+	@echo "--- Building AltivecCore wrapper (i386) ---"
+	mkdir -p $(INTERMEDIATE) $(INTERMEDIATE)/thin/x86
+	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) $(X86_FLAGS) \
+	  $(OPT_FLAGS) $(COMMON_WARN_FLAGS) -I$(PUBLIC_INCLUDE_DIR) \
+	  -c AltivecCore.m -o $(INTERMEDIATE)/AltivecCore-x86.o
+	$(AR_LEGACY) rc $@ \
+	  $(INTERMEDIATE)/AltivecCore-x86.o
+	$(RANLIB_LEGACY) $@
+
+$(INTERMEDIATE)/thin/x64/libAltivecCoreWrapper.a: AltivecCore.m \
+                                                  AltivecCore.h \
+                                                  $(PUBLIC_INCLUDE_DIR)/.stamp
+	@echo "--- Building AltivecCore wrapper (x86_64) ---"
+	mkdir -p $(INTERMEDIATE) $(INTERMEDIATE)/thin/x64
+	$(COMPILER_X64) $(X64_COMPILE_FLAGS) $(OPT_FLAGS) \
+	  $(COMMON_WARN_FLAGS) -I$(PUBLIC_INCLUDE_DIR) \
+	  -c AltivecCore.m -o $(INTERMEDIATE)/AltivecCore-x64.o
+	$(AR_MODERN) rc $@ \
+	  $(INTERMEDIATE)/AltivecCore-x64.o
+	$(RANLIB_MODERN) $@
+
+$(INTERMEDIATE)/thin/arm64/libAltivecCoreWrapper.a: AltivecCore.m \
+                                                    AltivecCore.h \
+                                                    $(PUBLIC_INCLUDE_DIR)/.stamp
+	@echo "--- Building AltivecCore wrapper (arm64) ---"
+	mkdir -p $(INTERMEDIATE) $(INTERMEDIATE)/thin/arm64
+	$(COMPILER_ARM64) $(ARM64_COMPILE_FLAGS) $(OPT_FLAGS) \
+	  $(COMMON_WARN_FLAGS) -I$(PUBLIC_INCLUDE_DIR) \
+	  -c AltivecCore.m -o $(INTERMEDIATE)/AltivecCore-arm64.o
+	$(AR_MODERN) rc $@ \
+	  $(INTERMEDIATE)/AltivecCore-arm64.o
+	$(RANLIB_MODERN) $@
+
+$(PREFIX)/ppc/lib/libAltivecCore.a: $(CORE_INPUTS_PPC)
+	@echo "--- Aggregating AltivecCore static archive (ppc) ---"
+	mkdir -p $(PREFIX)/ppc/lib
+	$(LIBTOOL_LEGACY) -static -no_warning_for_no_symbols -o $@ $^
+
+$(PREFIX)/x86/lib/libAltivecCore.a: $(CORE_INPUTS_X86)
+	@echo "--- Aggregating AltivecCore static archive (i386) ---"
+	mkdir -p $(PREFIX)/x86/lib
+	$(LIBTOOL_LEGACY) -static -no_warning_for_no_symbols -o $@ $^
+
+$(PREFIX)/x64/lib/libAltivecCore.a: $(CORE_INPUTS_X64)
+	@echo "--- Aggregating AltivecCore static archive (x86_64) ---"
+	mkdir -p $(PREFIX)/x64/lib
+	$(LIBTOOL_MODERN) -static --no_warning_for_no_symbols -o $@ $^
+
+$(PREFIX)/arm64/lib/libAltivecCore.a: $(CORE_INPUTS_ARM64)
+	@echo "--- Aggregating AltivecCore static archive (arm64) ---"
+	mkdir -p $(PREFIX)/arm64/lib
+	$(LIBTOOL_MODERN) -static --no_warning_for_no_symbols -o $@ $^
+
+$(PREFIX)/lib/libAltivecCore.a: $(PREFIX)/ppc/lib/libAltivecCore.a \
+                                $(PREFIX)/x86/lib/libAltivecCore.a \
+                                $(PREFIX)/x64/lib/libAltivecCore.a \
+                                $(PREFIX)/arm64/lib/libAltivecCore.a
+	mkdir -p $(PREFIX)/lib
+	$(LIPO) -create $(PREFIX)/ppc/lib/libAltivecCore.a \
+	                 $(PREFIX)/x86/lib/libAltivecCore.a \
+	                 $(PREFIX)/x64/lib/libAltivecCore.a \
+	                 $(PREFIX)/arm64/lib/libAltivecCore.a \
+	                 -output $@
+
+$(PUBLIC_LIB_DIR)/libAltivecCore.a: $(PREFIX)/lib/libAltivecCore.a
+	mkdir -p $(PUBLIC_LIB_DIR)
+	cp $< $@
 
 $(STAMP_DIR)/cjson-ppc.done: $(CJSON_DIR)/cJSON.c $(CJSON_DIR)/cJSON_Utils.c \
                               $(CJSON_DIR)/cJSON.h $(CJSON_DIR)/cJSON_Utils.h
@@ -230,9 +334,17 @@ verify-mac: $(PUBLIC_LIBS)
 			}; \
 		done; \
 	done; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (ppc)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (ppc)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (ppc)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '.objc_class_name_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (ppc)"; missing=1; }; \
 	exit $$missing
 
-$(INTERMEDIATE)/c-exports.txt: $(PUBLIC_LIBS)
+$(INTERMEDIATE)/c-exports.txt: $(PUBLIC_COMPONENT_LIBS)
 	@echo "--- Extracting AltivecCore public C exports (intersection of all 4 arches) ---"
 	mkdir -p $(INTERMEDIATE)
 	{ \
@@ -256,11 +368,14 @@ $(INTERMEDIATE)/c-exports.txt: $(PUBLIC_LIBS)
 
 $(INTERMEDIATE)/exports-legacy.txt: $(INTERMEDIATE)/c-exports.txt
 	cp $< $@
+	echo '.objc_class_name_AltivecCore' >> $@
 	echo '.objc_class_name_AICURLConnection' >> $@
 	echo '.objc_class_name_AIHTTPURLResponse' >> $@
 
 $(INTERMEDIATE)/exports-modern.txt: $(INTERMEDIATE)/c-exports.txt
 	cp $< $@
+	echo '_OBJC_CLASS_$$_AltivecCore' >> $@
+	echo '_OBJC_METACLASS_$$_AltivecCore' >> $@
 	echo '_OBJC_CLASS_$$_AICURLConnection' >> $@
 	echo '_OBJC_METACLASS_$$_AICURLConnection' >> $@
 	echo '_OBJC_CLASS_$$_AIHTTPURLResponse' >> $@
@@ -271,13 +386,7 @@ $(INTERMEDIATE)/AltivecCore-ppc.dylib: $(INTERMEDIATE)/exports-legacy.txt $(PUBL
 	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_PPC) $(COMPILER_PPC) \
 	  $(PPC_FLAGS) $(DYLIB_LINK_FLAGS) \
 	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-legacy.txt \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcurl.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libssl.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcrypto.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libz.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libsqlite3.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcjson.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAltivecCore.a \
 	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
 	  -o $@
 
@@ -286,13 +395,7 @@ $(INTERMEDIATE)/AltivecCore-x86.dylib: $(INTERMEDIATE)/exports-legacy.txt $(PUBL
 	MACOSX_DEPLOYMENT_TARGET=$(MAC_MIN_X86) $(COMPILER_X86) \
 	  $(X86_FLAGS) $(DYLIB_LINK_FLAGS) \
 	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-legacy.txt \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcurl.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libssl.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcrypto.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libz.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libsqlite3.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcjson.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAltivecCore.a \
 	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
 	  -o $@
 
@@ -301,13 +404,7 @@ $(INTERMEDIATE)/AltivecCore-x64.dylib: $(INTERMEDIATE)/exports-modern.txt $(PUBL
 	$(COMPILER_X64) \
 	  $(X64_FLAGS) $(DYLIB_LINK_FLAGS) \
 	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-modern.txt \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcurl.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libssl.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcrypto.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libz.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libsqlite3.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcjson.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAltivecCore.a \
 	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
 	  -o $@
 
@@ -316,13 +413,7 @@ $(INTERMEDIATE)/AltivecCore-arm64.dylib: $(INTERMEDIATE)/exports-modern.txt $(PU
 	$(COMPILER_ARM64) \
 	  $(ARM64_FLAGS) $(DYLIB_LINK_FLAGS) \
 	  -Wl,-exported_symbols_list,$(INTERMEDIATE)/exports-modern.txt \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcurl.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libssl.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcrypto.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libz.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libsqlite3.a \
-	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libcjson.a \
+	  -Wl,-force_load,$(PUBLIC_LIB_DIR)/libAltivecCore.a \
 	  -framework Foundation -framework CoreFoundation -framework SystemConfiguration \
 	  -o $@
 
@@ -376,7 +467,9 @@ verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: _curl_easy_init not exported"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: _sqlite3_open not exported"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: _cJSON_Parse not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: AltivecCore class not exported (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AltivecCore' || { echo " [!] ERROR: AltivecCore class not exported (ppc)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported (ppc)"; missing=1; }; \
 	exit $$missing
 
