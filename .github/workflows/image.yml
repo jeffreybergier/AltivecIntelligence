@@ -10,6 +10,7 @@ on:
       - 'libs/libcurl/**'
       - 'altivec_common_*.mk'
       - 'apps/**'
+      - '!apps/**/Resources/Info.plist'
       - 'bin/**'
       - 'docs/**'
       - 'templates/**'

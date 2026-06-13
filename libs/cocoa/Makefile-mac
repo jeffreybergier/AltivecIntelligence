@@ -38,12 +38,13 @@ ARM64_OBJS=$(addprefix $(INTERMEDIATE)/arm64/,$(COCOA_SOURCES:.m=.o))
 PUBLIC_LIB=$(PUBLIC_LIB_DIR)/libAltivecCocoa.a
 
 FRAMEWORK_NAME=AltivecCocoa
+FRAMEWORK_INFO_PLIST=Resources/Info-mac.plist
 FRAMEWORK_VERSION=A
 FRAMEWORK_BUNDLE=$(PUBLIC_LIB_DIR)/$(FRAMEWORK_NAME).framework
 FRAMEWORK_VERSION_DIR=$(FRAMEWORK_BUNDLE)/Versions/$(FRAMEWORK_VERSION)
 FRAMEWORK_INSTALL_NAME=@executable_path/../Frameworks/$(FRAMEWORK_NAME).framework/Versions/$(FRAMEWORK_VERSION)/$(FRAMEWORK_NAME)
-FRAMEWORK_COMPAT_VER=1.0.0
-FRAMEWORK_CURRENT_VER=1.0.0
+FRAMEWORK_CURRENT_VER=$(call plist_version,$(FRAMEWORK_INFO_PLIST))
+FRAMEWORK_COMPAT_VER=$(FRAMEWORK_CURRENT_VER)
 DYLIB_LINK_FLAGS=-dynamiclib \
                  -install_name $(FRAMEWORK_INSTALL_NAME) \
                  -compatibility_version $(FRAMEWORK_COMPAT_VER) \
@@ -216,26 +217,8 @@ $(INTERMEDIATE)/AltivecCocoa.dylib: $(INTERMEDIATE)/AltivecCocoa-ppc.dylib \
 	@echo "--- Merging Quad-Fat AltivecCocoa dylib ---"
 	$(LIPO) -create $^ -output $@
 
-$(INTERMEDIATE)/Info.plist:
-	mkdir -p $(INTERMEDIATE)
-	printf '%s\n' \
-	  '<?xml version="1.0" encoding="UTF-8"?>' \
-	  '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
-	  '<plist version="1.0">' \
-	  '<dict>' \
-	  '  <key>CFBundleDevelopmentRegion</key><string>en</string>' \
-	  '  <key>CFBundleExecutable</key><string>$(FRAMEWORK_NAME)</string>' \
-	  '  <key>CFBundleIdentifier</key><string>com.altivec.$(FRAMEWORK_NAME)</string>' \
-	  '  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>' \
-	  '  <key>CFBundleName</key><string>$(FRAMEWORK_NAME)</string>' \
-	  '  <key>CFBundlePackageType</key><string>FMWK</string>' \
-	  '  <key>CFBundleShortVersionString</key><string>$(FRAMEWORK_CURRENT_VER)</string>' \
-	  '  <key>CFBundleVersion</key><string>1</string>' \
-	  '</dict>' \
-	  '</plist>' > $@
-
 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME): $(INTERMEDIATE)/AltivecCocoa.dylib \
-                                      $(INTERMEDIATE)/Info.plist \
+                                      $(FRAMEWORK_INFO_PLIST) \
                                       $(PUBLIC_INCLUDE_DIR)/.stamp \
                                       $(PUBLIC_RESOURCE_DIR)/Fonts/.stamp
 	@echo "--- Assembling AltivecCocoa.framework bundle ---"
@@ -243,7 +226,7 @@ $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME): $(INTERMEDIATE)/AltivecCocoa.dylib \
 	mkdir -p $(FRAMEWORK_VERSION_DIR)/Headers \
 	         $(FRAMEWORK_VERSION_DIR)/Resources/Fonts
 	cp $(INTERMEDIATE)/AltivecCocoa.dylib $(FRAMEWORK_VERSION_DIR)/$(FRAMEWORK_NAME)
-	cp $(INTERMEDIATE)/Info.plist $(FRAMEWORK_VERSION_DIR)/Resources/Info.plist
+	cp $(FRAMEWORK_INFO_PLIST) $(FRAMEWORK_VERSION_DIR)/Resources/Info.plist
 	cp -R $(PUBLIC_INCLUDE_DIR)/* $(FRAMEWORK_VERSION_DIR)/Headers/
 	cp $(PUBLIC_RESOURCE_DIR)/Fonts/*.otf \
 	   $(FRAMEWORK_VERSION_DIR)/Resources/Fonts/

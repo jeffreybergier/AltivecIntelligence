@@ -23,16 +23,13 @@ These ENIL needs are already represented in Altivec's common build files:
 - [x] `ANALYZE_DIRS` source resolution for files found through `vpath`.
 - [x] `VALIDATE_PATHS` preflight checks.
 - [x] AltivecCore auto-detection and `ALTIVECCORE_REQUIRED` bootstrap.
-- [x] AltivecCore static/dynamic linkage selection.
-- [x] AltivecCore framework bundle for libcurl, OpenSSL, zlib, SQLite, and cJSON.
+- [x] AltivecCore static linkage for phone apps and static/dynamic linkage for
+  Mac apps.
+- [x] macOS AltivecCore framework bundle for libcurl, OpenSSL, zlib, SQLite,
+  and cJSON.
 - [x] macOS `EXTRA_BUNDLE_STEPS` for app-specific bundle staging.
 
 ## Migration Backlog
-
-Compatibility shims from `XPFoundation`, `XPAppKit`, and `XPUIKit` are
-deferred for now. They are not complete enough to embed in AltivecCore or
-AltivecCocoa, but the extraction notes remain below in case a future app needs
-specific pieces.
 
 - [x] **SQLite library builder**
   - Source: `/repo/ENIL-cocoa/source/deps/sqlite/`.
@@ -69,74 +66,21 @@ specific pieces.
   - Acceptance: a new app can share `Resources/*.lproj` across Mac and iPhone
     without hand-writing the transcoding/copy rules.
 
-- [ ] **Foundation compatibility library**
-  - Source: `/repo/ENIL-cocoa/source/shared/XPFoundation.*`.
-  - Extract generic pieces:
-    - `NSInteger`/`NSUInteger` compatibility aliases for old SDKs.
-    - Tiger-safe run-loop common-modes constant.
-    - `NSFileManager` wrappers for create/copy/remove/list/trash operations.
-    - percent-decoding and byte-count string helpers.
-    - cross-platform internet-password keychain wrapper.
-  - Remove or rename `ENILLog` usage before landing.
-  - Acceptance: apps can include one Altivec Foundation compatibility header
-    instead of re-implementing Tiger/iOS-safe wrappers.
-
-- [ ] **AppKit compatibility library**
-  - Source: `/repo/ENIL-cocoa/source/macOS/XPAppKit.*`.
-  - Extract generic SDK/runtime shims:
-    - dummy protocol pattern for pre-10.6 SDKs.
-    - renamed constants for window masks, button styles, text alignment,
-      table styles, colors, and toolbar identifiers.
-    - safe runtime dispatch wrappers for modern AppKit selectors.
-    - layer-backed view helpers that avoid requiring QuartzCore imports.
-    - split view, sheet, file wrapper, image drawing, notification, and Dock
-      badge helpers.
-  - Decouple from `AICookieCutterWindowController`; the runtime tier helper
-    probably belongs in the AppKit compatibility layer, not the cookie cutter.
-  - Acceptance: Mac apps can use modern-looking AppKit affordances while still
-    compiling against the 10.5 SDK and running on Tiger/Leopard.
-
-- [ ] **UIKit compatibility library**
-  - Source: `/repo/ENIL-cocoa/source/iOS/XPUIKit.*`.
-  - Extract iOS 4.3-safe wrappers:
-    - `UIWebView` scroll view access.
-    - transparent web view/background helpers.
-    - UIWebView shadow removal.
-    - deprecated local notification wrapper.
-    - badge count helper.
-  - Remove ENIL-specific colors or make them app-supplied.
-  - Acceptance: iPhone apps targeting iOS 4.3 can keep availability/deprecation
-    handling out of controllers.
-
-- [ ] **Nibless AppKit controller template**
-  - Source:
-    - `/repo/ENIL-cocoa/source/macOS/AIViewController.*`
-    - `/repo/ENIL-cocoa/source/macOS/AICookieCutterWindowController.*`
-    - `/repo/ENIL-cocoa/source/macOS/AIWebViewController.*`
-  - Extract as an advanced Mac template or optional support library:
-    - `NSResponder`-rooted view controller base.
-    - runtime `NSViewController` adapter for modern split APIs.
-    - three-pane split window controller with legacy `NSSplitView` fallback.
-    - WebKit1/WKWebView bridge for file-backed HTML UIs.
-  - Remove ENIL defaults and rename types if they become Altivec-owned.
-  - Acceptance: a new Mac app can start from a Tiger-safe three-pane template
-    without copying ENIL UI code.
-
 - [x] **AltivecCocoa controller library**
   - Source:
     - `/repo/ENIL-cocoa/source/macOS/AIViewController.*`
     - `/repo/ENIL-cocoa/source/macOS/AICookieCutterWindowController.*`
     - `/repo/ENIL-cocoa/source/macOS/AIWebViewController.*`
   - Package as a Mac quad-fat `libAltivecCocoa.a` and
-    `AltivecCocoa.framework`, plus an iPhone `libAltivecCocoa.a`/framework
-    currently carrying the cross-platform Font Awesome helper.
-  - Keep `XPFoundation`, `XPAppKit`, and `XPUIKit` out of the library for now.
+    `AltivecCocoa.framework`, plus an iPhone `libAltivecCocoa.a` carrying the
+    cross-platform Font Awesome helper and font resources.
+  - Keep `XPFoundation`, `XPAppKit`, and `XPUIKit` out of the library.
   - Added app opt-in through `ALTIVECCOCOA_REQUIRED`,
     `ALTIVECCOCOA_LINKAGE`, and `ALTIVECCOCOA_DIR`.
   - Acceptance: Mac apps can opt in with `ALTIVECCOCOA_REQUIRED=1` and use the
     three-pane nibless controller stack without copying ENIL sources; iPhone
-    apps can require the static library by default, with dynamic
-    framework linkage available only as an explicit iOS 8+ opt-in.
+    apps can require the static library without embedding unsupported
+    frameworks.
 
 - [x] **Font Awesome optional icon helper**
   - Source: `/repo/ENIL-cocoa/source/shared/FontAwesome.*`,
@@ -147,34 +91,21 @@ specific pieces.
   - Kept generated Solid icon enum regeneration through
     `libs/cocoa/tools/gen_aifontawesome_icons.py`.
   - Preserved Core Text rendering on 10.5+/iOS and ATSUI fallback on Tiger.
-  - Static linkage stages OTF files into the app bundle; dynamic linkage keeps
-    OTF files inside `AltivecCocoa.framework`.
+  - Static phone linkage stages OTF files into the app bundle; dynamic Mac
+    linkage keeps OTF files inside `AltivecCocoa.framework`.
   - Bundles a Font Awesome Free / SIL OFL 1.1 notice alongside the OTF files.
   - Acceptance: apps can render Font Awesome icons through AltivecCocoa without
     copying ENIL helper code or writing custom font staging rules.
 
-- [ ] **C utility extraction candidates**
-  - Source: `/repo/ENIL-cocoa/source/shared/enil_strbuf.*` and the pure-C
-    headers around `enil_cocoa.m`.
-  - Possible reusable pieces:
-    - growable string buffer.
-    - HTML, JS, and URL escaping helpers.
-    - Apple-framework bridge pattern that keeps portable `.c` files free of
-      Foundation/AppKit/UIKit imports.
-    - ImageIO JPEG thumbnail/transcode helper.
-    - CFDateFormatter timestamp helper.
-    - CFStringCompare SQLite collation helper.
-    - C-to-NSLog bridge.
-  - These are lower priority because they need naming cleanup and careful API
-    boundaries.
-  - Acceptance: only extract pieces that remove real duplication in Altivec
-    examples or libraries.
-
-- [ ] **Release helper**
+- [x] **Release helper**
   - Source: `/repo/ENIL-cocoa/scripts/version-bump-push.py` and `RELEASE.md`.
-  - Generalize the workflow for apps with paired macOS/iOS `Info.plist` files:
-    version check, patch bump, commit, tag, and optional push.
-  - Keep this secondary; it is project workflow, not core build capability.
+  - Added `/repo/altivec/bin/altivec-release` as a YAML-driven helper for app
+    version checks, explicit version sets, patch/minor/major bumps, commit,
+    tag, optional push, CI tag validation, target builds, and artifact staging.
+  - Added `templates/altivec-release.yml` for project-specific plist paths,
+    build commands, and release asset names.
+  - Added `templates/github-release.yml` so app repos can publish configured
+    release assets without hardcoded ENIL source paths.
   - Acceptance: a template app can opt into shared release versioning without
     adopting ENIL-specific paths or names.
 
@@ -185,6 +116,12 @@ specific pieces.
   except as reference material.
 - ENIL notification names, account/session paths, worker credentials, or
   product text.
+- `XPFoundation.*`, `XPAppKit.*`, and `XPUIKit.*`. These compatibility shims
+  are too ENIL-shaped and incomplete for AltivecCore or AltivecCocoa.
+- A separate nibless AppKit controller template. The reusable controller code
+  already landed in AltivecCocoa.
+- ENIL's lower-priority pure-C utility helpers around `enil_strbuf.*` and
+  `enil_cocoa.m`.
 
 ## Cleanup Targets In ENIL After Migration
 
@@ -193,5 +130,3 @@ specific pieces.
 - Remove ignored SQLite generated outputs from `/repo/ENIL-cocoa` after the
   Altivec SQLite library is available.
 - Replace local iOS order-only bundle/signing rules with common Altivec hooks.
-- Replace copied compatibility files with Altivec-provided headers/sources or
-  documented template includes.

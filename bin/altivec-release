@@ -1,0 +1,682 @@
+#!/usr/bin/env python3
+"""YAML-driven release helper for Altivec app repositories."""
+
+import argparse
+import os
+import plistlib
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover - exercised only on incomplete hosts.
+    yaml = None
+
+
+DEFAULT_CONFIG_NAMES = (".altivec-release.yml", "altivec-release.yml")
+VERSION_RE = re.compile(r"[0-9]+(?:\.[0-9]+){0,2}")
+DEFAULT_VERSION_KEYS = (
+    "CFBundleShortVersionString",
+    "CFBundleVersion",
+)
+
+
+def fail(message):
+    raise SystemExit(message)
+
+
+def require_yaml():
+    if yaml is None:
+        fail("missing Python YAML support; install PyYAML or python3-yaml")
+
+
+def find_config(start_dir):
+    current = start_dir.resolve()
+    while True:
+        for name in DEFAULT_CONFIG_NAMES:
+            candidate = current / name
+            if candidate.is_file():
+                return candidate
+        if current.parent == current:
+            return None
+        current = current.parent
+
+
+def resolve_config_path(path_arg):
+    if path_arg:
+        path = Path(path_arg).expanduser()
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        if not path.is_file():
+            fail("release config not found: %s" % path)
+        return path.resolve()
+
+    path = find_config(Path.cwd())
+    if path is None:
+        fail(
+            "release config not found; copy /altivec/templates/"
+            "altivec-release.yml to .altivec-release.yml"
+        )
+    return path
+
+
+def load_yaml_config(path):
+    require_yaml()
+    with path.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        fail("%s must contain a YAML mapping" % path)
+    return data
+
+
+def as_string_list(value, context):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    fail("%s must be a string or list of strings" % context)
+
+
+def relpath(path, root):
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
+def resolve_project_path(root, value, context):
+    if not isinstance(value, str) or not value:
+        fail("%s must be a non-empty path string" % context)
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    return path
+
+
+def normalize_config(config_path):
+    data = load_yaml_config(config_path)
+    root = config_path.parent
+
+    app_name = data.get("app_name") or data.get("name") or root.name
+    if not isinstance(app_name, str) or not app_name:
+        fail("app_name must be a non-empty string")
+
+    tag_prefix = data.get("tag_prefix", "v")
+    if not isinstance(tag_prefix, str):
+        fail("tag_prefix must be a string")
+
+    version_cfg = data.get("version")
+    if not isinstance(version_cfg, dict):
+        fail("version must be a YAML mapping")
+
+    source = resolve_project_path(
+        root, version_cfg.get("source"), "version.source"
+    )
+    global_keys = as_string_list(version_cfg.get("keys"), "version.keys")
+    if not global_keys:
+        global_keys = list(DEFAULT_VERSION_KEYS)
+    source_key = version_cfg.get("source_key", global_keys[0])
+    if not isinstance(source_key, str) or not source_key:
+        fail("version.source_key must be a non-empty string")
+
+    plist_items = version_cfg.get("plists")
+    if plist_items is None:
+        plist_items = [relpath(source, root)]
+    if not isinstance(plist_items, list) or not plist_items:
+        fail("version.plists must be a non-empty list")
+
+    plists = []
+    for i, item in enumerate(plist_items):
+        context = "version.plists[%d]" % i
+        if isinstance(item, str):
+            path = resolve_project_path(root, item, context)
+            keys = list(global_keys)
+        elif isinstance(item, dict):
+            path = resolve_project_path(root, item.get("path"), context + ".path")
+            keys = as_string_list(item.get("keys"), context + ".keys")
+            if not keys:
+                keys = list(global_keys)
+        else:
+            fail("%s must be a path string or mapping" % context)
+        plists.append({"path": path, "keys": keys})
+
+    extra_files = [
+        resolve_project_path(root, item, "versioned_files")
+        for item in as_string_list(data.get("versioned_files"), "versioned_files")
+    ]
+
+    release_cfg = data.get("release", {})
+    if release_cfg is None:
+        release_cfg = {}
+    if not isinstance(release_cfg, dict):
+        fail("release must be a YAML mapping")
+    commit_message = release_cfg.get("commit_message", "Version {version}")
+    if not isinstance(commit_message, str) or not commit_message:
+        fail("release.commit_message must be a non-empty string")
+
+    targets = normalize_targets(root, data.get("targets", []))
+
+    return {
+        "root": root,
+        "path": config_path,
+        "app_name": app_name,
+        "tag_prefix": tag_prefix,
+        "source": source,
+        "source_key": source_key,
+        "plists": plists,
+        "versioned_files": unique_paths(
+            [p["path"] for p in plists] + extra_files
+        ),
+        "release": release_cfg,
+        "targets": targets,
+    }
+
+
+def normalize_targets(root, target_items):
+    if target_items is None:
+        return []
+    if not isinstance(target_items, list):
+        fail("targets must be a list")
+
+    targets = []
+    names = set()
+    for i, item in enumerate(target_items):
+        context = "targets[%d]" % i
+        if not isinstance(item, dict):
+            fail("%s must be a mapping" % context)
+
+        name = item.get("name")
+        if not isinstance(name, str) or not name:
+            fail("%s.name must be a non-empty string" % context)
+        if name in names:
+            fail("duplicate target name: %s" % name)
+        names.add(name)
+
+        workdir = item.get("workdir", ".")
+        build = item.get("build", [])
+        commands = as_string_list(build, context + ".build")
+
+        artifacts = normalize_target_artifacts(root, item, context)
+
+        targets.append(
+            {
+                "name": name,
+                "workdir": resolve_project_path(root, workdir, context + ".workdir"),
+                "build": commands,
+                "artifacts": artifacts,
+            }
+        )
+    return targets
+
+
+def normalize_target_artifacts(root, item, context):
+    if item.get("artifacts") is not None:
+        if item.get("artifact") is not None or item.get("asset_name") is not None:
+            fail("%s cannot mix artifacts with artifact/asset_name" % context)
+        artifact_items = item.get("artifacts")
+        if not isinstance(artifact_items, list):
+            fail("%s.artifacts must be a list" % context)
+
+        artifacts = []
+        for i, artifact_item in enumerate(artifact_items):
+            artifact_context = "%s.artifacts[%d]" % (context, i)
+            if isinstance(artifact_item, str):
+                path = resolve_project_path(root, artifact_item, artifact_context)
+                asset_name = None
+            elif isinstance(artifact_item, dict):
+                path = resolve_project_path(
+                    root, artifact_item.get("path"), artifact_context + ".path"
+                )
+                asset_name = artifact_item.get("asset_name")
+                if asset_name is not None and not isinstance(asset_name, str):
+                    fail("%s.asset_name must be a string" % artifact_context)
+            else:
+                fail("%s must be a path string or mapping" % artifact_context)
+            artifacts.append({"path": path, "asset_name": asset_name})
+        return artifacts
+
+    artifact = item.get("artifact")
+    if artifact is None:
+        return []
+
+    asset_name = item.get("asset_name")
+    if asset_name is not None and not isinstance(asset_name, str):
+        fail("%s.asset_name must be a string" % context)
+    return [
+        {
+            "path": resolve_project_path(root, artifact, context + ".artifact"),
+            "asset_name": asset_name,
+        }
+    ]
+
+
+def unique_paths(paths):
+    seen = set()
+    result = []
+    for path in paths:
+        key = str(path)
+        if key not in seen:
+            seen.add(key)
+            result.append(path)
+    return result
+
+
+def validate_version(version):
+    if not isinstance(version, str) or not VERSION_RE.fullmatch(version):
+        fail("version must be numeric dot-separated, e.g. 1, 1.0, or 1.0.3")
+
+
+def normalized_parts(version):
+    validate_version(version)
+    parts = [int(part) for part in version.split(".")]
+    while len(parts) < 3:
+        parts.append(0)
+    return parts
+
+
+def bump_version(version, part):
+    major, minor, patch = normalized_parts(version)
+    if part == "major":
+        return "%d.0.0" % (major + 1)
+    if part == "minor":
+        return "%d.%d.0" % (major, minor + 1)
+    if part == "patch":
+        return "%d.%d.%d" % (major, minor, patch + 1)
+    fail("unsupported bump part: %s" % part)
+
+
+def load_plist(path):
+    if not path.is_file():
+        fail("plist not found: %s" % path)
+    with path.open("rb") as f:
+        return plistlib.load(f)
+
+
+def read_version(config):
+    source = config["source"]
+    key = config["source_key"]
+    data = load_plist(source)
+    version = data.get(key)
+    if not version:
+        fail("%s has no %s" % (relpath(source, config["root"]), key))
+    validate_version(version)
+    return version
+
+
+def replace_plist_string(path, key, value, root, dry_run=False):
+    if dry_run:
+        print("update %s %s=%s" % (relpath(path, root), key, value))
+        return
+
+    text = path.read_text(encoding="utf-8")
+    pattern = r"(<key>%s</key>\s*<string>)[^<]*(</string>)" % re.escape(key)
+    updated, count = re.subn(pattern, r"\g<1>%s\g<2>" % value, text, count=1)
+    if count != 1:
+        fail("could not update %s in %s" % (key, relpath(path, root)))
+    path.write_text(updated, encoding="utf-8")
+
+
+def set_versions(config, version, dry_run=False):
+    validate_version(version)
+    root = config["root"]
+    for plist in config["plists"]:
+        path = plist["path"]
+        for key in plist["keys"]:
+            replace_plist_string(path, key, version, root, dry_run=dry_run)
+
+
+def check_versions(config, version):
+    validate_version(version)
+    errors = []
+    root = config["root"]
+    for plist in config["plists"]:
+        path = plist["path"]
+        data = load_plist(path)
+        for key in plist["keys"]:
+            actual = data.get(key)
+            if actual != version:
+                errors.append(
+                    "%s %s is %r, expected %r"
+                    % (relpath(path, root), key, actual, version)
+                )
+    if errors:
+        fail("\n".join(errors))
+
+
+def run(cmd, config, capture=False, dry_run=False):
+    root = config["root"]
+    display = " ".join(cmd)
+    if dry_run:
+        print("+ %s" % display)
+        return ""
+    if capture:
+        result = subprocess.run(
+            cmd,
+            cwd=root,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return result.stdout.strip()
+    print("+ %s" % display)
+    subprocess.run(cmd, cwd=root, check=True)
+    return ""
+
+
+def run_shell(command, cwd, dry_run=False):
+    if dry_run:
+        print("+ cd %s && %s" % (cwd, command))
+        return
+    print("+ cd %s && %s" % (cwd, command))
+    subprocess.run(command, cwd=cwd, shell=True, check=True)
+
+
+def ensure_clean_tree(config):
+    status = run(["git", "status", "--porcelain"], config, capture=True)
+    if status:
+        fail("working tree is not clean; commit or stash changes before release")
+
+
+def current_branch(config):
+    branch = run(["git", "branch", "--show-current"], config, capture=True)
+    if not branch:
+        fail("cannot release from a detached HEAD")
+    return branch
+
+
+def has_origin(config):
+    result = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        cwd=config["root"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def ensure_tag_available(config, tag):
+    local = subprocess.run(
+        ["git", "rev-parse", "-q", "--verify", "refs/tags/%s" % tag],
+        cwd=config["root"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if local.returncode == 0:
+        fail("local tag already exists: %s" % tag)
+
+    if not has_origin(config):
+        return
+    remote = subprocess.run(
+        [
+            "git",
+            "ls-remote",
+            "--exit-code",
+            "--tags",
+            "origin",
+            "refs/tags/%s" % tag,
+        ],
+        cwd=config["root"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if remote.returncode == 0:
+        fail("remote tag already exists on origin: %s" % tag)
+
+
+def tag_for_version(config, version):
+    return "%s%s" % (config["tag_prefix"], version)
+
+
+def git_add_paths(config, paths, dry_run=False):
+    root = config["root"]
+    rels = [relpath(path, root) for path in paths]
+    run(["git", "add"] + rels, config, dry_run=dry_run)
+
+
+def selected_targets(config, names):
+    targets = config["targets"]
+    if not names:
+        return targets
+
+    by_name = {target["name"]: target for target in targets}
+    missing = [name for name in names if name not in by_name]
+    if missing:
+        fail("unknown release target(s): %s" % ", ".join(missing))
+    return [by_name[name] for name in names]
+
+
+def format_asset_name(template, config, target, version):
+    tag = tag_for_version(config, version)
+    try:
+        return template.format(
+            app_name=config["app_name"],
+            version=version,
+            tag=tag,
+            target=target["name"],
+        )
+    except (KeyError, IndexError, ValueError) as exc:
+        fail("invalid asset_name template for %s: %s" % (target["name"], exc))
+
+
+def copy_artifact(src, dest, dry_run=False):
+    if dry_run:
+        print("+ cp %s %s" % (src, dest))
+        return
+    if not src.exists():
+        fail("artifact not found: %s" % src)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if src.is_dir():
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(src, dest)
+    else:
+        shutil.copy2(src, dest)
+
+
+def command_current(config, _args):
+    print(read_version(config))
+
+
+def command_check(config, args):
+    check_versions(config, args.version)
+    print("version %s OK" % args.version)
+
+
+def command_set(config, args):
+    set_versions(config, args.version, dry_run=args.dry_run)
+    if not args.dry_run:
+        check_versions(config, args.version)
+    print("version set to %s" % args.version)
+
+
+def command_bump(config, args):
+    branch = current_branch(config)
+    old_version = read_version(config)
+    new_version = args.set_version or bump_version(old_version, args.part)
+    validate_version(new_version)
+    tag = tag_for_version(config, new_version)
+
+    if not args.dry_run:
+        ensure_clean_tree(config)
+        ensure_tag_available(config, tag)
+
+    print(
+        "Bumping %s %s -> %s"
+        % (config["app_name"], old_version, new_version)
+    )
+    set_versions(config, new_version, dry_run=args.dry_run)
+    if not args.dry_run:
+        check_versions(config, new_version)
+
+    git_add_paths(config, config["versioned_files"], dry_run=args.dry_run)
+    message_template = config["release"].get("commit_message", "Version {version}")
+    message = message_template.format(
+        app_name=config["app_name"],
+        version=new_version,
+        tag=tag,
+    )
+    run(["git", "commit", "-m", message], config, dry_run=args.dry_run)
+    run(["git", "tag", tag], config, dry_run=args.dry_run)
+
+    if not args.no_push:
+        run(["git", "push", "origin", branch], config, dry_run=args.dry_run)
+        run(["git", "push", "origin", tag], config, dry_run=args.dry_run)
+
+    if args.dry_run:
+        print("Dry run only; no files were changed.")
+    elif args.no_push:
+        print("Release tag %s is ready. Push with:" % tag)
+        print("git push origin %s && git push origin %s" % (branch, tag))
+    else:
+        print("Release tag %s pushed." % tag)
+
+
+def command_ci_env(config, args):
+    tag = args.tag
+    if tag is None:
+        tag = os.environ.get("GITHUB_REF_NAME")
+    if not tag:
+        fail("ci-env needs a tag argument or GITHUB_REF_NAME")
+
+    prefix = config["tag_prefix"]
+    version = tag[len(prefix):] if prefix and tag.startswith(prefix) else tag
+    validate_version(version)
+    check_versions(config, version)
+
+    lines = [
+        "RELEASE_TAG=%s" % tag,
+        "RELEASE_VERSION=%s" % version,
+    ]
+    if args.github_env:
+        path = Path(args.github_env)
+        with path.open("a", encoding="utf-8") as f:
+            for line in lines:
+                f.write(line + "\n")
+        print("wrote release environment to %s" % path)
+    else:
+        for line in lines:
+            print(line)
+
+
+def command_build(config, args):
+    targets = selected_targets(config, args.target)
+    if not targets:
+        fail("no targets configured")
+    for target in targets:
+        if not target["build"]:
+            fail("target %s has no build commands" % target["name"])
+        print("--- Building %s ---" % target["name"])
+        for command in target["build"]:
+            run_shell(command, target["workdir"], dry_run=args.dry_run)
+
+
+def command_stage(config, args):
+    version = args.version or read_version(config)
+    validate_version(version)
+    targets = selected_targets(config, args.target)
+    if not targets:
+        fail("no targets configured")
+
+    dist = Path(args.dist).expanduser()
+    if not dist.is_absolute():
+        dist = config["root"] / dist
+
+    for target in targets:
+        artifacts = target["artifacts"]
+        if not artifacts:
+            fail("target %s has no artifact path" % target["name"])
+        for artifact in artifacts:
+            path = artifact["path"]
+            template = artifact["asset_name"] or path.name
+            asset_name = format_asset_name(template, config, target, version)
+            dest = dist / asset_name
+            copy_artifact(path, dest, dry_run=args.dry_run)
+            print("staged %s" % relpath(dest, config["root"]))
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description="Version, tag, build, and stage Altivec app releases."
+    )
+    parser.add_argument(
+        "--config",
+        help="release config path; defaults to .altivec-release.yml",
+    )
+
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    p_current = subparsers.add_parser("current", help="print current version")
+    p_current.set_defaults(func=command_current)
+
+    p_check = subparsers.add_parser("check", help="check plist versions")
+    p_check.add_argument("version")
+    p_check.set_defaults(func=command_check)
+
+    p_set = subparsers.add_parser("set", help="set configured plist versions")
+    p_set.add_argument("version")
+    p_set.add_argument("--dry-run", action="store_true")
+    p_set.set_defaults(func=command_set)
+
+    p_bump = subparsers.add_parser(
+        "bump", help="bump, commit, tag, and optionally push a release"
+    )
+    p_bump.add_argument(
+        "part",
+        nargs="?",
+        choices=("major", "minor", "patch"),
+        default="patch",
+    )
+    p_bump.add_argument(
+        "--set",
+        dest="set_version",
+        metavar="VERSION",
+        help="set an explicit version instead of bumping a part",
+    )
+    p_bump.add_argument("--dry-run", action="store_true")
+    p_bump.add_argument("--no-push", action="store_true")
+    p_bump.set_defaults(func=command_bump)
+
+    p_ci = subparsers.add_parser(
+        "ci-env", help="validate a tag and emit RELEASE_* environment values"
+    )
+    p_ci.add_argument("tag", nargs="?")
+    p_ci.add_argument(
+        "--github-env",
+        help="append values to a GitHub Actions environment file",
+    )
+    p_ci.set_defaults(func=command_ci_env)
+
+    p_build = subparsers.add_parser("build", help="run configured build targets")
+    p_build.add_argument("--target", action="append", help="target name")
+    p_build.add_argument("--dry-run", action="store_true")
+    p_build.set_defaults(func=command_build)
+
+    p_stage = subparsers.add_parser("stage", help="copy artifacts to dist")
+    p_stage.add_argument("version", nargs="?")
+    p_stage.add_argument("--target", action="append", help="target name")
+    p_stage.add_argument("--dist", default="dist")
+    p_stage.add_argument("--dry-run", action="store_true")
+    p_stage.set_defaults(func=command_stage)
+
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    config_path = resolve_config_path(args.config)
+    config = normalize_config(config_path)
+    args.func(config, args)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except subprocess.CalledProcessError as exc:
+        sys.exit(exc.returncode)

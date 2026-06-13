@@ -46,3 +46,5 @@ IOS_MIN_VER=4.3
 IOS_ARM64_MIN_VER=7.0
 
 JOBS=$(shell getconf _NPROCESSORS_ONLN)
+
+plist_version = $(shell python3 -c 'import plistlib; print(plistlib.load(open("$(1)", "rb"))["CFBundleVersion"])')

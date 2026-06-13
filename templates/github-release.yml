@@ -1,0 +1,77 @@
+# Copy this file to .github/workflows/release.yml in an app repository.
+# It expects .altivec-release.yml at the repository root.
+
+name: Build Release
+
+on:
+  push:
+    tags:
+      - "*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to create or update"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and stage release packages
+    runs-on: ubuntu-22.04
+    env:
+      BUILD_IMAGE: ghcr.io/jeffreybergier/altivec-intelligence:latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Resolve release tag
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="${{ inputs.tag_name }}"
+          fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+
+      - name: Check configured plist versions
+        run: |
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -e GITHUB_REF_NAME="$RELEASE_TAG" \
+            -v "${{ github.workspace }}:/repo/user" \
+            -w /repo/user \
+            "$BUILD_IMAGE" \
+            -lc "altivec-release ci-env" > release.env
+          cat release.env >> "$GITHUB_ENV"
+          cat release.env
+
+      - name: Build configured targets and stage assets
+        run: |
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -e IS_SANDBOX=1 \
+            -v "${{ github.workspace }}:/repo/user" \
+            -w /repo/user \
+            "$BUILD_IMAGE" \
+            -lc "altivec-release build && altivec-release stage '$RELEASE_VERSION'"
+          ls -lh dist
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --generate-notes
+          fi
+          gh release upload "$RELEASE_TAG" dist/* --clobber

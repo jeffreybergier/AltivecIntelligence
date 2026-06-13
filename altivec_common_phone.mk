@@ -52,113 +52,76 @@ ALL_SOURCES = $(SOURCES) $(EXTRA_SOURCES)
 OBJS = $(addprefix $(INT_DIR)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) $(EXTRA_SOURCES:.m=.o) $(EXTRA_SOURCES:.c=.o)))
 
 # --- Auto-detect AltivecCore ---
-# ALTIVECCORE_LINKAGE picks how the core networking stack is linked.
-#   static (default): link the .a archives directly into the binary.
-#                     Required for iOS 4.3-7 device compatibility.
-#   dynamic         : link against AltivecCore.framework; the framework
-#                     is copied into <App>.app/Frameworks/ (iOS flat layout).
-#                     Embedded iOS frameworks require iOS 8+ at runtime.
+# iPhone builds link AltivecCore statically. Embedded iOS frameworks require
+# iOS 8+ at runtime, so dynamic linkage is intentionally unsupported here.
 ALTIVECCORE_LINKAGE ?= static
+ifneq ($(strip $(ALTIVECCORE_LINKAGE)),static)
+  $(error ALTIVECCORE_LINKAGE=$(ALTIVECCORE_LINKAGE) is not supported for iOS; use static linkage for iOS 4.3-7 compatibility)
+endif
 ALTIVECCORE_REQUIRED ?= 0
 ALTIVECCORE_DIR ?=
 ALTIVECCORE_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/core/build-phone
 ifeq ($(strip $(ALTIVECCORE_DIR)),)
-  ALTIVECCORE_PATH = $(firstword $(wildcard $(addsuffix /lib/AltivecCore.framework/AltivecCore, $(ALTIVECCORE_SEARCH_PATHS))))
+  ALTIVECCORE_PATH = $(firstword $(wildcard $(addsuffix /lib/libAICURLConnection.a, $(ALTIVECCORE_SEARCH_PATHS))))
   ifneq ($(ALTIVECCORE_PATH),)
-    ALTIVECCORE_DIR = $(patsubst %/lib/AltivecCore.framework/AltivecCore,%,$(ALTIVECCORE_PATH))
+    ALTIVECCORE_DIR = $(patsubst %/lib/libAICURLConnection.a,%,$(ALTIVECCORE_PATH))
   else ifeq ($(ALTIVECCORE_REQUIRED),1)
     ALTIVECCORE_DIR = $(firstword $(ALTIVECCORE_SEARCH_PATHS))
   endif
 endif
 ifeq ($(ALTIVECCORE_REQUIRED),1)
   ifneq ($(strip $(ALTIVECCORE_DIR)),)
-    ifeq ($(ALTIVECCORE_LINKAGE),dynamic)
-      ALTIVECCORE_FRAMEWORK = $(ALTIVECCORE_DIR)/lib/AltivecCore.framework
-      EXTRA_FLAGS += -F$(ALTIVECCORE_DIR)/lib
-    else
-      EXTRA_FLAGS += -I$(ALTIVECCORE_DIR)/include
-    endif
+    EXTRA_FLAGS += -I$(ALTIVECCORE_DIR)/include
   endif
 endif
 
-ifeq ($(ALTIVECCORE_LINKAGE),dynamic)
-  ALTIVECCORE_REQUIRED_FILES = $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/AltivecCore \
-                               $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/cacert.pem \
-                               $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/Headers/AltivecCore.h \
-                               $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/Headers/sqlite3.h \
-                               $(ALTIVECCORE_DIR)/lib/AltivecCore.framework/Headers/cJSON.h
-else
-  ALTIVECCORE_REQUIRED_FILES = $(ALTIVECCORE_DIR)/lib/libAICURLConnection.a \
-                               $(ALTIVECCORE_DIR)/lib/libcurl.a \
-                               $(ALTIVECCORE_DIR)/lib/libssl.a \
-                               $(ALTIVECCORE_DIR)/lib/libcrypto.a \
-                               $(ALTIVECCORE_DIR)/lib/libz.a \
-                               $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
-                               $(ALTIVECCORE_DIR)/lib/libcjson.a \
-                               $(ALTIVECCORE_DIR)/lib/cacert.pem \
-                               $(ALTIVECCORE_DIR)/include/AltivecCore.h \
-                               $(ALTIVECCORE_DIR)/include/sqlite3.h \
-                               $(ALTIVECCORE_DIR)/include/cJSON.h
-endif
+ALTIVECCORE_REQUIRED_FILES = $(ALTIVECCORE_DIR)/lib/libAICURLConnection.a \
+                             $(ALTIVECCORE_DIR)/lib/libcurl.a \
+                             $(ALTIVECCORE_DIR)/lib/libssl.a \
+                             $(ALTIVECCORE_DIR)/lib/libcrypto.a \
+                             $(ALTIVECCORE_DIR)/lib/libz.a \
+                             $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
+                             $(ALTIVECCORE_DIR)/lib/libcjson.a \
+                             $(ALTIVECCORE_DIR)/lib/cacert.pem \
+                             $(ALTIVECCORE_DIR)/include/AltivecCore.h \
+                             $(ALTIVECCORE_DIR)/include/sqlite3.h \
+                             $(ALTIVECCORE_DIR)/include/cJSON.h
 
 # --- Auto-detect AltivecCocoa ---
-# ALTIVECCOCOA_LINKAGE picks how the Cocoa/controller layer is linked.
-#   static (default): link libAltivecCocoa.a directly into the binary.
-#                     Required for iOS 4.3-7 device compatibility.
-#   dynamic         : link against AltivecCocoa.framework; the framework
-#                     is copied into <App>.app/Frameworks/ (iOS flat layout).
-#                     Embedded iOS frameworks require iOS 8+ at runtime.
-#
-# The current phone build intentionally exports an empty framework: the
-# AppKit controller classes compile only on Mac, but the artifact exercises
-# the same framework plumbing for future iPhone-side classes.
+# iPhone builds link AltivecCocoa statically and stage font resources into the
+# app bundle. Embedded iOS frameworks are intentionally unsupported here.
 ALTIVECCOCOA_LINKAGE ?= static
+ifneq ($(strip $(ALTIVECCOCOA_LINKAGE)),static)
+  $(error ALTIVECCOCOA_LINKAGE=$(ALTIVECCOCOA_LINKAGE) is not supported for iOS; use static linkage for iOS 4.3-7 compatibility)
+endif
 ALTIVECCOCOA_REQUIRED ?= 0
 ALTIVECCOCOA_DIR ?=
 ALTIVECCOCOA_SEARCH_PATHS = $(ALTIVEC_ROOT)/libs/cocoa/build-phone
 ifeq ($(strip $(ALTIVECCOCOA_DIR)),)
-  ALTIVECCOCOA_PATH = $(firstword $(wildcard $(addsuffix /lib/AltivecCocoa.framework/AltivecCocoa, $(ALTIVECCOCOA_SEARCH_PATHS))))
+  ALTIVECCOCOA_PATH = $(firstword $(wildcard $(addsuffix /lib/libAltivecCocoa.a, $(ALTIVECCOCOA_SEARCH_PATHS))))
   ifneq ($(ALTIVECCOCOA_PATH),)
-    ALTIVECCOCOA_DIR = $(patsubst %/lib/AltivecCocoa.framework/AltivecCocoa,%,$(ALTIVECCOCOA_PATH))
+    ALTIVECCOCOA_DIR = $(patsubst %/lib/libAltivecCocoa.a,%,$(ALTIVECCOCOA_PATH))
   else ifeq ($(ALTIVECCOCOA_REQUIRED),1)
     ALTIVECCOCOA_DIR = $(firstword $(ALTIVECCOCOA_SEARCH_PATHS))
   endif
 endif
 ifeq ($(ALTIVECCOCOA_REQUIRED),1)
   ifneq ($(strip $(ALTIVECCOCOA_DIR)),)
-    ifeq ($(ALTIVECCOCOA_LINKAGE),dynamic)
-      ALTIVECCOCOA_FRAMEWORK = $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework
-      EXTRA_FLAGS += -F$(ALTIVECCOCOA_DIR)/lib
-    else
-      ALTIVECCOCOA_RESOURCE_DIR = $(ALTIVECCOCOA_DIR)/Resources
-      EXTRA_FLAGS += -I$(ALTIVECCOCOA_DIR)/include
-    endif
+    ALTIVECCOCOA_RESOURCE_DIR = $(ALTIVECCOCOA_DIR)/Resources
+    EXTRA_FLAGS += -I$(ALTIVECCOCOA_DIR)/include
   endif
 endif
 
-ifeq ($(ALTIVECCOCOA_LINKAGE),dynamic)
-  ALTIVECCOCOA_REQUIRED_FILES = $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/AltivecCocoa \
-                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Headers/AltivecCocoa.h \
-                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Headers/AIViewController.h \
-                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Headers/AICookieCutterWindowController.h \
-                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Headers/AIWebViewController.h \
-                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Headers/AIFontAwesome.h \
-                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Fonts/FA7-Solid-900.otf \
-                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Fonts/FA7-Regular-400.otf \
-                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Fonts/FA7-Brands-400.otf \
-                                $(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/Fonts/LICENSE-Font-Awesome.txt
-else
-  ALTIVECCOCOA_REQUIRED_FILES = $(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a \
-                                $(ALTIVECCOCOA_DIR)/include/AltivecCocoa.h \
-                                $(ALTIVECCOCOA_DIR)/include/AIViewController.h \
-                                $(ALTIVECCOCOA_DIR)/include/AICookieCutterWindowController.h \
-                                $(ALTIVECCOCOA_DIR)/include/AIWebViewController.h \
-                                $(ALTIVECCOCOA_DIR)/include/AIFontAwesome.h \
-                                $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Solid-900.otf \
-                                $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Regular-400.otf \
-                                $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Brands-400.otf \
-                                $(ALTIVECCOCOA_DIR)/Resources/Fonts/LICENSE-Font-Awesome.txt
-endif
+ALTIVECCOCOA_REQUIRED_FILES = $(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a \
+                              $(ALTIVECCOCOA_DIR)/include/AltivecCocoa.h \
+                              $(ALTIVECCOCOA_DIR)/include/AIViewController.h \
+                              $(ALTIVECCOCOA_DIR)/include/AICookieCutterWindowController.h \
+                              $(ALTIVECCOCOA_DIR)/include/AIWebViewController.h \
+                              $(ALTIVECCOCOA_DIR)/include/AIFontAwesome.h \
+                              $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Solid-900.otf \
+                              $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Regular-400.otf \
+                              $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Brands-400.otf \
+                              $(ALTIVECCOCOA_DIR)/Resources/Fonts/LICENSE-Font-Awesome.txt
 
 # --- Flags ---
 IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wconversion -Wsign-conversion -Wfloat-conversion \
@@ -170,29 +133,19 @@ IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wco
 IOS_FRAMEWORKS = -framework UIKit -framework Foundation -framework CoreGraphics
 ifeq ($(ALTIVECCORE_REQUIRED),1)
   ifneq ($(strip $(ALTIVECCORE_DIR)),)
-    ifeq ($(ALTIVECCORE_LINKAGE),dynamic)
-      IOS_FRAMEWORKS += -F$(ALTIVECCORE_DIR)/lib -framework AltivecCore \
-                        -Wl,-rpath,@executable_path/Frameworks
-    else
-      IOS_FRAMEWORKS += $(ALTIVECCORE_DIR)/lib/libAICURLConnection.a \
-                        $(ALTIVECCORE_DIR)/lib/libcurl.a \
-                        $(ALTIVECCORE_DIR)/lib/libssl.a \
-                        $(ALTIVECCORE_DIR)/lib/libcrypto.a \
-                        $(ALTIVECCORE_DIR)/lib/libz.a \
-                        $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
-                        $(ALTIVECCORE_DIR)/lib/libcjson.a
-    endif
+    IOS_FRAMEWORKS += $(ALTIVECCORE_DIR)/lib/libAICURLConnection.a \
+                      $(ALTIVECCORE_DIR)/lib/libcurl.a \
+                      $(ALTIVECCORE_DIR)/lib/libssl.a \
+                      $(ALTIVECCORE_DIR)/lib/libcrypto.a \
+                      $(ALTIVECCORE_DIR)/lib/libz.a \
+                      $(ALTIVECCORE_DIR)/lib/libsqlite3.a \
+                      $(ALTIVECCORE_DIR)/lib/libcjson.a
   endif
 endif
 ifeq ($(ALTIVECCOCOA_REQUIRED),1)
   ifneq ($(strip $(ALTIVECCOCOA_DIR)),)
-    ifeq ($(ALTIVECCOCOA_LINKAGE),dynamic)
-      IOS_FRAMEWORKS += -F$(ALTIVECCOCOA_DIR)/lib -framework AltivecCocoa \
-                        -Wl,-rpath,@executable_path/Frameworks
-    else
-      IOS_FRAMEWORKS += $(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a \
-                        -framework CoreText
-    endif
+    IOS_FRAMEWORKS += $(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a \
+                      -framework CoreText
   endif
 endif
 
@@ -262,9 +215,6 @@ altiveccore-bootstrap:
 		exit 1; \
 	fi
 	@probe="$(ALTIVECCORE_DIR)/lib/libcjson.a"; target=phone-static; \
-	if [ "$(ALTIVECCORE_LINKAGE)" = "dynamic" ]; then \
-		probe="$(ALTIVECCORE_DIR)/lib/AltivecCore.framework/AltivecCore"; target=phone-all; \
-	fi; \
 	if [ ! -e "$$probe" ]; then \
 		echo " [!] Missing AltivecCore artifact ($$probe), running bootstrap build ($$target)..."; \
 		$(MAKE) -C $(ALTIVEC_ROOT)/libs/core $$target; \
@@ -295,9 +245,6 @@ altiveccocoa-bootstrap:
 		exit 1; \
 	fi
 	@probe="$(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a"; target=phone-static; \
-	if [ "$(ALTIVECCOCOA_LINKAGE)" = "dynamic" ]; then \
-		probe="$(ALTIVECCOCOA_DIR)/lib/AltivecCocoa.framework/AltivecCocoa"; target=phone-all; \
-	fi; \
 	if [ ! -e "$$probe" ]; then \
 		echo " [!] Missing AltivecCocoa artifact ($$probe), running bootstrap build ($$target)..."; \
 		$(MAKE) -C $(ALTIVEC_ROOT)/libs/cocoa $$target; \
@@ -372,20 +319,11 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin $(PHONE_BUNDLE_DEPS)
 			done ; \
 		fi ; \
 	done
-	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ] && [ "$(ALTIVECCORE_LINKAGE)" = "dynamic" ] && [ -d "$(ALTIVECCORE_FRAMEWORK)" ]; then \
-		echo "  > embedding AltivecCore.framework" ; \
-		mkdir -p $@/Frameworks ; \
-		cp -RP $(ALTIVECCORE_FRAMEWORK) $@/Frameworks/ ; \
-	elif [ "$(ALTIVECCORE_REQUIRED)" = "1" ] && [ -f "$(ALTIVECCORE_DIR)/lib/cacert.pem" ]; then \
+	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ] && [ -f "$(ALTIVECCORE_DIR)/lib/cacert.pem" ]; then \
 		echo "  > copying cacert.pem" ; \
 		cp "$(ALTIVECCORE_DIR)/lib/cacert.pem" $@/ ; \
 	fi
-	@if [ "$(ALTIVECCOCOA_REQUIRED)" = "1" ] && [ "$(ALTIVECCOCOA_LINKAGE)" = "dynamic" ] && [ -d "$(ALTIVECCOCOA_FRAMEWORK)" ]; then \
-		echo "  > embedding AltivecCocoa.framework" ; \
-		mkdir -p $@/Frameworks ; \
-		cp -RP $(ALTIVECCOCOA_FRAMEWORK) $@/Frameworks/ ; \
-	fi
-	@if [ "$(ALTIVECCOCOA_REQUIRED)" = "1" ] && [ "$(ALTIVECCOCOA_LINKAGE)" = "static" ] && [ -d "$(ALTIVECCOCOA_RESOURCE_DIR)/Fonts" ]; then \
+	@if [ "$(ALTIVECCOCOA_REQUIRED)" = "1" ] && [ -d "$(ALTIVECCOCOA_RESOURCE_DIR)/Fonts" ]; then \
 		echo "  > copying AltivecCocoa fonts" ; \
 		mkdir -p $@/Fonts ; \
 		cp "$(ALTIVECCOCOA_RESOURCE_DIR)"/Fonts/*.otf $@/Fonts/ ; \

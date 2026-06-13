@@ -1478,10 +1478,10 @@ typedef enum {
  * with the process font manager via CTFontManager. Idempotent — an
  * already-registered face is logged and skipped.
  *
- * Static linkage resolves <bundle> to the app bundle; dynamic linkage resolves
- * it to AltivecCocoa.framework. +fontForStyle:size: needs registration, so
- * call this once at launch if you use Font Awesome as a UIFont. The image
- * rasteriser reads OTF files by path and does not require registration. */
+ * Phone apps stage the fonts into the app bundle. +fontForStyle:size: needs
+ * registration, so call this once at launch if you use Font Awesome as a
+ * UIFont. The image rasteriser reads OTF files by path and does not require
+ * registration. */
 + (void)registerBundledFonts;
 
 /* The Font Awesome UIFont at `size` points for use as a UILabel/UIButton font

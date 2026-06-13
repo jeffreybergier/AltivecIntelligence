@@ -1,5 +1,5 @@
 # AltivecIntelligence AltivecCocoa Master Makefile
-# Builds AltivecCocoa as Mac and iPhone static libraries/frameworks.
+# Builds AltivecCocoa as a phone static library and Mac static/framework artifacts.
 
 all: mac-all phone-all
 
@@ -29,15 +29,9 @@ phone-static:
 	@echo "==========================================================="
 	$(MAKE) -f Makefile-phone static
 
-phone-dynamic:
-	@echo "==========================================================="
-	@echo "BUILDING PHONE ALTIVECCOCOA.framework (armv7, arm64)"
-	@echo "==========================================================="
-	$(MAKE) -f Makefile-phone dynamic
-
 phone-all:
 	@echo "==========================================================="
-	@echo "BUILDING PHONE STATIC LIB + ALTIVECCOCOA.framework"
+	@echo "BUILDING PHONE ALTIVECCOCOA STATIC LIBRARY (armv7, arm64)"
 	@echo "==========================================================="
 	$(MAKE) -f Makefile-phone all
 
@@ -52,5 +46,5 @@ prune-intermediates:
 	rm -rf build-mac/intermediate build-mac/stamps build-mac/prefix \
 	       build-phone/intermediate build-phone/stamps build-phone/prefix
 
-.PHONY: all mac-static mac-dynamic mac-all mac phone-static phone-dynamic \
+.PHONY: all mac-static mac-dynamic mac-all mac phone-static \
         phone-all phone clean prune-intermediates

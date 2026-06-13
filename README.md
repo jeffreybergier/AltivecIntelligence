@@ -178,8 +178,10 @@ networking, SQLite, and cJSON even on Mac OS X Tiger.
 - [`altivec_common_phone.mk`](./altivec_common_phone.mk): A "parent" Makefile with the general rules for compiling Phone apps
 - [`templates`](./templates/): Reusable templates for end users (compose + thin Makefiles for new app projects)
 - [`templates/compose.yml`](./templates/compose.yml): The compose file end users drop into their own app repo (prebuilt GHCR image, app mounted at `/repo/user`). **This is the file most people want.**
+- [`templates/altivec-release.yml`](./templates/altivec-release.yml): Optional release config for version bumps, tags, and staged release assets.
+- [`templates/github-release.yml`](./templates/github-release.yml): Optional GitHub Actions workflow that builds and uploads configured release assets.
 - [`compose.yml`](./compose.yml): The **engine-development** compose — clone-and-build the image locally and mount your live checkout at `/repo/altivec`. Only needed if you are customizing the engine itself.
-- [`bin`](./bin/): Runtime scripts on `PATH` inside the image — `altivec-deploy` (push/run apps on hardware), `altivec-chooser` (AI CLI picker)
+- [`bin`](./bin/): Runtime scripts on `PATH` inside the image — `altivec-deploy` (push/run apps on hardware), `altivec-release` (version/tag helper), `altivec-chooser` (AI CLI picker)
 - `AGENTS.md`: AI mandates and technical constraints (also surfaced as CLAUDE.md / GEMINI.md via symlink).
 
 ## 🧩 Makefile Templates
@@ -189,26 +191,25 @@ Use these thin templates in your app repo:
 
 Optional AltivecCore knobs:
 - `ALTIVECCORE_REQUIRED=1`: enforce required Core artifacts at validate time.
-- `ALTIVECCORE_LINKAGE=dynamic|static`: choose framework or static archives.
+- `ALTIVECCORE_LINKAGE=dynamic|static`: choose framework or static archives on
+  macOS. Phone apps support `static` only.
 - `ALTIVECCORE_DIR=/path/to/altivec/libs/core/build-mac|build-phone`: override autodetect.
 
-For iPhone apps, `static` is the default because embedded frameworks require
-iOS 8+ at runtime. Use `ALTIVECCORE_LINKAGE=dynamic` only for iOS 8+ builds
-where you specifically want framework embedding.
+For iPhone apps, AltivecCore is static-only because embedded frameworks require
+iOS 8+ at runtime and break the iOS 4.3-7 compatibility target.
 
 Optional AltivecCocoa knobs:
 - `ALTIVECCOCOA_REQUIRED=1`: enforce required Cocoa artifacts at validate time.
 - `ALTIVECCOCOA_LINKAGE=dynamic|static`: choose `AltivecCocoa.framework` or
-  `libAltivecCocoa.a`.
+  `libAltivecCocoa.a` on macOS. Phone apps support `static` only.
 - `ALTIVECCOCOA_DIR=/path/to/altivec/libs/cocoa/build-mac|build-phone`:
   override autodetect.
 
 AltivecCocoa contains reusable nibless AppKit controller classes such as
 `AIViewController`, `AICookieCutterWindowController`, and `AIWebViewController`,
 plus the cross-platform `AIFontAwesome` icon helper. Static AltivecCocoa apps
-stage Font Awesome OTFs into the app bundle; dynamic apps use the fonts inside
-`AltivecCocoa.framework`. Like AltivecCore, phone apps default to
-`ALTIVECCOCOA_LINKAGE=static`; opt into `dynamic` only for iOS 8+.
+stage Font Awesome OTFs into the app bundle; macOS dynamic apps use the fonts
+inside `AltivecCocoa.framework`.
 The bundled Font Awesome Free OTFs are licensed under SIL OFL 1.1; their
 notice is copied with the font files.
 
@@ -230,6 +231,42 @@ Bundle resource knobs:
   resource processing. Phone builds also support `PHONE_EXTRA_BUNDLE_STEPS`.
 - `PHONE_LDID_SIGN=1` or `PHONE_LDID_ENTITLEMENTS=Entitlements.plist`: opt in
   to `ldid` pseudo-signing before IPA packaging.
+
+## Release Helper
+
+`altivec-release` is an optional YAML-driven helper for app repositories that
+want one command to keep `Info.plist` versions, git commits, tags, and staged
+release assets aligned.
+
+Copy [`templates/altivec-release.yml`](./templates/altivec-release.yml) to
+`.altivec-release.yml` in your app repo and edit the app name, plist paths,
+and target artifact paths. Then run commands from the app repo root:
+
+```bash
+altivec-release current
+altivec-release check 1.2.3
+altivec-release bump patch --no-push
+altivec-release bump --set 1.3.0 --dry-run
+altivec-release build
+altivec-release stage 1.3.0 --dist dist
+```
+
+For GitHub Actions, a tagged release can validate the tag against the configured
+plist versions and publish environment variables with:
+
+```bash
+altivec-release ci-env "$GITHUB_REF_NAME" --github-env "$GITHUB_ENV"
+```
+
+The helper supports Mac-only, iPhone-only, and paired Mac/iPhone app layouts.
+It only knows what is in `.altivec-release.yml`; build commands and artifact
+names stay project-specific.
+
+To publish releases from GitHub, copy
+[`templates/github-release.yml`](./templates/github-release.yml) into
+`.github/workflows/release.yml`. That workflow runs `altivec-release` inside
+the Altivec container, builds the configured targets, stages `dist/*`, and
+uploads those files to the tag's GitHub release.
 
 ## 🔧 Customizing the Container
 
@@ -275,7 +312,7 @@ edits. To make engine changes take effect you must either:
 
 ## 🚧 To-Do List
 1. [ ] Enable on-device debugging for iOS
-1. [X] Add libraries as dynamic frameworks (e.g. `AltivecCore.framework`)
+1. [X] Add macOS libraries as dynamic frameworks (e.g. `AltivecCore.framework`)
 1. [ ] Add `libgit` as a dependency for file syncing
 1. [ ] Setup Github Actions
    1. [ ] Build release apps and save in artifact storage

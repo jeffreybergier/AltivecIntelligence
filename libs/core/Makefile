@@ -1,5 +1,5 @@
 # AltivecIntelligence AltivecCore Master Makefile
-# Builds static archives plus AltivecCore.framework for Phone and Mac.
+# Builds phone static archives and Mac static/framework artifacts.
 
 all: phone-all mac-all
 
@@ -23,13 +23,7 @@ mac-dynamic:
 	@echo "==========================================================="
 	$(MAKE) -f Makefile-mac dynamic
 
-phone-dynamic:
-	@echo "==========================================================="
-	@echo "BUILDING PHONE ALTIVECCORE.framework (armv7, arm64)"
-	@echo "==========================================================="
-	$(MAKE) -f Makefile-phone dynamic
-
-# --- Combined: Static Libraries + AltivecCore.framework ---
+# --- Combined/Alias Targets ---
 mac-all:
 	@echo "==========================================================="
 	@echo "BUILDING MAC STATIC LIBS + ALTIVECCORE.framework"
@@ -38,7 +32,7 @@ mac-all:
 
 phone-all:
 	@echo "==========================================================="
-	@echo "BUILDING PHONE STATIC LIBS + ALTIVECCORE.framework"
+	@echo "BUILDING PHONE ALTIVECCORE STATIC LIBRARIES (armv7, arm64)"
 	@echo "==========================================================="
 	$(MAKE) -f Makefile-phone all
 
@@ -57,4 +51,4 @@ prune-intermediates:
 	       build-phone/intermediate \
 	       build-phone/stamps
 
-.PHONY: all phone-static mac-static mac-dynamic phone-dynamic mac-all phone-all phone mac clean prune-intermediates
+.PHONY: all phone-static mac-static mac-dynamic mac-all phone-all phone mac clean prune-intermediates

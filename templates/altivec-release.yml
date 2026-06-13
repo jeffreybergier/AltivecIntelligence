@@ -1,0 +1,39 @@
+# Copy this file to .altivec-release.yml at the root of an app repository.
+# Paths are relative to the config file.
+
+app_name: MyApp
+tag_prefix: v
+
+version:
+  source: source/macOS/Resources/Info.plist
+  keys:
+    - CFBundleShortVersionString
+    - CFBundleVersion
+  plists:
+    - source/macOS/Resources/Info.plist
+    - source/iOS/Resources/Info.plist
+
+# Optional files to include in the version bump commit.
+versioned_files: []
+
+release:
+  commit_message: "Version {version}"
+
+# Optional build/stage metadata for release workflows.
+# Remove the target you do not ship.
+targets:
+  - name: macOS
+    workdir: source/macOS
+    build:
+      - make clean
+      - make release
+    artifact: source/macOS/build-release/MyApp.zip
+    asset_name: MyApp-{version}-macOS.zip
+
+  - name: iOS
+    workdir: source/iOS
+    build:
+      - make clean
+      - make release
+    artifact: source/iOS/build-release/MyApp.ipa
+    asset_name: MyApp-{version}-iOS.ipa

@@ -1,0 +1,88 @@
+app_name: AltivecIntelligence
+tag_prefix: v
+
+version:
+  source: apps/SingleWindow/Resources/Info.plist
+  keys:
+    - CFBundleShortVersionString
+    - CFBundleVersion
+  plists:
+    - apps/SingleWindow/Resources/Info.plist
+    - apps/SingleScreen/Resources/Info.plist
+    - apps/CURLmac/Resources/Info.plist
+    - apps/CURLphone/Resources/Info.plist
+    - libs/core/Resources/Info-mac.plist
+    - libs/cocoa/Resources/Info-mac.plist
+
+release:
+  commit_message: "Version {version}"
+
+targets:
+  - name: AltivecCore
+    workdir: libs/core
+    build:
+      - make clean
+      - make all
+      - mkdir -p build-release
+      - cd build-mac/lib && zip -rqy ../../build-release/AltivecCore-macOS.framework.zip AltivecCore.framework
+      - rm -rf build-release/AltivecCore-iOS-static
+      - mkdir -p build-release/AltivecCore-iOS-static
+      - cp -R build-phone/lib build-release/AltivecCore-iOS-static/
+      - cp -R build-phone/include build-release/AltivecCore-iOS-static/
+      - cd build-release && zip -rqy AltivecCore-iOS-static.zip AltivecCore-iOS-static
+    artifacts:
+      - path: libs/core/build-release/AltivecCore-macOS.framework.zip
+        asset_name: AltivecCore-{version}-macOS.framework.zip
+      - path: libs/core/build-release/AltivecCore-iOS-static.zip
+        asset_name: AltivecCore-{version}-iOS-static.zip
+
+  - name: AltivecCocoa
+    workdir: libs/cocoa
+    build:
+      - make clean
+      - make all
+      - mkdir -p build-release
+      - cd build-mac/lib && zip -rqy ../../build-release/AltivecCocoa-macOS.framework.zip AltivecCocoa.framework
+      - rm -rf build-release/AltivecCocoa-iOS-static
+      - mkdir -p build-release/AltivecCocoa-iOS-static
+      - cp -R build-phone/lib build-release/AltivecCocoa-iOS-static/
+      - cp -R build-phone/include build-release/AltivecCocoa-iOS-static/
+      - cp -R build-phone/Resources build-release/AltivecCocoa-iOS-static/
+      - cd build-release && zip -rqy AltivecCocoa-iOS-static.zip AltivecCocoa-iOS-static
+    artifacts:
+      - path: libs/cocoa/build-release/AltivecCocoa-macOS.framework.zip
+        asset_name: AltivecCocoa-{version}-macOS.framework.zip
+      - path: libs/cocoa/build-release/AltivecCocoa-iOS-static.zip
+        asset_name: AltivecCocoa-{version}-iOS-static.zip
+
+  - name: SingleWindow
+    workdir: apps/SingleWindow
+    build:
+      - make clean
+      - make release
+    artifact: apps/SingleWindow/build-release/SingleWindow.zip
+    asset_name: SingleWindow-{version}-macOS.zip
+
+  - name: SingleScreen
+    workdir: apps/SingleScreen
+    build:
+      - make clean
+      - make release
+    artifact: apps/SingleScreen/build-release/SingleScreen.ipa
+    asset_name: SingleScreen-{version}-iOS.ipa
+
+  - name: CURLmac
+    workdir: apps/CURLmac
+    build:
+      - ALTIVEC_ROOT=../.. make clean
+      - ALTIVEC_ROOT=../.. make release
+    artifact: apps/CURLmac/build-release/CURLmac.zip
+    asset_name: CURLmac-{version}-macOS.zip
+
+  - name: CURLphone
+    workdir: apps/CURLphone
+    build:
+      - ALTIVEC_ROOT=../.. make clean
+      - ALTIVEC_ROOT=../.. make release
+    artifact: apps/CURLphone/build-release/CURLphone.ipa
+    asset_name: CURLphone-{version}-iOS.ipa

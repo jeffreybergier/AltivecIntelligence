@@ -53,9 +53,9 @@ Located in /osxcross/target/SDK/:
 | **iPhone** | `clang-14` | 8.4 | armv7, arm64 | -O3 / -O0 |
 
 ## 🔗 Library Build System (AltivecCore)
-Libraries (libcurl, OpenSSL, zlib, SQLite, cJSON) are built as static binaries (`.a`) and bundled into `AltivecCore.framework`.
+Libraries (libcurl, OpenSSL, zlib, SQLite, cJSON) are built as static binaries (`.a`). Mac builds also bundle them into `AltivecCore.framework`.
 - **Orchestration:** `/altivec/libs/core/Makefile` manages separate `Makefile-mac` and `Makefile-phone` builds. Prebuilt outputs ship in the GHCR image at `/altivec/libs/core/build-{mac,phone}` — user apps opt in with `ALTIVECCORE_REQUIRED=1`.
-- **iPhone Linkage:** `ALTIVECCORE_LINKAGE=dynamic` embeds `AltivecCore.framework` and is an iOS 8+ runtime path. Use `ALTIVECCORE_LINKAGE=static` for iOS 4.3-7 devices.
+- **iPhone Linkage:** iPhone apps use static AltivecCore linkage only. Embedded iOS frameworks require iOS 8+ and are not supported for the iOS 4.3-7 compatibility target.
 - **AICURLConnection**: A robust `libcurl` wrapper with full `NSURLConnection` parity for asynchronous transfers and header parsing.
 - **Certificate Handling**: `cacert.pem` is automatically bundled with apps to ensure SSL verification works.
 
