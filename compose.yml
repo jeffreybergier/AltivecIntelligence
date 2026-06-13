@@ -26,8 +26,6 @@ services:
     volumes:
       - ~/.altivec:/root
       - .:/repo/altivec
-      - ../ENIL-cocoa:/repo/ENIL-cocoa
-      - ../ENIL-cloud:/repo/ENIL-cloud
       # Uncomment to add more tools into the container
       # ../extras:/repo/extras
     entrypoint: /bin/bash

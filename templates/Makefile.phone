@@ -4,6 +4,16 @@
 APP_NAME = MyPhoneApp
 SOURCES = main.m AppDelegate.m
 
+# Optional shared source roots. The common engine uses these for vpath source
+# lookup and static analyzer path resolution.
+# SOURCE_DIRS = ../shared
+
+# Optional per-source-group flags. Useful when app UI files use ARC but shared
+# engine files stay MRC, or when shared portable C needs a different warning
+# posture for iOS analysis/builds.
+# PHONE_SOURCE_FLAGS = -fobjc-arc
+# PHONE_EXTRA_SOURCE_FLAGS = -Wno-pedantic -Wno-conversion
+
 # Blind-copy ordinary root resources, including iOS icons and launch images.
 # Info.plist must live here; the common Makefile stages it to the app root.
 RES_DIR = Resources

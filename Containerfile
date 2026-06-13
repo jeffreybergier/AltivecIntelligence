@@ -321,6 +321,7 @@ RUN cd libs/cocoa && make all && make prune-intermediates
 # Common mk fragments must land before the apps build below — each app's
 # Makefile does `include /altivec/altivec_common_{mac,phone}.mk` by
 # absolute path.
+COPY altivec_common_app.mk   ./
 COPY altivec_common_mac.mk   ./
 COPY altivec_common_phone.mk ./
 

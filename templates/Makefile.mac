@@ -4,6 +4,10 @@
 APP_NAME = MyMacApp
 SOURCES = main.m AppDelegate.m
 
+# Optional shared source roots. The common engine uses these for vpath source
+# lookup and static analyzer path resolution.
+# SOURCE_DIRS = ../shared
+
 # Blind-copy ordinary resources into Contents/Resources. Info.plist must live
 # here; the common Makefile stages it to Contents/Info.plist.
 RES_DIR = Resources

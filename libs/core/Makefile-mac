@@ -31,6 +31,13 @@ CORE_COMPONENT_LIBS=libAICURLConnection.a \
 CORE_STATIC_LIBS=libAltivecCore.a $(CORE_COMPONENT_LIBS)
 PUBLIC_LIBS=$(addprefix $(PUBLIC_LIB_DIR)/,$(CORE_STATIC_LIBS))
 PUBLIC_COMPONENT_LIBS=$(addprefix $(PUBLIC_LIB_DIR)/,$(CORE_COMPONENT_LIBS))
+CURL_PUBLIC_FILES=libAICURLConnection.a \
+                  libcurl.a \
+                  libssl.a \
+                  libcrypto.a \
+                  libz.a \
+                  cacert.pem
+SQLITE_PUBLIC_FILES=libsqlite3.a
 CORE_INPUTS_PPC=$(INTERMEDIATE)/thin/ppc/libAltivecCoreWrapper.a \
                 $(addprefix $(INTERMEDIATE)/thin/ppc/,$(CORE_COMPONENT_LIBS))
 CORE_INPUTS_X86=$(INTERMEDIATE)/thin/x86/libAltivecCoreWrapper.a \
@@ -102,33 +109,13 @@ sqlite-ready:
 		$(MAKE) -C $(CWD)/../sqlite mac; \
 	fi
 
-$(PUBLIC_LIB_DIR)/libAICURLConnection.a: | curl-ready
+$(addprefix $(PUBLIC_LIB_DIR)/,$(CURL_PUBLIC_FILES)): $(PUBLIC_LIB_DIR)/%: | curl-ready
 	mkdir -p $(PUBLIC_LIB_DIR)
-	cp $(CURL_DIR)/lib/libAICURLConnection.a $@
+	cp $(CURL_DIR)/lib/$* $@
 
-$(PUBLIC_LIB_DIR)/libcurl.a: | curl-ready
+$(addprefix $(PUBLIC_LIB_DIR)/,$(SQLITE_PUBLIC_FILES)): $(PUBLIC_LIB_DIR)/%: | sqlite-ready
 	mkdir -p $(PUBLIC_LIB_DIR)
-	cp $(CURL_DIR)/lib/libcurl.a $@
-
-$(PUBLIC_LIB_DIR)/libssl.a: | curl-ready
-	mkdir -p $(PUBLIC_LIB_DIR)
-	cp $(CURL_DIR)/lib/libssl.a $@
-
-$(PUBLIC_LIB_DIR)/libcrypto.a: | curl-ready
-	mkdir -p $(PUBLIC_LIB_DIR)
-	cp $(CURL_DIR)/lib/libcrypto.a $@
-
-$(PUBLIC_LIB_DIR)/libz.a: | curl-ready
-	mkdir -p $(PUBLIC_LIB_DIR)
-	cp $(CURL_DIR)/lib/libz.a $@
-
-$(PUBLIC_LIB_DIR)/libsqlite3.a: | sqlite-ready
-	mkdir -p $(PUBLIC_LIB_DIR)
-	cp $(SQLITE_DIR)/lib/libsqlite3.a $@
-
-$(PUBLIC_LIB_DIR)/cacert.pem: | curl-ready
-	mkdir -p $(PUBLIC_LIB_DIR)
-	cp $(CURL_DIR)/lib/cacert.pem $@
+	cp $(SQLITE_DIR)/lib/$* $@
 
 define thin_component_rule
 $(INTERMEDIATE)/thin/$1/%.a: $(PUBLIC_LIB_DIR)/%.a

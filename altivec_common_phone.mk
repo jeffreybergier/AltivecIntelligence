@@ -47,9 +47,8 @@ ifneq ($(strip $(PHONE_LDID_ENTITLEMENTS)),)
 endif
 
 # --- Object Mapping ---
-# Support both .m and .c files in SOURCES and EXTRA_SOURCES
-ALL_SOURCES = $(SOURCES) $(EXTRA_SOURCES)
-OBJS = $(addprefix $(INT_DIR)/, $(filter %.o, $(SOURCES:.m=.o) $(SOURCES:.c=.o) $(EXTRA_SOURCES:.m=.o) $(EXTRA_SOURCES:.c=.o)))
+include $(ALTIVEC_ROOT)/altivec_common_app.mk
+OBJS = $(APP_OBJS)
 
 # --- Auto-detect AltivecCore ---
 # iPhone builds link AltivecCore statically. Embedded iOS frameworks require
@@ -80,6 +79,9 @@ ALTIVECCORE_REQUIRED_FILES = $(ALTIVECCORE_DIR)/lib/libAltivecCore.a \
                              $(ALTIVECCORE_DIR)/include/AltivecCore.h \
                              $(ALTIVECCORE_DIR)/include/sqlite3.h \
                              $(ALTIVECCORE_DIR)/include/cJSON.h
+ALTIVECCORE_BOOTSTRAP_PROBE = $(ALTIVECCORE_DIR)/lib/libAltivecCore.a
+ALTIVECCORE_BOOTSTRAP_TARGET = phone-static
+ALTIVECCORE_BUILD_DIR = build-phone
 
 # --- Auto-detect AltivecCocoa ---
 # iPhone builds link AltivecCocoa statically and stage font resources into the
@@ -116,6 +118,10 @@ ALTIVECCOCOA_REQUIRED_FILES = $(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a \
                               $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Regular-400.otf \
                               $(ALTIVECCOCOA_DIR)/Resources/Fonts/FA7-Brands-400.otf \
                               $(ALTIVECCOCOA_DIR)/Resources/Fonts/LICENSE-Font-Awesome.txt
+ALTIVECCOCOA_BOOTSTRAP_PROBE = $(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a
+ALTIVECCOCOA_BOOTSTRAP_TARGET = phone-static
+ALTIVECCOCOA_BUILD_DIR = build-phone
+ALTIVEC_PLATFORM_TARGET = phone
 
 # --- Flags ---
 IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wconversion -Wsign-conversion -Wfloat-conversion \
@@ -123,6 +129,13 @@ IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wco
             -Wno-unused-command-line-argument -Wunguarded-availability -Wno-semicolon-before-method-body \
             -isysroot $(IOS_SDK_PATH) \
             -B$(BIN_DIR)
+
+PHONE_SOURCE_FLAGS ?=
+PHONE_EXTRA_SOURCE_FLAGS ?=
+PHONE_ANALYZE_SOURCE_FLAGS ?= $(PHONE_SOURCE_FLAGS)
+PHONE_ANALYZE_EXTRA_SOURCE_FLAGS ?= $(PHONE_EXTRA_SOURCE_FLAGS)
+$(APP_SOURCE_OBJS): IOS_FLAGS += $(PHONE_SOURCE_FLAGS)
+$(APP_EXTRA_OBJS): IOS_FLAGS += $(PHONE_EXTRA_SOURCE_FLAGS)
 
 IOS_FRAMEWORKS = -framework UIKit -framework Foundation -framework CoreGraphics
 ifeq ($(ALTIVECCORE_REQUIRED),1)
@@ -152,108 +165,32 @@ clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf build-release build-debug $(ANALYZE_OUTPUT_DIR)
 
-# --- Static analyzer ---
-# Local Makefiles set ANALYZE_DIRS to the same dirs they vpath sources from,
-# so basenames like 'foo.c' resolve to a real path. vpath rewrites
-# prerequisite lookups for make rules but does NOT rewrite a recipe's argv,
-# so the analyzer (which we invoke directly on source files, not via the
-# pattern rules) needs its own resolution step.
-ANALYZE_DIRS       ?= .
-ANALYZE_OUTPUT_DIR ?= build-analyze
-ANALYZE_OUTPUT     ?= $(ANALYZE_OUTPUT_DIR)/analyze.txt
-analyze_find        = $(firstword $(foreach d,$(ANALYZE_DIRS),$(wildcard $(d)/$(1))))
-ANALYZE_SOURCES     = $(foreach s,$(ALL_SOURCES),$(call analyze_find,$(s)))
-
 analyze: validate
 	@mkdir -p $(ANALYZE_OUTPUT_DIR)
 	@echo "--- Running Clang Static Analyzer (arm64) ---"
 	@echo "  > writing report to $(ANALYZE_OUTPUT)"
-	@$(CLANG14) --analyze -Xanalyzer -analyzer-output=text \
-		-target arm64-apple-ios4.3 -arch arm64 -isysroot $(IOS_SDK_PATH) \
-		$(IOS_FLAGS) $(ANALYZE_SOURCES) > $(ANALYZE_OUTPUT) 2>&1 || true
-	@warnings=$$(grep -cE '^.+:[0-9]+:[0-9]+: warning:' $(ANALYZE_OUTPUT) 2>/dev/null || true); \
-	errors=$$(grep -cE '^.+:[0-9]+:[0-9]+: error:' $(ANALYZE_OUTPUT) 2>/dev/null || true); \
-	echo "  > $${warnings:-0} warning(s), $${errors:-0} error(s) — see $(ANALYZE_OUTPUT)"
+	$(call analyze_check_sources)
+	@: > $(ANALYZE_OUTPUT)
+	@if [ -n "$(strip $(ANALYZE_SOURCE_FILES))" ]; then \
+		echo "  > analyzing app sources"; \
+		$(CLANG14) --analyze -Xanalyzer -analyzer-output=text \
+			-target arm64-apple-ios4.3 -arch arm64 -isysroot $(IOS_SDK_PATH) \
+			$(IOS_FLAGS) $(PHONE_ANALYZE_SOURCE_FLAGS) \
+			$(ANALYZE_SOURCE_FILES) >> $(ANALYZE_OUTPUT) 2>&1 || true; \
+	fi
+	@if [ -n "$(strip $(ANALYZE_EXTRA_SOURCE_FILES))" ]; then \
+		echo "  > analyzing extra sources"; \
+		$(CLANG14) --analyze -Xanalyzer -analyzer-output=text \
+			-target arm64-apple-ios4.3 -arch arm64 -isysroot $(IOS_SDK_PATH) \
+			$(IOS_FLAGS) $(PHONE_ANALYZE_EXTRA_SOURCE_FLAGS) \
+			$(ANALYZE_EXTRA_SOURCE_FILES) >> $(ANALYZE_OUTPUT) 2>&1 || true; \
+	fi
+	$(call analyze_report)
 
-# Directories the local Makefile wants validated before a build/analyze runs.
-# Mirrors ANALYZE_DIRS in shape: a positive list, only what's explicitly given
-# gets checked. Dep dirs (cJSON, qrcodegen, libcurl headers, etc.) are
-# intentionally NOT included by default — those are managed by their own
-# build systems and have their own bootstrap targets.
-VALIDATE_PATHS ?=
+validate: validate-sdk validate-paths libs-ready cocoa-ready
 
-validate:
+validate-sdk:
 	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi
-	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory altiveccore-bootstrap; fi
-	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory libs-ready; fi
-	@if [ "$(ALTIVECCOCOA_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory altiveccocoa-bootstrap; fi
-	@if [ "$(ALTIVECCOCOA_REQUIRED)" = "1" ]; then $(MAKE) --no-print-directory cocoa-ready; fi
-	@for dir in $(VALIDATE_PATHS); do \
-		if [ ! -d "$$dir" ]; then \
-			echo " [!] ERROR: Project directory missing: $$dir"; \
-			exit 1; \
-		fi; \
-	done
-
-altiveccore-bootstrap:
-	@if [ "$(ALTIVECCORE_REQUIRED)" != "1" ]; then exit 0; fi
-	@if [ -z "$(ALTIVECCORE_DIR)" ]; then \
-		echo " [!] ERROR: AltivecCore is required but ALTIVECCORE_DIR is not set."; \
-		echo "     Set ALTIVECCORE_DIR=/path/to/libs/core/build-phone or build at $(ALTIVEC_ROOT)/libs/core/build-phone."; \
-		exit 1; \
-	fi
-	@probe="$(ALTIVECCORE_DIR)/lib/libAltivecCore.a"; target=phone-static; \
-	if [ ! -e "$$probe" ]; then \
-		echo " [!] Missing AltivecCore artifact ($$probe), running bootstrap build ($$target)..."; \
-		$(MAKE) -C $(ALTIVEC_ROOT)/libs/core $$target; \
-	fi
-
-libs-ready:
-	@if [ "$(ALTIVECCORE_REQUIRED)" != "1" ]; then exit 0; fi
-	@if [ -z "$(ALTIVECCORE_DIR)" ]; then \
-		echo " [!] ERROR: AltivecCore is required but ALTIVECCORE_DIR is not set."; \
-		echo "     Set ALTIVECCORE_DIR=/path/to/libs/core/build-phone."; \
-		exit 1; \
-	fi
-	@missing=""; \
-	for f in $(ALTIVECCORE_REQUIRED_FILES); do \
-		if [ ! -f "$$f" ]; then missing="$$missing $$f"; fi; \
-	done; \
-	if [ -n "$$missing" ]; then \
-		echo " [!] ERROR: Missing required AltivecCore artifacts:$$missing"; \
-		echo "     Build them with: make -C $(ALTIVEC_ROOT)/libs/core phone"; \
-		exit 1; \
-	fi
-
-altiveccocoa-bootstrap:
-	@if [ "$(ALTIVECCOCOA_REQUIRED)" != "1" ]; then exit 0; fi
-	@if [ -z "$(ALTIVECCOCOA_DIR)" ]; then \
-		echo " [!] ERROR: AltivecCocoa is required but ALTIVECCOCOA_DIR is not set."; \
-		echo "     Set ALTIVECCOCOA_DIR=/path/to/libs/cocoa/build-phone or build at $(ALTIVEC_ROOT)/libs/cocoa/build-phone."; \
-		exit 1; \
-	fi
-	@probe="$(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a"; target=phone-static; \
-	if [ ! -e "$$probe" ]; then \
-		echo " [!] Missing AltivecCocoa artifact ($$probe), running bootstrap build ($$target)..."; \
-		$(MAKE) -C $(ALTIVEC_ROOT)/libs/cocoa $$target; \
-	fi
-
-cocoa-ready:
-	@if [ "$(ALTIVECCOCOA_REQUIRED)" != "1" ]; then exit 0; fi
-	@if [ -z "$(ALTIVECCOCOA_DIR)" ]; then \
-		echo " [!] ERROR: AltivecCocoa is required but ALTIVECCOCOA_DIR is not set."; \
-		echo "     Set ALTIVECCOCOA_DIR=/path/to/libs/cocoa/build-phone."; \
-		exit 1; \
-	fi
-	@missing=""; \
-	for f in $(ALTIVECCOCOA_REQUIRED_FILES); do \
-		if [ ! -f "$$f" ]; then missing="$$missing $$f"; fi; \
-	done; \
-	if [ -n "$$missing" ]; then \
-		echo " [!] ERROR: Missing required AltivecCocoa artifacts:$$missing"; \
-		echo "     Build them with: make -C $(ALTIVEC_ROOT)/libs/cocoa phone"; \
-		exit 1; \
-	fi
 
 # --- Internal File Targets ---
 
@@ -282,41 +219,14 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin $(PHONE_BUNDLE_DEPS)
 	@cp $< $@/$(APP_NAME)
 	@echo "  > copying Info.plist"
 	@cp "$(INFO_PLIST)" $@/Info.plist
-	@if [ -d "$(RES_DIR)" ]; then \
-		did_copy=0 ; \
-		for res in "$(RES_DIR)"/*; do \
-			[ -e "$$res" ] || continue ; \
-			[ "$$(basename "$$res")" = "Info.plist" ] && continue ; \
-			if [ "$$did_copy" = "0" ]; then echo "  > copying resources" ; did_copy=1 ; fi ; \
-			cp -R "$$res" $@/ ; \
-		done ; \
-	fi
-	@for dir in $(BUNDLE_FONT_DIRS); do \
-		if [ -d "$$dir" ] && [ "$$(ls -A "$$dir" 2>/dev/null)" ]; then \
-			echo "  > copying fonts from $$dir" ; \
-			mkdir -p $@/Fonts ; \
-			cp -R "$$dir"/* $@/Fonts/ ; \
-		fi ; \
-	done
-	@for dir in $(BUNDLE_LOCALIZATION_DIRS); do \
-		if ls "$$dir"/*.lproj >/dev/null 2>&1; then \
-			echo "  > copying localizations from $$dir" ; \
-			for lproj in "$$dir"/*.lproj; do \
-				[ -d "$$lproj" ] || continue ; \
-				cp -R "$$lproj" $@/ ; \
-			done ; \
-		fi ; \
-	done
+	$(call copy_bundle_resources,$@)
+	$(call copy_bundle_fonts,$@/Fonts)
+	$(call copy_bundle_localizations,$@,copy)
 	@if [ "$(ALTIVECCORE_REQUIRED)" = "1" ] && [ -f "$(ALTIVECCORE_DIR)/lib/cacert.pem" ]; then \
 		echo "  > copying cacert.pem" ; \
 		cp "$(ALTIVECCORE_DIR)/lib/cacert.pem" $@/ ; \
 	fi
-	@if [ "$(ALTIVECCOCOA_REQUIRED)" = "1" ] && [ -d "$(ALTIVECCOCOA_RESOURCE_DIR)/Fonts" ]; then \
-		echo "  > copying AltivecCocoa fonts" ; \
-		mkdir -p $@/Fonts ; \
-		cp "$(ALTIVECCOCOA_RESOURCE_DIR)"/Fonts/*.otf $@/Fonts/ ; \
-		cp "$(ALTIVECCOCOA_RESOURCE_DIR)"/Fonts/LICENSE-Font-Awesome.txt $@/Fonts/ ; \
-	fi
+	$(call copy_altiveccocoa_fonts,1,$@/Fonts)
 	@echo "  > extracting symbols"
 	@$(DSYMUTIL) $< -o $(BUILD_DIR)/$(APP_NAME).dSYM
 	@echo -n "APPL????" > $@/PkgInfo
@@ -348,5 +258,5 @@ $(INT_DIR)/%.o: %.c
 	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
 	           $(IOS_FLAGS) -c $< -o $@
 
-.PHONY: release debug clean analyze validate altiveccore-bootstrap libs-ready \
+.PHONY: release debug clean analyze validate validate-sdk altiveccore-bootstrap libs-ready \
         altiveccocoa-bootstrap cocoa-ready
