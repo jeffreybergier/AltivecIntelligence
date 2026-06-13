@@ -150,11 +150,15 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
+          sources=()
+          for digest in *; do
+            sources+=("${{ env.IMAGE }}@sha256:${digest}")
+          done
           docker buildx imagetools create \
             -t ${{ env.IMAGE }}:latest \
             -t ${{ env.IMAGE }}:${{ needs.prepare.outputs.release_sha }} \
             -t ${{ env.IMAGE }}:${{ needs.prepare.outputs.release_tag }} \
-            $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+            "${sources[@]}"
 
       - name: Inspect image
         run: docker buildx imagetools inspect ${{ env.IMAGE }}:${{ needs.prepare.outputs.release_tag }}
@@ -169,7 +173,7 @@ jobs:
       contents: write
       packages: read
     env:
-      BUILD_IMAGE: ${{ env.IMAGE }}:${{ needs.prepare.outputs.release_tag }}
+      BUILD_IMAGE: ghcr.io/${{ github.repository_owner }}/altivec-intelligence:${{ needs.prepare.outputs.release_tag }}
       RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
       RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
     defaults:
