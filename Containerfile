@@ -125,14 +125,6 @@ ENV OSXCROSS_NO_DSYMUTIL=1
 ENV INSTALLPREFIX=/osxcross/target
 ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib"
 
-# Keep generic native build tools pointed at Ubuntu's toolchain even though the
-# osxcross tools are on PATH. Project makefiles still invoke Apple cross tools
-# explicitly, while npm/gem native extensions use these defaults.
-ENV CC=/usr/bin/gcc \
-    CXX=/usr/bin/g++ \
-    LD=/usr/bin/ld \
-    AR=/usr/bin/ar
-
 # Host bind mounts often carry the macOS UID/GID, so Git running as root inside
 # the container otherwise rejects them as dubious ownership.
 RUN git config --system --add safe.directory "*"
@@ -313,6 +305,16 @@ ENV ALTIVEC_CACHE=/cache \
     GEM_SPEC_CACHE=/cache/gem/specs
 
 RUN mkdir -p /cache
+
+# Keep generic native build tools pointed at Ubuntu's toolchain even though the
+# osxcross tools are on PATH. Project makefiles still invoke Apple cross tools
+# explicitly, while npm/gem native extensions use these defaults. This must be
+# set after the osxcross build, because cctools builds Objective-C sources and
+# cannot use Ubuntu's GCC without the Objective-C frontend.
+ENV CC=/usr/bin/gcc \
+    CXX=/usr/bin/g++ \
+    LD=/usr/bin/ld \
+    AR=/usr/bin/ar
 
 # Runtime helper scripts live in altivec-builder so every downstream image
 # stage inherits host-architecture-correct tools. `altivec-release` is an
