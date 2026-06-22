@@ -125,6 +125,18 @@ ENV OSXCROSS_NO_DSYMUTIL=1
 ENV INSTALLPREFIX=/osxcross/target
 ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib"
 
+# Keep generic native build tools pointed at Ubuntu's toolchain even though the
+# osxcross tools are on PATH. Project makefiles still invoke Apple cross tools
+# explicitly, while npm/gem native extensions use these defaults.
+ENV CC=/usr/bin/gcc \
+    CXX=/usr/bin/g++ \
+    LD=/usr/bin/ld \
+    AR=/usr/bin/ar
+
+# Host bind mounts often carry the macOS UID/GID, so Git running as root inside
+# the container otherwise rejects them as dubious ownership.
+RUN git config --system --add safe.directory "*"
+
 # 3. Install Radare to help with decompilation 
 #    and reverse engineering (optional)
 
@@ -280,6 +292,27 @@ CMD ["/bin/bash"]
 # and targets altivec-builder) gets the same PATH as the prebuilt GHCR
 # image — the bind-mount supplies the files at runtime.
 ENV PATH="/altivec/bin:${PATH}"
+
+# Runtime caches should not default into /root, because many project compose
+# files bind-mount ~/.altivec there. /cache is intended to be backed by a
+# disposable named Docker volume in compose files.
+ENV ALTIVEC_CACHE=/cache \
+    XDG_CACHE_HOME=/cache/xdg \
+    NODE_COMPILE_CACHE=/cache/node/compile \
+    COREPACK_HOME=/cache/corepack \
+    npm_config_cache=/cache/npm \
+    YARN_CACHE_FOLDER=/cache/yarn \
+    PNPM_HOME=/cache/pnpm \
+    GOPATH=/cache/go \
+    GOMODCACHE=/cache/go/pkg/mod \
+    GOCACHE=/cache/go-build \
+    BUNDLE_USER_HOME=/cache/bundle \
+    BUNDLE_USER_CACHE=/cache/bundle/cache \
+    BUNDLE_USER_CONFIG=/cache/bundle/config \
+    BUNDLE_PATH=/cache/bundle/install \
+    GEM_SPEC_CACHE=/cache/gem/specs
+
+RUN mkdir -p /cache
 
 # Runtime helper scripts live in altivec-builder so every downstream image
 # stage inherits host-architecture-correct tools. `altivec-release` is an

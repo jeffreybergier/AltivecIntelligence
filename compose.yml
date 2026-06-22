@@ -7,6 +7,7 @@ services:
     image: altivec-image
     working_dir: /repo/altivec
     volumes:
+      - cache:/cache
       - ~/.altivec:/root
       - .:/repo/altivec
       # Uncomment to add more tools into the container
@@ -24,9 +25,13 @@ services:
       - IS_SANDBOX=1
     working_dir: /repo/altivec
     volumes:
+      - cache:/cache
       - ~/.altivec:/root
       - .:/repo/altivec
       # Uncomment to add more tools into the container
       # ../extras:/repo/extras
     entrypoint: /bin/bash
     command: -lc "altivec-chooser"
+
+volumes:
+  cache:
