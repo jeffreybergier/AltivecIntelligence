@@ -39,6 +39,7 @@ services:
     image: ghcr.io/jeffreybergier/altivec-intelligence:latest
     working_dir: /repo/user
     volumes:
+      - cache:/cache
       - ~/.altivec:/root
       - .:/repo/user
       # Uncomment to add more tools into the container
@@ -52,9 +53,13 @@ services:
       - IS_SANDBOX=1
     working_dir: /repo/user
     volumes:
+      - cache:/cache
       - ~/.altivec:/root
       - .:/repo/user
       # Uncomment to add more tools into the container
       # ../extras:/repo/extras
     entrypoint: /bin/bash
     command: -lc "altivec-chooser"
+
+volumes:
+  cache:

@@ -60,6 +60,17 @@ docker compose run --rm altivec "make"
 docker compose run --rm altivec-intelligence
 ```
 
+The template mounts a named Docker volume at `/cache`. The image points common
+runtime caches there for npm, Yarn, pnpm, Go, Bundler, Ruby gem metadata, and
+XDG-compatible tools, so disposable build/tool caches do not accumulate under
+`~/.altivec`. Remove them with `docker compose down -v` when you want a clean
+cache.
+
+The image also configures Git to trust bind-mounted project directories and
+points generic native build variables (`CC`, `CXX`, `LD`, `AR`) at Ubuntu's
+toolchain. That keeps npm and gem native extensions from accidentally invoking
+the Apple cross-linker that is also available on `PATH`.
+
 ### Introduce the AI to Your Project
 
 #### Introduction Prompt
