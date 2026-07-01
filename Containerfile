@@ -104,7 +104,7 @@ ENV CURL_RETRY_FLAGS="--fail --silent --show-error --location --retry 5 --retry-
 #      files (via their `BUNDLED WITH` line) frequently refuse to accept.
 RUN gem install bundler --no-document
 
-# 2. Settings for the User
+# 2a. Settings for the User
 
 # Change to 1 less than the number of CPU cores on your computer
 # Also make sure Docker is configured to use every CPU core
@@ -114,7 +114,7 @@ ENV JOBS=6
 # This makes the build take significantly longer
 ENV DISABLE_BOOTSTRAP=1
 
-# 2. Set up environment
+# 2b. Set up environment
 
 ENV GCC_VERSION=4.2.1
 ENV APPLE_GCC=1
@@ -176,9 +176,18 @@ RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sh
     echo "Post-Build: Altivec Intelligence" \
       && ./postbuild.sh
 
-ENV PATH="/osxcross/target/bin:${PATH}"
+# 6. Keep native Linux tools ahead of osxcross by default. Ruby/Bundler and
+# other host-native extension builds may invoke tools like `ld` indirectly
+# through GCC and do not always honor LD=/usr/bin/ld. Altivec makefiles invoke
+# osxcross compilers/linkers explicitly, or prepend /osxcross/target/bin only
+# for the commands that need it.
+ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/altivec/bin:/osxcross/target/bin" \
+    CC=/usr/bin/gcc \
+    CXX=/usr/bin/g++ \
+    LD=/usr/bin/ld \
+    AR=/usr/bin/ar
 
-# 6. Node.js 22 LTS (matches wrangler's supported runtime)
+# 7. Node.js 22 LTS (matches wrangler's supported runtime)
 RUN curl $CURL_RETRY_FLAGS -o /tmp/nodesource-setup.sh \
       https://deb.nodesource.com/setup_22.x \
     && bash /tmp/nodesource-setup.sh \
@@ -186,7 +195,7 @@ RUN curl $CURL_RETRY_FLAGS -o /tmp/nodesource-setup.sh \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# 7. Fix broken npm bundled with nodesource, then install globals
+# 8a. Fix broken npm bundled with nodesource, then install globals
 RUN curl $CURL_RETRY_FLAGS -o /tmp/npm.tgz \
       https://registry.npmjs.org/npm/-/npm-11.14.1.tgz \
     && mkdir -p /tmp/npm-install \
@@ -206,13 +215,13 @@ RUN npm install -g \
       js-beautify \
       webcrack
 
-# 7b. Antigravity CLI (Google's replacement for Gemini CLI)
+# 8b. Antigravity CLI (Google's replacement for Gemini CLI)
 RUN curl $CURL_RETRY_FLAGS -o /tmp/antigravity-install.sh \
       https://antigravity.google/cli/install.sh \
     && bash /tmp/antigravity-install.sh --dir /usr/local/bin \
     && rm -f /tmp/antigravity-install.sh
 
-# 8. rcodesign — real Apple code signer (osxcross only ships
+# 9a. rcodesign — real Apple code signer (osxcross only ships
 #    codesign_allocate, which reserves space but cannot sign).
 #    Prebuilt static musl binary from indygreg/apple-platform-rs.
 #    NOTE: must be ARG, not ENV — rcodesign reads any RCODESIGN_*
@@ -232,7 +241,7 @@ RUN set -eux; \
     rm -rf /tmp/rcodesign.tar.gz "/tmp/apple-codesign-${RCODESIGN_VERSION}-${RC_ARCH}"; \
     rcodesign --version
 
-# 8b. ldid — pseudo-signer + entitlements editor for jailbroken iOS.
+# 9b. ldid — pseudo-signer + entitlements editor for jailbroken iOS.
 #     Statically-linked binary from ProcursusTeam (musl-based; no glibc
 #     dependency on the host). Complements rcodesign above: rcodesign
 #     handles real-cert signing; ldid is the canonical tool for the
@@ -249,7 +258,7 @@ RUN set -eux; \
     chmod +x /usr/local/bin/ldid; \
     ldid 2>&1 | grep -q "Link Identity Editor"
 
-# 8c. ipsw — blacktop's Mach-O analysis multi-tool. `ipsw class-dump`
+# 9c. ipsw — blacktop's Mach-O analysis multi-tool. `ipsw class-dump`
 #      reconstructs Obj-C (and Swift) @interface declarations straight
 #      from a Mach-O binary: the Linux-native stand-in for the classic
 #      macOS class-dump, which Ubuntu does not package for apt. Shipped
@@ -272,18 +281,16 @@ RUN set -eux; \
     rm -rf /tmp/ipsw.tar.gz /tmp/ipsw-install; \
     ipsw version
 
-# 9. Working Directory & Runtime
+# 10. Working Directory & Runtime
 WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-lc"]
 CMD ["/bin/bash"]
 
-# Put /altivec/bin on PATH so altivec-deploy, altivec-release, and
-# altivec-chooser are
-# callable by bare name (no ./ prefix, no .sh extension). Lives in the
-# base stage so the dev compose (which bind-mounts the repo at /altivec
-# and targets altivec-builder) gets the same PATH as the prebuilt GHCR
-# image — the bind-mount supplies the files at runtime.
-ENV PATH="/altivec/bin:${PATH}"
+# /altivec/bin is already on PATH above so altivec-deploy, altivec-release, and
+# altivec-chooser are callable by bare name (no ./ prefix, no .sh extension).
+# That PATH lives in the base stage so the dev compose (which bind-mounts the
+# repo at /altivec and targets altivec-builder) gets the same PATH as the
+# prebuilt GHCR image — the bind-mount supplies the files at runtime.
 
 # Runtime caches should not default into /root, because many project compose
 # files bind-mount ~/.altivec there. /cache is intended to be backed by a
@@ -306,16 +313,6 @@ ENV ALTIVEC_CACHE=/cache \
 
 RUN mkdir -p /cache
 
-# Keep generic native build tools pointed at Ubuntu's toolchain even though the
-# osxcross tools are on PATH. Project makefiles still invoke Apple cross tools
-# explicitly, while npm/gem native extensions use these defaults. This must be
-# set after the osxcross build, because cctools builds Objective-C sources and
-# cannot use Ubuntu's GCC without the Objective-C frontend.
-ENV CC=/usr/bin/gcc \
-    CXX=/usr/bin/g++ \
-    LD=/usr/bin/ld \
-    AR=/usr/bin/ar
-
 # Runtime helper scripts live in altivec-builder so every downstream image
 # stage inherits host-architecture-correct tools. `altivec-release` is an
 # interpreted Python script, but this placement keeps script validation and
@@ -324,7 +321,7 @@ COPY bin/ /altivec/bin/
 RUN chmod +x /altivec/bin/* \
  && altivec-release --help >/dev/null
 
-# 10. GHCR image layer — bakes the Altivec runtime repo into /altivec/.
+# 11. GHCR image layer — bakes the Altivec runtime repo into /altivec/.
 #     Builds the shared AltivecCore and AltivecCocoa artifacts and ships their
 #     build outputs in the image so GHCR consumers do NOT have to
 #     re-run the slow cross-compile locally. The top-level `make all`
