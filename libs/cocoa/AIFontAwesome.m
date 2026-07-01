@@ -97,26 +97,6 @@ static NSString *ai_fa_font_path(AIFontAwesomeStyle style)
   return ai_fa_required_font_path(ai_fa_file_name(style));
 }
 
-static CGFontRef ai_fa_create_cgfont(AIFontAwesomeStyle style)
-{
-  NSString *path = ai_fa_font_path(style);
-  CGDataProviderRef provider;
-  CGFontRef font;
-  provider = CGDataProviderCreateWithFilename([path fileSystemRepresentation]);
-  if (!provider) {
-    [NSException raise:NSInternalInconsistencyException
-                format:@"AIFontAwesome cannot open font file %@", path];
-    return NULL;
-  }
-  font = CGFontCreateWithDataProvider(provider);
-  CGDataProviderRelease(provider);
-  if (!font) {
-    [NSException raise:NSInternalInconsistencyException
-                format:@"AIFontAwesome cannot load font file %@", path];
-  }
-  return font;
-}
-
 static CGContextRef ai_fa_make_context(size_t px, CGColorRef fill)
 {
   CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
@@ -156,16 +136,24 @@ static int ai_fa_to_utf16(uint32_t cp, UniChar out[2])
  * slot so NSToolbar draws the image 1:1 instead of rescaling it). */
 static BOOL ai_fa_draw_coretext(CGContextRef ctx, uint32_t cp,
                                 CGFloat canvasPx, CGFloat glyphPx,
-                                AIFontAwesomeStyle style)
+                                NSString *psname)
 {
   /* CTFontCreateWithName's name resolution crashes inside TFont::SetMatrix
    * on Leopard 10.5 (EXC_BAD_ACCESS). Go through CGFont instead: create the
    * CGFont by PostScript name, build the CTFont from it purely for Unicode
    * -> glyph mapping + metrics, and reuse the same CGFont to draw. */
-  CGFontRef cgFont = ai_fa_create_cgfont(style);
+  CGFontRef cgFont = CGFontCreateWithFontName((CFStringRef)psname);
+#if !__LP64__ && !TARGET_OS_IPHONE
   if (!cgFont) {
-    AIFALog(@"AIFontAwesome.coretext", @"font '%@' unavailable",
-            ai_fa_postscript_name(style));
+    ATSFontRef atsFont = ATSFontFindFromPostScriptName(
+        (CFStringRef)psname, kATSOptionFlagsDefault);
+    if (atsFont != (ATSFontRef)kATSFontRefUnspecified) {
+      cgFont = CGFontCreateWithPlatformFont(&atsFont);
+    }
+  }
+#endif
+  if (!cgFont) {
+    AIFALog(@"AIFontAwesome.coretext", @"font '%@' unavailable", psname);
     return NO;
   }
   CTFontRef font = CTFontCreateWithGraphicsFont(cgFont, glyphPx, NULL, NULL);
@@ -218,61 +206,10 @@ static BOOL ai_fa_draw_coretext(CGContextRef ctx, uint32_t cp,
  * Core Text, and no ATSUI/Gestalt at all); both route to Core Text below. */
 static BOOL ai_fa_draw_atsui(CGContextRef ctx, uint32_t cp,
                              CGFloat canvasPx, CGFloat glyphPx,
-                             AIFontAwesomeStyle style)
+                             NSString *psname)
 {
   if (cp > 0xFFFF) return NO; /* Font Awesome is entirely BMP */
   UniChar u = (UniChar)cp;
-  NSString *psname = ai_fa_postscript_name(style);
-  static BOOL solidTried = NO;
-  static BOOL regularTried = NO;
-  static BOOL brandsTried = NO;
-  static NSData *solidData = nil;
-  static NSData *regularData = nil;
-  static NSData *brandsData = nil;
-  static ATSFontContainerRef solidContainer = 0;
-  static ATSFontContainerRef regularContainer = 0;
-  static ATSFontContainerRef brandsContainer = 0;
-  BOOL *tried = &solidTried;
-  NSData **dataSlot = &solidData;
-  ATSFontContainerRef *container = &solidContainer;
-  switch (style) {
-    case AIFontAwesomeStyleRegular:
-      tried = &regularTried;
-      dataSlot = &regularData;
-      container = &regularContainer;
-      break;
-    case AIFontAwesomeStyleBrands:
-      tried = &brandsTried;
-      dataSlot = &brandsData;
-      container = &brandsContainer;
-      break;
-    case AIFontAwesomeStyleSolid:
-      break;
-  }
-
-  if (!*tried) {
-    NSString *path = ai_fa_font_path(style);
-    *tried = YES;
-    if (path) {
-      *dataSlot = [[NSData alloc] initWithContentsOfFile:path];
-      if (*dataSlot) {
-        OSStatus err = ATSFontActivateFromMemory(
-            (LogicalAddress)[(*dataSlot) bytes],
-            (ByteCount)[(*dataSlot) length],
-            kATSFontContextLocal,
-            kATSFontFormatUnspecified,
-            NULL,
-            kATSOptionFlagsDefault,
-            container);
-        if (err != noErr) {
-          AIFALog(@"AIFontAwesome.atsui", @"activate %@ failed: %d",
-                  [path lastPathComponent], (int)err);
-          [*dataSlot release];
-          *dataSlot = nil;
-        }
-      }
-    }
-  }
 
   ATSFontRef af = ATSFontFindFromPostScriptName(
       (CFStringRef)psname, kATSOptionFlagsDefault);
@@ -387,16 +324,17 @@ static int ai_fa_have_coretext(void)
   CGContextRef ctx = ai_fa_make_context(canvasPx, fill);
   if (!ctx) return NULL;
 
+  NSString *psname = ai_fa_postscript_name(style);
   BOOL ok;
 #if __LP64__ || TARGET_OS_IPHONE
-  ok = ai_fa_draw_coretext(ctx, codePoint, (CGFloat)canvasPx, glyphPx, style);
+  ok = ai_fa_draw_coretext(ctx, codePoint, (CGFloat)canvasPx, glyphPx, psname);
 #else
   if (ai_fa_have_coretext()) {
     ok = ai_fa_draw_coretext(ctx, codePoint, (CGFloat)canvasPx,
-                                  glyphPx, style);
+                                  glyphPx, psname);
   } else {
     ok = ai_fa_draw_atsui(ctx, codePoint, (CGFloat)canvasPx,
-                               glyphPx, style);
+                               glyphPx, psname);
   }
 #endif
 
