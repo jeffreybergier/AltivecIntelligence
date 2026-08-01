@@ -134,6 +134,12 @@ PHONE_SOURCE_FLAGS ?=
 PHONE_EXTRA_SOURCE_FLAGS ?=
 PHONE_ANALYZE_SOURCE_FLAGS ?= $(PHONE_SOURCE_FLAGS)
 PHONE_ANALYZE_EXTRA_SOURCE_FLAGS ?= $(PHONE_EXTRA_SOURCE_FLAGS)
+PHONE_LINK_FLAGS ?=
+PHONE_ARCLITE_ARCHIVE ?= /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a
+# Clang force-loads ARCLite for deployment targets below iOS 5 whenever ARC
+# is present at link time. Restrict the flag to armv7: arm64 only runs on iOS
+# 7 and newer, where the system Objective-C runtime already provides ARC.
+PHONE_ARC_LINK_FLAGS ?= $(if $(filter -fobjc-arc,$(PHONE_SOURCE_FLAGS) $(PHONE_EXTRA_SOURCE_FLAGS)),-Xarch_armv7 -fobjc-arc)
 $(APP_SOURCE_OBJS): IOS_FLAGS += $(PHONE_SOURCE_FLAGS)
 $(APP_EXTRA_OBJS): IOS_FLAGS += $(PHONE_EXTRA_SOURCE_FLAGS)
 
@@ -187,10 +193,17 @@ analyze: validate
 	fi
 	$(call analyze_report)
 
-validate: validate-sdk validate-paths libs-ready cocoa-ready
+validate: validate-sdk validate-paths validate-arclite libs-ready cocoa-ready
 
 validate-sdk:
 	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi
+
+validate-arclite:
+	@if [ -n "$(strip $(PHONE_ARC_LINK_FLAGS))" ] && [ ! -r "$(PHONE_ARCLITE_ARCHIVE)" ]; then \
+		echo " [!] ERROR: iOS 4.3 ARC compatibility archive missing at $(PHONE_ARCLITE_ARCHIVE)"; \
+		echo "     Rebuild the Altivec Intelligence container to install it."; \
+		exit 1; \
+	fi
 
 # --- Internal File Targets ---
 
@@ -234,11 +247,12 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin $(PHONE_BUNDLE_DEPS)
 	$(PHONE_EXTRA_BUNDLE_STEPS)
 
 # Compile and Link in two steps to preserve .o files for dsymutil
-$(INT_DIR)/$(APP_NAME)-bin: $(OBJS)
+$(INT_DIR)/$(APP_NAME)-bin: $(OBJS) | validate-arclite
 	@echo " [2/4] Linking Phone universal binary (armv7, arm64)..."
 	@export PATH=$(BIN_DIR):$(PATH); \
 	$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
-	           $(IOS_FLAGS) $(IOS_FRAMEWORKS) $(LIBS_IPHONE) $^ -o $@
+	           $(IOS_FLAGS) $(PHONE_ARC_LINK_FLAGS) $(PHONE_LINK_FLAGS) \
+	           $(IOS_FRAMEWORKS) $(LIBS_IPHONE) $^ -o $@
 
 $(INT_DIR)/%.o: %.m
 	@mkdir -p $(INT_DIR)
@@ -258,5 +272,5 @@ $(INT_DIR)/%.o: %.c
 	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
 	           $(IOS_FLAGS) -c $< -o $@
 
-.PHONY: release debug clean analyze validate validate-sdk altiveccore-bootstrap libs-ready \
+.PHONY: release debug clean analyze validate validate-sdk validate-arclite altiveccore-bootstrap libs-ready \
         altiveccocoa-bootstrap cocoa-ready

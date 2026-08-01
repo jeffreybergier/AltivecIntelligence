@@ -321,6 +321,29 @@ COPY bin/ /altivec/bin/
 RUN chmod +x /altivec/bin/* \
  && altivec-release --help >/dev/null
 
+# Clang automatically force-loads this path for pre-iOS-5 ARC links. Use the
+# Apple archive shipped by Xcode 6.4: it supports armv7/iOS 4.3 and predates
+# the objc_loadClassref dependency in modern Xcode's replacement archive.
+# Keep this stable input late in the builder stage so changing it does not
+# invalidate the unrelated OSXCross, Node, and native-tool installation layers.
+COPY --chmod=0644 toolchain/lib/arc/libarclite_iphoneos.a /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a
+RUN set -eux; \
+    echo 'f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8  /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a' \
+      | sha256sum -c -; \
+    /osxcross/target/bin/lipo \
+      /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
+      -verify_arch armv7; \
+    strings /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
+      | grep -Fq -- '-miphoneos-version-min=4.3'; \
+    /usr/bin/llvm-nm-14 /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
+      | grep -Fq '_OBJC_METACLASS_$___ARCLite__'; \
+    if /usr/bin/llvm-nm-14 \
+        /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
+        | grep -Eq '[[:space:]]_objc_loadClassref$'; then \
+      echo 'error: ARCLite requires objc_loadClassref from a newer SDK' >&2; \
+      exit 1; \
+    fi
+
 # 11. GHCR image layer — bakes the Altivec runtime repo into /altivec/.
 #     Builds the shared AltivecCore and AltivecCocoa artifacts and ships their
 #     build outputs in the image so GHCR consumers do NOT have to
@@ -404,7 +427,14 @@ RUN set -e; \
     test ! -d libs/cocoa/build-phone/lib/AltivecCocoa.framework; \
     test -f apps/CURLphone/build-release/CURLphone.app/Fonts/FA7-Solid-900.otf; \
     test -f apps/CURLphone/build-release/CURLphone.app/Fonts/LICENSE-Font-Awesome.txt; \
-    test ! -d apps/CURLphone/build-release/CURLphone.app/Frameworks
+    test ! -d apps/CURLphone/build-release/CURLphone.app/Frameworks; \
+    make -C apps/CURLphone -Bn release PHONE_SOURCE_FLAGS=-fobjc-arc \
+      > /tmp/curlphone-arc-link-plan; \
+    awk '/Linking Phone universal/ { in_link = 1 }; \
+         in_link && /-Xarch_armv7 -fobjc-arc/ { found = 1 }; \
+         END { exit(found ? 0 : 1) }' \
+      /tmp/curlphone-arc-link-plan; \
+    rm -f /tmp/curlphone-arc-link-plan
 
 # Bake the rest of the runtime repo into /altivec/. Build-time-only files
 # (Containerfile, compose.yml, docker/, .github/) are deliberately

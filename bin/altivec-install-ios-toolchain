@@ -1,0 +1,414 @@
+#!/bin/bash
+
+# Install CoolStar's 32-bit on-device toolchain and the iPhoneOS 8.4 SDK.
+# This script is intended to run as root on a jailbroken 32-bit iPhone.
+
+set -euo pipefail
+
+readonly ALTIVEC_WORK_DIR="/var/root/tmp_altivec"
+readonly ALTIVEC_BACKUP_ROOT="$ALTIVEC_WORK_DIR/backups"
+readonly ALTIVEC_SDK_ARCHIVE_DIR="$ALTIVEC_WORK_DIR/sdk-archives"
+readonly ALTIVEC_SDK_DIR="$ALTIVEC_WORK_DIR/sdks"
+readonly ALTIVEC_SDK_PATH="$ALTIVEC_SDK_DIR/iPhoneOS8.4.sdk"
+readonly ALTIVEC_LATEST_SDK="$ALTIVEC_SDK_DIR/Latest.sdk"
+readonly ALTIVEC_SDK_ARCHIVE="$ALTIVEC_SDK_ARCHIVE_DIR/iPhoneOS8.4.sdk.tar.gz"
+readonly ALTIVEC_SDK_URL="https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS8.4.sdk.tar.gz"
+readonly ALTIVEC_SDK_SHA256="677be5a92577c5e29cbab6067a9a624a3369af1cc00578941565886ea6a0a7da"
+
+ALTIVEC_SDK_SOURCE=""
+ALTIVEC_SDK_IS_INSTALLED=0
+ALTIVEC_SDK_ARCHIVE_IS_READY=0
+ALTIVEC_NEEDS_CURL=0
+
+ALTIVEC_PACKAGE_NAMES=(
+  "org.coolstar.iostoolchain"
+  "org.coolstar.llvm-clang"
+  "org.coolstar.llvm-clang32"
+  "org.coolstar.ld64"
+  "org.coolstar.cctools"
+  "make"
+  "ldid"
+  "uuid"
+)
+
+ALTIVEC_PACKAGE_VERSIONS=(
+  "6.1-1"
+  "3.7.1-1"
+  "3.7.1-2"
+  "274.2"
+  "895"
+  "3.81-2p"
+  "1:1.2.1"
+  "1.6.0-2p"
+)
+
+ALTIVEC_INSTALL_SPECS=()
+
+usage() {
+  echo "Usage: $(basename "$0") [--sdk-archive /absolute/path/iPhoneOS8.4.sdk.tar.gz]"
+  echo ""
+  echo "Installs the pinned CoolStar armv7 toolchain and iPhoneOS 8.4 SDK."
+  echo "If GitHub cannot be reached from the phone, copy the SDK archive onto"
+  echo "the phone first and provide its absolute path with --sdk-archive."
+}
+
+log_header() {
+  echo ""
+  echo "--- $1 ---"
+}
+
+log_item() {
+  echo " > $1"
+}
+
+log_warn() {
+  echo " [!] $1" >&2
+}
+
+fail() {
+  echo " [!] ERROR: $1" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "Required command is missing: $1"
+}
+
+installed_version() {
+  local package_name="$1"
+  local package_status
+
+  package_status="$(dpkg-query -W -f='${Status}' "$package_name" 2>/dev/null || true)"
+  if [[ "$package_status" != "install ok installed" ]]; then
+    return 1
+  fi
+
+  dpkg-query -W -f='${Version}' "$package_name"
+}
+
+candidate_version() {
+  local package_name="$1"
+  local policy_line
+
+  while IFS= read -r policy_line; do
+    if [[ "$policy_line" =~ Candidate:[[:space:]]*(.*)$ ]]; then
+      echo "${BASH_REMATCH[1]}"
+      return 0
+    fi
+  done < <(apt-cache policy "$package_name" 2>/dev/null || true)
+
+  return 1
+}
+
+expected_package_is_available() {
+  local package_name="$1"
+  local expected_version="$2"
+  local found_version
+
+  if found_version="$(installed_version "$package_name")"; then
+    if [[ "$found_version" != "$expected_version" ]]; then
+      fail "$package_name $found_version is installed; expected $expected_version. Refusing to replace or downgrade it."
+    fi
+    log_item "$package_name $expected_version is already installed"
+    return 0
+  fi
+
+  found_version="$(candidate_version "$package_name" || true)"
+  if [[ "$found_version" == "$expected_version" ]]; then
+    log_item "$package_name $expected_version is available"
+    return 0
+  fi
+
+  log_warn "$package_name candidate is '${found_version:-none}'; expected $expected_version"
+  return 1
+}
+
+verify_sdk_archive() {
+  local archive_path="$1"
+  local actual_checksum
+
+  [[ -f "$archive_path" ]] || fail "SDK archive not found: $archive_path"
+  actual_checksum="$(sha256sum "$archive_path")"
+  actual_checksum="${actual_checksum%% *}"
+  if [[ "$actual_checksum" != "$ALTIVEC_SDK_SHA256" ]]; then
+    fail "SDK checksum mismatch for $archive_path (got $actual_checksum)"
+  fi
+}
+
+validate_sdk_directory() {
+  local sdk_path="$1"
+
+  [[ -d "$sdk_path/System/Library/Frameworks/UIKit.framework/Headers" ]] || return 1
+  [[ -f "$sdk_path/System/Library/Frameworks/UIKit.framework/Headers/UIKit.h" ]] || return 1
+  [[ -f "$sdk_path/System/Library/Frameworks/Foundation.framework/Headers/Foundation.h" ]] || return 1
+  [[ -e "$sdk_path/usr/lib/libSystem.dylib" ]] || return 1
+  [[ -f "$sdk_path/usr/lib/crt1.3.1.o" ]] || return 1
+  [[ -f "$sdk_path/SDKSettings.plist" ]] || return 1
+}
+
+check_archive_paths() {
+  local archive_path="$1"
+  local archive_member
+  local normalized_member
+
+  tar -tzf "$archive_path" >/dev/null
+  while IFS= read -r archive_member; do
+    case "$archive_member" in
+      /*|../*|*/../*|*/..)
+        fail "Unsafe path in SDK archive: $archive_member"
+        ;;
+    esac
+
+    normalized_member="${archive_member#./}"
+    case "$normalized_member" in
+      iPhoneOS8.4.sdk|iPhoneOS8.4.sdk/*)
+        ;;
+      *)
+        fail "Unexpected top-level path in SDK archive: $archive_member"
+        ;;
+    esac
+  done < <(tar -tzf "$archive_path")
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --sdk-archive)
+      [[ $# -ge 2 ]] || fail "--sdk-archive requires a path"
+      ALTIVEC_SDK_SOURCE="$2"
+      [[ "$ALTIVEC_SDK_SOURCE" == /* ]] || fail "--sdk-archive must be an absolute path"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      fail "Unknown option: $1"
+      ;;
+  esac
+done
+
+log_header "Checking iPhone"
+
+[[ "$(id -u)" == "0" ]] || fail "Run this installer as root"
+[[ "$(uname -s)" == "Darwin" ]] || fail "This installer only runs on an iPhone"
+[[ -f /System/Library/CoreServices/SystemVersion.plist ]] || fail "iPhone system files were not found"
+
+for ALTIVEC_REQUIRED_COMMAND in \
+  apt-cache apt-get basename cp df dpkg dpkg-query grep id ln mkdir mktemp mv \
+  plutil ps readlink rmdir sed sha256sum sw_vers sysctl tail tar uname; do
+  require_command "$ALTIVEC_REQUIRED_COMMAND"
+done
+
+ALTIVEC_IOS_VERSION="$(sw_vers -productVersion 2>/dev/null || true)"
+[[ -n "$ALTIVEC_IOS_VERSION" ]] || ALTIVEC_IOS_VERSION="$(plutil -key ProductVersion /System/Library/CoreServices/SystemVersion.plist)"
+ALTIVEC_IOS_MAJOR="${ALTIVEC_IOS_VERSION%%.*}"
+[[ "$ALTIVEC_IOS_MAJOR" =~ ^[0-9]+$ ]] || fail "Could not determine the iOS version"
+(( ALTIVEC_IOS_MAJOR >= 5 )) || fail "CoolStar's LLVM package requires iOS 5 or later"
+
+ALTIVEC_DPKG_ARCH="$(dpkg --print-architecture 2>/dev/null || true)"
+[[ "$ALTIVEC_DPKG_ARCH" == "iphoneos-arm" ]] || fail "Unsupported package architecture: ${ALTIVEC_DPKG_ARCH:-unknown}"
+
+ALTIVEC_ARM64_CAPABLE="$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)"
+[[ "$ALTIVEC_ARM64_CAPABLE" != "1" ]] || fail "This script pins the 32-bit toolchain and must not be used on an arm64 iPhone"
+
+log_item "device: $(uname -m)"
+log_item "iOS: $ALTIVEC_IOS_VERSION"
+log_item "package architecture: $ALTIVEC_DPKG_ARCH"
+
+mkdir -p "$ALTIVEC_WORK_DIR" "$ALTIVEC_BACKUP_ROOT" "$ALTIVEC_SDK_ARCHIVE_DIR" "$ALTIVEC_SDK_DIR"
+cd "$ALTIVEC_WORK_DIR"
+
+if [[ -e "$ALTIVEC_SDK_PATH" ]]; then
+  validate_sdk_directory "$ALTIVEC_SDK_PATH" || fail "Existing SDK is incomplete: $ALTIVEC_SDK_PATH"
+  ALTIVEC_SDK_IS_INSTALLED=1
+  log_item "existing SDK passed structural validation"
+fi
+
+if (( ALTIVEC_SDK_IS_INSTALLED == 0 )); then
+  if [[ -n "$ALTIVEC_SDK_SOURCE" ]]; then
+    verify_sdk_archive "$ALTIVEC_SDK_SOURCE"
+    ALTIVEC_SDK_ARCHIVE_IS_READY=1
+  elif [[ -e "$ALTIVEC_SDK_ARCHIVE" ]]; then
+    verify_sdk_archive "$ALTIVEC_SDK_ARCHIVE"
+    ALTIVEC_SDK_ARCHIVE_IS_READY=1
+  elif ! command -v curl >/dev/null 2>&1; then
+    ALTIVEC_NEEDS_CURL=1
+  fi
+fi
+
+log_header "Checking disk space"
+
+read -r _ _ _ ALTIVEC_ROOT_FREE_KB _ _ < <(df -Pk / | tail -n 1)
+read -r _ _ _ ALTIVEC_VAR_FREE_KB _ _ < <(df -Pk /var | tail -n 1)
+ALTIVEC_SHARE_TARGET="$(readlink /usr/share 2>/dev/null || true)"
+
+case "$ALTIVEC_SHARE_TARGET" in
+  /var/*|/private/var/*)
+    readonly ALTIVEC_MIN_ROOT_KB=$((128 * 1024))
+    readonly ALTIVEC_MIN_VAR_KB=$((1536 * 1024))
+    log_item "/usr/share is stashed on /var"
+    ;;
+  *)
+    readonly ALTIVEC_MIN_ROOT_KB=$((768 * 1024))
+    readonly ALTIVEC_MIN_VAR_KB=$((512 * 1024))
+    log_warn "/usr/share is not stashed on /var; LLVM will consume root filesystem space"
+    ;;
+esac
+
+log_item "/ free: $((ALTIVEC_ROOT_FREE_KB / 1024)) MiB"
+log_item "/var free: $((ALTIVEC_VAR_FREE_KB / 1024)) MiB"
+(( ALTIVEC_ROOT_FREE_KB >= ALTIVEC_MIN_ROOT_KB )) || fail "Not enough free space on /"
+(( ALTIVEC_VAR_FREE_KB >= ALTIVEC_MIN_VAR_KB )) || fail "Not enough free space on /var"
+
+# Legacy iOS does not reliably provide pgrep.
+# shellcheck disable=SC2009
+if ps axww 2>/dev/null | grep -E '[a]pt-get|[d]pkg' >/dev/null; then
+  fail "Another apt or dpkg process is running; close Cydia and try again"
+fi
+
+log_header "Backing up package state"
+
+ALTIVEC_BACKUP_DIR="$(mktemp -d "$ALTIVEC_BACKUP_ROOT/toolchain-before.XXXXXX")"
+readonly ALTIVEC_BACKUP_DIR
+cp -p /var/lib/dpkg/status "$ALTIVEC_BACKUP_DIR/dpkg-status"
+if [[ -f /etc/apt/sources.list ]]; then
+  cp -p /etc/apt/sources.list "$ALTIVEC_BACKUP_DIR/sources.list"
+fi
+if [[ -d /etc/apt/sources.list.d ]]; then
+  cp -Rp /etc/apt/sources.list.d "$ALTIVEC_BACKUP_DIR/"
+fi
+log_item "backup: $ALTIVEC_BACKUP_DIR"
+
+if (( ALTIVEC_NEEDS_CURL == 1 )); then
+  ALTIVEC_PACKAGE_NAMES+=("curl")
+  ALTIVEC_PACKAGE_VERSIONS+=("7.33.0-9")
+fi
+
+for ((ALTIVEC_PACKAGE_INDEX = 0; ALTIVEC_PACKAGE_INDEX < ${#ALTIVEC_PACKAGE_NAMES[@]}; ALTIVEC_PACKAGE_INDEX++)); do
+  ALTIVEC_INSTALL_SPECS+=("${ALTIVEC_PACKAGE_NAMES[$ALTIVEC_PACKAGE_INDEX]}=${ALTIVEC_PACKAGE_VERSIONS[$ALTIVEC_PACKAGE_INDEX]}")
+done
+
+log_header "Checking pinned packages"
+
+ALTIVEC_NEEDS_APT_REFRESH=0
+for ((ALTIVEC_PACKAGE_INDEX = 0; ALTIVEC_PACKAGE_INDEX < ${#ALTIVEC_PACKAGE_NAMES[@]}; ALTIVEC_PACKAGE_INDEX++)); do
+  if ! expected_package_is_available "${ALTIVEC_PACKAGE_NAMES[$ALTIVEC_PACKAGE_INDEX]}" "${ALTIVEC_PACKAGE_VERSIONS[$ALTIVEC_PACKAGE_INDEX]}"; then
+    ALTIVEC_NEEDS_APT_REFRESH=1
+  fi
+done
+
+if (( ALTIVEC_NEEDS_APT_REFRESH == 1 )); then
+  log_header "Refreshing package lists"
+  if ! apt-get update; then
+    log_warn "apt-get update reported an error; checking whether the required packages were still refreshed"
+  fi
+
+  for ((ALTIVEC_PACKAGE_INDEX = 0; ALTIVEC_PACKAGE_INDEX < ${#ALTIVEC_PACKAGE_NAMES[@]}; ALTIVEC_PACKAGE_INDEX++)); do
+    expected_package_is_available "${ALTIVEC_PACKAGE_NAMES[$ALTIVEC_PACKAGE_INDEX]}" "${ALTIVEC_PACKAGE_VERSIONS[$ALTIVEC_PACKAGE_INDEX]}" \
+      || fail "Enable the Cydia/Telesphoreo and BigBoss repositories, then try again"
+  done
+fi
+
+log_header "Simulating package transaction"
+
+ALTIVEC_APT_CACHE_DIR="$(mktemp -d "$ALTIVEC_WORK_DIR/apt-archives.XXXXXX")"
+readonly ALTIVEC_APT_CACHE_DIR
+mkdir "$ALTIVEC_APT_CACHE_DIR/partial"
+readonly ALTIVEC_APT_SIMULATION="$ALTIVEC_BACKUP_DIR/apt-simulation.txt"
+
+if ! apt-get -s install "${ALTIVEC_INSTALL_SPECS[@]}" > "$ALTIVEC_APT_SIMULATION" 2>&1; then
+  sed -n '1,240p' "$ALTIVEC_APT_SIMULATION" >&2
+  fail "APT could not resolve the pinned toolchain"
+fi
+sed -n '1,240p' "$ALTIVEC_APT_SIMULATION"
+if grep -q '^Remv ' "$ALTIVEC_APT_SIMULATION"; then
+  fail "APT proposed removing a package; no changes were made"
+fi
+
+log_header "Installing on-device toolchain"
+
+apt-get -y --download-only \
+  -o "Dir::Cache::archives=$ALTIVEC_APT_CACHE_DIR" \
+  -o Acquire::Retries=3 \
+  install "${ALTIVEC_INSTALL_SPECS[@]}"
+
+DEBIAN_FRONTEND=noninteractive apt-get -y --no-download \
+  -o "Dir::Cache::archives=$ALTIVEC_APT_CACHE_DIR" \
+  install "${ALTIVEC_INSTALL_SPECS[@]}"
+
+for ((ALTIVEC_PACKAGE_INDEX = 0; ALTIVEC_PACKAGE_INDEX < ${#ALTIVEC_PACKAGE_NAMES[@]}; ALTIVEC_PACKAGE_INDEX++)); do
+  ALTIVEC_INSTALLED_VERSION="$(installed_version "${ALTIVEC_PACKAGE_NAMES[$ALTIVEC_PACKAGE_INDEX]}" || true)"
+  [[ "$ALTIVEC_INSTALLED_VERSION" == "${ALTIVEC_PACKAGE_VERSIONS[$ALTIVEC_PACKAGE_INDEX]}" ]] \
+    || fail "Package verification failed for ${ALTIVEC_PACKAGE_NAMES[$ALTIVEC_PACKAGE_INDEX]}"
+done
+
+for ALTIVEC_TOOL in clang clang++ ld as ar make ldid; do
+  require_command "$ALTIVEC_TOOL"
+done
+clang --version | sed -n '1,3p'
+
+if (( ALTIVEC_SDK_IS_INSTALLED == 0 )); then
+  log_header "Preparing iPhoneOS 8.4 SDK"
+
+  if (( ALTIVEC_SDK_ARCHIVE_IS_READY == 1 )) && [[ -n "$ALTIVEC_SDK_SOURCE" ]] && [[ "$ALTIVEC_SDK_SOURCE" != "$ALTIVEC_SDK_ARCHIVE" ]]; then
+    [[ ! -e "$ALTIVEC_SDK_ARCHIVE" ]] || fail "SDK archive destination already exists: $ALTIVEC_SDK_ARCHIVE"
+    cp -p "$ALTIVEC_SDK_SOURCE" "$ALTIVEC_SDK_ARCHIVE"
+  elif (( ALTIVEC_SDK_ARCHIVE_IS_READY == 0 )); then
+    require_command curl
+    ALTIVEC_SDK_DOWNLOAD="$(mktemp "$ALTIVEC_SDK_ARCHIVE_DIR/.iPhoneOS8.4.sdk.tar.gz.XXXXXX")"
+    log_item "downloading $ALTIVEC_SDK_URL"
+    if ! curl --fail --location --retry 5 --retry-delay 2 --connect-timeout 30 \
+      "$ALTIVEC_SDK_URL" -o "$ALTIVEC_SDK_DOWNLOAD"; then
+      log_warn "Verified TLS failed; retrying without certificate validation because the archive is SHA-256 pinned"
+      if ! curl --insecure --fail --location --retry 5 --retry-delay 2 --connect-timeout 30 \
+        "$ALTIVEC_SDK_URL" -o "$ALTIVEC_SDK_DOWNLOAD"; then
+        fail "The phone could not reach GitHub. Copy iPhoneOS8.4.sdk.tar.gz to the phone and rerun with --sdk-archive /absolute/path/iPhoneOS8.4.sdk.tar.gz"
+      fi
+    fi
+    verify_sdk_archive "$ALTIVEC_SDK_DOWNLOAD"
+    mv "$ALTIVEC_SDK_DOWNLOAD" "$ALTIVEC_SDK_ARCHIVE"
+  fi
+
+  verify_sdk_archive "$ALTIVEC_SDK_ARCHIVE"
+  check_archive_paths "$ALTIVEC_SDK_ARCHIVE"
+
+  [[ ! -e "$ALTIVEC_SDK_PATH" ]] || fail "SDK destination appeared during installation: $ALTIVEC_SDK_PATH"
+  ALTIVEC_SDK_EXTRACT_DIR="$(mktemp -d "$ALTIVEC_WORK_DIR/sdk-extract.XXXXXX")"
+  tar --no-same-owner -xzf "$ALTIVEC_SDK_ARCHIVE" -C "$ALTIVEC_SDK_EXTRACT_DIR"
+  validate_sdk_directory "$ALTIVEC_SDK_EXTRACT_DIR/iPhoneOS8.4.sdk" \
+    || fail "Extracted SDK failed structural validation; staging was retained at $ALTIVEC_SDK_EXTRACT_DIR"
+  mv "$ALTIVEC_SDK_EXTRACT_DIR/iPhoneOS8.4.sdk" "$ALTIVEC_SDK_PATH"
+  rmdir "$ALTIVEC_SDK_EXTRACT_DIR"
+fi
+
+if [[ -L "$ALTIVEC_LATEST_SDK" ]]; then
+  [[ "$(readlink "$ALTIVEC_LATEST_SDK")" == "iPhoneOS8.4.sdk" ]] \
+    || fail "$ALTIVEC_LATEST_SDK points somewhere unexpected"
+elif [[ -e "$ALTIVEC_LATEST_SDK" ]]; then
+  fail "$ALTIVEC_LATEST_SDK exists and is not a symbolic link"
+else
+  ln -s iPhoneOS8.4.sdk "$ALTIVEC_LATEST_SDK"
+fi
+
+validate_sdk_directory "$ALTIVEC_LATEST_SDK" || fail "Final SDK validation failed"
+
+log_header "Testing compiler and sysroot"
+
+printf '#import <UIKit/UIKit.h>\n' | clang \
+  -arch armv7 \
+  -miphoneos-version-min=6.0 \
+  -isysroot "$ALTIVEC_LATEST_SDK" \
+  -x objective-c \
+  -fsyntax-only \
+  -
+
+log_header "Installation complete"
+
+log_item "Clang: $(command -v clang)"
+log_item "SDK: $ALTIVEC_SDK_PATH"
+log_item "sysroot: $ALTIVEC_LATEST_SDK"
+log_item "package backup: $ALTIVEC_BACKUP_DIR"
+log_item "package archives: $ALTIVEC_APT_CACHE_DIR"
+log_item "Use -arch armv7 -miphoneos-version-min=6.0 -isysroot $ALTIVEC_LATEST_SDK when compiling"
