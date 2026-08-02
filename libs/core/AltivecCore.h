@@ -4,6 +4,20 @@
 #ifndef AltivecCore_h
 #define AltivecCore_h
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Returns an AltivecCore-owned, process-lifetime file-system path to the
+// bundled CA certificates file, or NULL if the path cannot be resolved.
+// Pass this path to CURLOPT_CAINFO on every new or reset libcurl easy handle.
+const char *AltivecCoreCertPath(void);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+
+#ifdef __OBJC__
 #import <Foundation/Foundation.h>
 
 // Root utility class for AltivecCore-wide resources.
@@ -15,20 +29,21 @@
 @end
 
 #import <AltivecCore/AICURLConnection.h>
+#endif
 
-#import <AltivecCore/curl/curl.h>
+#include <AltivecCore/curl/curl.h>
 
-#import <AltivecCore/openssl/ssl.h>
-#import <AltivecCore/openssl/crypto.h>
-#import <AltivecCore/openssl/evp.h>
-#import <AltivecCore/openssl/err.h>
-#import <AltivecCore/openssl/pem.h>
-#import <AltivecCore/openssl/x509.h>
-#import <AltivecCore/openssl/bio.h>
+#include <AltivecCore/openssl/ssl.h>
+#include <AltivecCore/openssl/crypto.h>
+#include <AltivecCore/openssl/evp.h>
+#include <AltivecCore/openssl/err.h>
+#include <AltivecCore/openssl/pem.h>
+#include <AltivecCore/openssl/x509.h>
+#include <AltivecCore/openssl/bio.h>
 
-#import <AltivecCore/zlib.h>
-#import <AltivecCore/sqlite3.h>
-#import <AltivecCore/cJSON.h>
-#import <AltivecCore/cJSON_Utils.h>
+#include <AltivecCore/zlib.h>
+#include <AltivecCore/sqlite3.h>
+#include <AltivecCore/cJSON.h>
+#include <AltivecCore/cJSON_Utils.h>
 
 #endif /* AltivecCore_h */

@@ -212,6 +212,13 @@ $(PUBLIC_INCLUDE_DIR)/.stamp: AltivecCore.h | curl-ready sqlite-ready
 
 verify-phone: $(PUBLIC_LIBS)
 	@echo "--- Verifying Phone AltivecCore static libraries ---"
+	@printf '%s\n' \
+	  '#include <AltivecCore/AltivecCore.h>' \
+	  'const char *altivec_core_c_header_probe(void) {' \
+	  '  return AltivecCoreCertPath();' \
+	  '}' | \
+	  $(COMPILER_IOS) $(IOS_V7_FLAGS) $(COMMON_WARN_FLAGS) -Werror \
+	    -std=c99 -I$(PUBLIC_INCLUDE_DIR) -x c -fsyntax-only -
 	@missing=0; \
 	for lib in $(PUBLIC_LIBS); do \
 		info="`$(LIPO_MODERN) -info $$lib 2>/dev/null`"; \
@@ -226,7 +233,9 @@ verify-phone: $(PUBLIC_LIBS)
 	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=armv7 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (armv7)"; missing=1; }; \
 	exit $$missing
 
 prune-build-files:

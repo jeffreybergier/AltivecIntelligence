@@ -324,10 +324,12 @@ verify-mac: $(PUBLIC_LIBS)
 	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (arm64)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (ppc)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (ppc)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (ppc)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (ppc)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '.objc_class_name_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (ppc)"; missing=1; }; \
 	exit $$missing
 
@@ -355,12 +357,14 @@ $(INTERMEDIATE)/c-exports.txt: $(PUBLIC_COMPONENT_LIBS)
 
 $(INTERMEDIATE)/exports-legacy.txt: $(INTERMEDIATE)/c-exports.txt
 	cp $< $@
+	echo '_AltivecCoreCertPath' >> $@
 	echo '.objc_class_name_AltivecCore' >> $@
 	echo '.objc_class_name_AICURLConnection' >> $@
 	echo '.objc_class_name_AIHTTPURLResponse' >> $@
 
 $(INTERMEDIATE)/exports-modern.txt: $(INTERMEDIATE)/c-exports.txt
 	cp $< $@
+	echo '_AltivecCoreCertPath' >> $@
 	echo '_OBJC_CLASS_$$_AltivecCore' >> $@
 	echo '_OBJC_METACLASS_$$_AltivecCore' >> $@
 	echo '_OBJC_CLASS_$$_AICURLConnection' >> $@
@@ -454,9 +458,11 @@ verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: _curl_easy_init not exported"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: _sqlite3_open not exported"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: _cJSON_Parse not exported"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: _AltivecCoreCertPath not exported (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: AltivecCore class not exported (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AltivecCore' || { echo " [!] ERROR: AltivecCore class not exported (ppc)"; missing=1; }; \
+	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: _AltivecCoreCertPath not exported (ppc)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported (ppc)"; missing=1; }; \
 	exit $$missing
 
