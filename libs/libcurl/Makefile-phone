@@ -73,16 +73,16 @@ prune-build-files:
 $(TARBALL_DIR):
 	mkdir -p $@
 
-$(ZLIB_TARBALL): | $(TARBALL_DIR)
+$(ZLIB_TARBALL): force-download-check | $(TARBALL_DIR)
 	$(call download_to_target,$(ZLIB_URLS))
 
-$(OPENSSL_TARBALL): | $(TARBALL_DIR)
+$(OPENSSL_TARBALL): force-download-check | $(TARBALL_DIR)
 	$(call download_to_target,$(OPENSSL_URLS))
 
-$(CURL_TARBALL): | $(TARBALL_DIR)
+$(CURL_TARBALL): force-download-check | $(TARBALL_DIR)
 	$(call download_to_target,$(CURL_URLS))
 
-$(TARBALL_DIR)/cacert.pem: | $(TARBALL_DIR)
+$(TARBALL_DIR)/cacert.pem: force-download-check | $(TARBALL_DIR)
 	$(call download_to_target,$(CACERT_URLS))
 
 $(PUBLIC_LIB_DIR)/cacert.pem: $(TARBALL_DIR)/cacert.pem

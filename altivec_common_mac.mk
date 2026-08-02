@@ -68,6 +68,7 @@ ifeq ($(ALTIVECCORE_REQUIRED),1)
     ifeq ($(ALTIVECCORE_LINKAGE),dynamic)
       ALTIVECCORE_FRAMEWORK = $(ALTIVECCORE_DIR)/lib/AltivecCore.framework
       MAC_FLAGS += -F$(ALTIVECCORE_DIR)/lib
+      MAC_FLAGS += -I$(ALTIVECCORE_FRAMEWORK)/Headers
       MAC_LIBS  += -F$(ALTIVECCORE_DIR)/lib -framework AltivecCore
     else
       MAC_FLAGS += -I$(ALTIVECCORE_DIR)/include

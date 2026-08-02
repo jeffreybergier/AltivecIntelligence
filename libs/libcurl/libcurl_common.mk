@@ -63,16 +63,39 @@ CURL_RETRY_FLAGS=--fail --location --retry 5 --retry-delay 2 \
 
 define download_to_target
 	@set -e; \
+	validate_download() { \
+	  case "$$2" in \
+	    *.tar.gz) tar -tzf "$$1" >/dev/null 2>&1 ;; \
+	    *.pem) grep -q -- '-----BEGIN CERTIFICATE-----' "$$1" ;; \
+	    *) test -s "$$1" ;; \
+	  esac; \
+	}; \
+	if test -f "$@"; then \
+	  if validate_download "$@" "$@"; then \
+	    exit 0; \
+	  fi; \
+	  echo " [!] Invalid cached download: $@"; \
+	  rm -f "$@"; \
+	fi; \
 	tmp="$@.tmp"; \
 	rm -f "$$tmp"; \
 	for url in $(1); do \
 	  echo "  > downloading $$url"; \
 	  if curl $(CURL_RETRY_FLAGS) "$$url" -o "$$tmp"; then \
-	    mv "$$tmp" "$@"; \
-	    exit 0; \
+	    if validate_download "$$tmp" "$@"; then \
+	      mv "$$tmp" "$@"; \
+	      exit 0; \
+	    fi; \
+	    echo "  > rejected invalid response from $$url"; \
 	  fi; \
 	  rm -f "$$tmp"; \
 	done; \
 	echo " [!] ERROR: failed to download $@"; \
 	exit 1
 endef
+
+# Re-run download recipes so cached files are validated before use. Valid
+# files return immediately; invalid files are replaced from the configured URLs.
+force-download-check:
+
+.PHONY: force-download-check

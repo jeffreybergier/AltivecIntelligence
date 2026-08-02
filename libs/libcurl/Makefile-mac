@@ -92,20 +92,20 @@ prune-build-files:
 $(TARBALL_DIR):
 	mkdir -p $@
 
-$(ZLIB_TARBALL): | $(TARBALL_DIR)
+$(ZLIB_TARBALL): force-download-check | $(TARBALL_DIR)
 	$(call download_to_target,$(ZLIB_URLS))
 
-$(OPENSSL_TARBALL): | $(TARBALL_DIR)
+$(OPENSSL_TARBALL): force-download-check | $(TARBALL_DIR)
 	$(call download_to_target,$(OPENSSL_URLS))
 
-$(CURL_TARBALL): | $(TARBALL_DIR)
+$(CURL_TARBALL): force-download-check | $(TARBALL_DIR)
 	$(call download_to_target,$(CURL_URLS))
 
 $(PUBLIC_LIB_DIR)/cacert.pem: $(TARBALL_DIR)/cacert.pem
 	mkdir -p $(PUBLIC_LIB_DIR)
 	cp $< $@
 
-$(TARBALL_DIR)/cacert.pem: | $(TARBALL_DIR)
+$(TARBALL_DIR)/cacert.pem: force-download-check | $(TARBALL_DIR)
 	$(call download_to_target,$(CACERT_URLS))
 
 define extract_source
@@ -296,6 +296,8 @@ $(STAMP_DIR)/curl-x86.done: $(STAMP_DIR)/curl-x86.extract | $(PREFIX)/lib/libz.a
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
 	touch $@
 
+# Ubuntu Clang parses __builtin_available but does not ship the Darwin runtime
+# helper needed by checks newer than the 10.9 deployment target.
 $(STAMP_DIR)/curl-x64.done: $(STAMP_DIR)/curl-x64.extract | $(PREFIX)/lib/libz.a $(PREFIX)/lib/libcrypto.a $(PREFIX)/lib/libssl.a
 	@echo "--- Building curl (x64) ---"
 	cd $(CURL_X64_SRC) && \
@@ -312,6 +314,11 @@ $(STAMP_DIR)/curl-x64.done: $(STAMP_DIR)/curl-x64.extract | $(PREFIX)/lib/libz.a
 	--prefix=$(PREFIX)/x64 && \
 	sed -i 's|#define HAVE_ATOMIC 1|/* #undef HAVE_ATOMIC */|g' lib/curl_config.h && \
 	sed -i 's|#define HAVE_STDATOMIC_H 1|/* #undef HAVE_STDATOMIC_H */|g' lib/curl_config.h && \
+	sed -i \
+	  's|#define HAVE_BUILTIN_AVAILABLE 1|/* #undef HAVE_BUILTIN_AVAILABLE */|g' \
+	  lib/curl_config.h && \
+	grep -q '^/\* #undef HAVE_BUILTIN_AVAILABLE \*/' lib/curl_config.h \
+	  || { echo " [!] x64: HAVE_BUILTIN_AVAILABLE still set"; exit 1; } && \
 	grep -q '^#define HAVE_GETADDRINFO_THREADSAFE 1' lib/curl_config.h \
 	  || { echo " [!] x64: HAVE_GETADDRINFO_THREADSAFE not set"; exit 1; } && \
 	make clean && make -j$(JOBS) -C lib install && make -j$(JOBS) -C include install
