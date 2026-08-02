@@ -1,6 +1,6 @@
 # Altivec Intelligence - CURLphone (iPhone)
 APP_NAME = CURLphone
-SOURCES = main.m DownloadViewController.m CrossPlatform.m
+SOURCES = main.m DownloadViewController.m CrossPlatform.m AICURLConnection.m
 
 ALTIVECCORE_REQUIRED = 1
 ALTIVECCOCOA_REQUIRED = 1

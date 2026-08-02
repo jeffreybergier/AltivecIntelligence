@@ -1,8 +1,5 @@
 #import "AICURLConnection.h"
-#import <curl/curl.h>
-#import <openssl/opensslv.h>
-#import <openssl/crypto.h>
-#import <zlib.h>
+#import <AltivecCore/AltivecCore.h>
 #import <objc/runtime.h>
 
 @implementation AIHTTPURLResponse
@@ -145,16 +142,7 @@ static size_t AIHeaderCallback(void *contents,
 
 + (NSString *)certPath;
 {
-  // Try the framework bundle first (AltivecCore.framework/Resources/),
-  // then fall back to the app's main bundle for static-link callers.
-  NSString *certPath = [[NSBundle bundleForClass:self] pathForResource:@"cacert"
-                                                                ofType:@"pem"];
-  if (certPath == nil) {
-    certPath = [[NSBundle mainBundle] pathForResource:@"cacert"
-                                               ofType:@"pem"];
-  }
-  NSParameterAssert(certPath);
-  return certPath;
+  return [AltivecCore certPath];
 }
 
 #pragma mark - Initializers
@@ -456,7 +444,7 @@ static size_t AIHeaderCallback(void *contents,
 
 // Clang emits calls to __isPlatformVersionAtLeast for @available() checks.
 // Normally provided by libclang_rt.osx.a, which OSXCross does not ship —
-// stub it here so AltivecCore.dylib is self-contained.
+// keep a weak fallback here so the CURL sample apps are self-contained.
 #include <sys/sysctl.h>
 #include <stdlib.h>
 #include <stdint.h>

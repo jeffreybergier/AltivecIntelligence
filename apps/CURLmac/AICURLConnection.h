@@ -1,5 +1,8 @@
 #import <Foundation/Foundation.h>
 
+// Private convenience wrapper for the CURL sample apps. New applications
+// should use AltivecCore's bundled libcurl directly instead of copying this API.
+
 // A subclass of NSHTTPURLResponse that provides a reliable way to 
 // initialize and store HTTP metadata on legacy systems like Tiger (10.4).
 // Matches the standard NSURLResponse and NSHTTPURLResponse APIs.

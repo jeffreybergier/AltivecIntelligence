@@ -16,8 +16,7 @@ IOS_V7_FLAGS=-target armv7-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -ar
 IOS_64_FLAGS=-target arm64-apple-ios$(IOS_ARM64_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch arm64 -B$(BIN_DIR)
 CJSON_CFLAGS=$(OPT_FLAGS) $(COMMON_WARN_FLAGS) -std=c99 -I$(CJSON_DIR)
 
-CORE_COMPONENT_LIBS=libAICURLConnection.a \
-                    libcurl.a \
+CORE_COMPONENT_LIBS=libcurl.a \
                     libssl.a \
                     libcrypto.a \
                     libz.a \
@@ -25,8 +24,7 @@ CORE_COMPONENT_LIBS=libAICURLConnection.a \
                     libcjson.a
 CORE_STATIC_LIBS=libAltivecCore.a $(CORE_COMPONENT_LIBS)
 PUBLIC_LIBS=$(addprefix $(PUBLIC_LIB_DIR)/,$(CORE_STATIC_LIBS))
-CURL_PUBLIC_FILES=libAICURLConnection.a \
-                  libcurl.a \
+CURL_PUBLIC_FILES=libcurl.a \
                   libssl.a \
                   libcrypto.a \
                   libz.a \
@@ -42,6 +40,7 @@ REMOVED_FRAMEWORK_BUNDLE=$(PUBLIC_LIB_DIR)/AltivecCore.framework
 all: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
      $(PUBLIC_INCLUDE_DIR)/.stamp verify-phone
 	@rm -rf $(REMOVED_FRAMEWORK_BUNDLE)
+	@rm -f $(PUBLIC_LIB_DIR)/libAICURLConnection.a
 	@echo "-----------------------------------------------------------"
 	@echo "PHONE ALTIVECCORE STATIC LIBS BUILD SUCCESSFUL"
 	@echo "Libraries: $(PUBLIC_LIB_DIR)"
@@ -52,6 +51,7 @@ all: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
 static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
         $(PUBLIC_INCLUDE_DIR)/.stamp verify-phone
 	@rm -rf $(REMOVED_FRAMEWORK_BUNDLE)
+	@rm -f $(PUBLIC_LIB_DIR)/libAICURLConnection.a
 	@echo "-----------------------------------------------------------"
 	@echo "PHONE ALTIVECCORE STATIC LIBS BUILD SUCCESSFUL"
 	@echo "Libraries: $(PUBLIC_LIB_DIR)"
@@ -65,13 +65,11 @@ dynamic:
 	@exit 1
 
 curl-ready:
-	@if [ ! -f "$(CURL_DIR)/lib/libAICURLConnection.a" ] || \
-	    [ ! -f "$(CURL_DIR)/lib/libcurl.a" ] || \
+	@if [ ! -f "$(CURL_DIR)/lib/libcurl.a" ] || \
 	    [ ! -f "$(CURL_DIR)/lib/libssl.a" ] || \
 	    [ ! -f "$(CURL_DIR)/lib/libcrypto.a" ] || \
 	    [ ! -f "$(CURL_DIR)/lib/libz.a" ] || \
-	    [ ! -f "$(CURL_DIR)/lib/cacert.pem" ] || \
-	    [ ! -f "$(CURL_DIR)/include/AICURLConnection.h" ]; then \
+	    [ ! -f "$(CURL_DIR)/lib/cacert.pem" ]; then \
 		echo "--- Building Phone libcurl static dependency ---"; \
 		$(MAKE) -C $(CWD)/../libcurl phone-static; \
 	fi
@@ -193,14 +191,14 @@ $(PUBLIC_INCLUDE_DIR)/.stamp: AltivecCore.h | curl-ready sqlite-ready
 	rm -rf $(PUBLIC_INCLUDE_DIR)/curl $(PUBLIC_INCLUDE_DIR)/openssl \
 	       $(PUBLIC_INCLUDE_DIR)/AltivecCore
 	cp -R $(CURL_DIR)/include/* $(PUBLIC_INCLUDE_DIR)/
-	rm -f $(PUBLIC_INCLUDE_DIR)/AltivecCURL.h
+	rm -f $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h \
+	      $(PUBLIC_INCLUDE_DIR)/AltivecCURL.h
 	cp $(SQLITE_DIR)/include/sqlite3.h $(PUBLIC_INCLUDE_DIR)/
 	cp $(CJSON_DIR)/cJSON.h $(PUBLIC_INCLUDE_DIR)/
 	cp $(CJSON_DIR)/cJSON_Utils.h $(PUBLIC_INCLUDE_DIR)/
 	cp AltivecCore.h $(PUBLIC_INCLUDE_DIR)/
 	mkdir -p $(PUBLIC_INCLUDE_DIR)/AltivecCore
 	cp $(PUBLIC_INCLUDE_DIR)/AltivecCore.h \
-	   $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h \
 	   $(PUBLIC_INCLUDE_DIR)/zlib.h \
 	   $(PUBLIC_INCLUDE_DIR)/sqlite3.h \
 	   $(PUBLIC_INCLUDE_DIR)/cJSON.h \
@@ -236,6 +234,9 @@ verify-phone: $(PUBLIC_LIBS)
 	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=armv7 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (armv7)"; missing=1; }; \
+	if $(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q 'AICURLConnection'; then echo " [!] ERROR: aggregate still exports AICURLConnection (arm64)"; missing=1; fi; \
+	test ! -e $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h || { echo " [!] ERROR: AICURLConnection.h is still public"; missing=1; }; \
+	test ! -e $(PUBLIC_INCLUDE_DIR)/AltivecCore/AICURLConnection.h || { echo " [!] ERROR: nested AICURLConnection.h is still public"; missing=1; }; \
 	exit $$missing
 
 prune-build-files:

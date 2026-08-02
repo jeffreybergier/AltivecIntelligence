@@ -59,8 +59,9 @@ echo "  2) Codex"
 echo "  3) Antigravity"
 echo "  4) Pi"
 echo "  5) OpenCode"
+echo "  6) Kimi"
 echo ""
-read -rp "Choice [1-5]: " choice
+read -rp "Choice [1-6]: " choice
 
 case "$choice" in
   1)
@@ -82,6 +83,10 @@ case "$choice" in
   5)
     pkg="opencode-ai"
     launcher="launch_standard opencode"
+    ;;
+  6)
+    pkg="@moonshot-ai/kimi-code"
+    launcher="launch_standard kimi"
     ;;
   *)
     log "main" "Invalid choice: $choice"

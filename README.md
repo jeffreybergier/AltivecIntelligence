@@ -56,7 +56,7 @@ docker compose pull
 docker compose run --rm altivec "make"
 
 # 4. Use with AI assistant (interactive chooser picks
-#    Claude / Codex / Antigravity / Pi / OpenCode):
+#    Claude / Codex / Antigravity / Pi / OpenCode / Kimi):
 docker compose run --rm altivec-intelligence
 ```
 
@@ -100,6 +100,11 @@ run it to make sure it works.
 an iPhone app or Mac app. Also, if you want to do networking, you may consider
 using the CURLmac or CURLphone app as starting place because those have
 AltivecCore linked.
+
+The CURL samples include `AICURLConnection` as private convenience source for
+their demonstrations; it is not part of AltivecCore's public API. New app code
+should call libcurl directly and set `CURLOPT_CAINFO` to
+`AltivecCoreCertPath()` on every new or reset easy handle.
 
 ## Deploying to Hardware
 

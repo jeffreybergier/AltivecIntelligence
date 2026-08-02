@@ -40,8 +40,7 @@ OPENSSL_ARM64_SRC=$(INTERMEDIATE)/openssl-$(OPENSSL_VER)-arm64
 CURL_ARMV7_SRC=$(INTERMEDIATE)/curl-$(CURL_VER)-armv7
 CURL_ARM64_SRC=$(INTERMEDIATE)/curl-$(CURL_VER)-arm64
 
-PUBLIC_LIBS=$(PUBLIC_LIB_DIR)/libAICURLConnection.a \
-            $(PUBLIC_LIB_DIR)/libcurl.a \
+PUBLIC_LIBS=$(PUBLIC_LIB_DIR)/libcurl.a \
             $(PUBLIC_LIB_DIR)/libssl.a \
             $(PUBLIC_LIB_DIR)/libcrypto.a \
             $(PUBLIC_LIB_DIR)/libz.a
@@ -50,15 +49,13 @@ all: static
 
 static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
         $(PUBLIC_INCLUDE_DIR)/.stamp verify-phone prune-build-files
+	@rm -f $(PUBLIC_LIB_DIR)/libAICURLConnection.a \
+	       $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h
 	@echo "-----------------------------------------------------------"
 	@echo "PHONE UNIVERSAL (armv7 + arm64) STATIC BUILD SUCCESSFUL"
 	@echo "Libraries: $(PUBLIC_LIB_DIR)"
 	@echo "Headers:   $(PUBLIC_INCLUDE_DIR)"
 	@echo "-----------------------------------------------------------"
-
-aicc: $(PUBLIC_LIB_DIR)/libAICURLConnection.a \
-      $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h verify-phone prune-build-files
-	@echo "AICURLConnection build successful."
 
 verify-phone: $(PUBLIC_LIBS)
 	@echo "--- Verifying Phone universal libraries ---"
@@ -276,64 +273,21 @@ $(STAMP_DIR)/curl-universal: $(STAMP_DIR)/curl-armv7 \
 $(PREFIX)/lib/libcurl.a: $(STAMP_DIR)/curl-universal
 	test -f $@
 
-$(STAMP_DIR)/aicc-armv7: AICURLConnection.m AICURLConnection.h \
-                         | $(PREFIX)/lib/libcurl.a
-	@echo "--- Building AICURLConnection (armv7) ---"
-	mkdir -p $(INTERMEDIATE) $(PREFIX)/armv7/lib
-	$(COMPILER_IOS) $(IOS_V7_FLAGS) $(OPT_FLAGS) \
-	  -I$(PREFIX)/armv7/include \
-	  -c AICURLConnection.m \
-	  -o $(INTERMEDIATE)/AICURLConnection-armv7.o
-	$(AR_MODERN) rc \
-	  $(PREFIX)/armv7/lib/libAICURLConnection.a \
-	  $(INTERMEDIATE)/AICURLConnection-armv7.o
-	$(RANLIB_MODERN) $(PREFIX)/armv7/lib/libAICURLConnection.a
-	touch $@
-
-$(STAMP_DIR)/aicc-arm64: AICURLConnection.m AICURLConnection.h \
-                         | $(PREFIX)/lib/libcurl.a
-	@echo "--- Building AICURLConnection (arm64) ---"
-	mkdir -p $(INTERMEDIATE) $(PREFIX)/arm64/lib
-	$(COMPILER_IOS) $(IOS_64_FLAGS) $(OPT_FLAGS) \
-	  -I$(PREFIX)/arm64/include \
-	  -c AICURLConnection.m \
-	  -o $(INTERMEDIATE)/AICURLConnection-arm64.o
-	$(AR_MODERN) rc \
-	  $(PREFIX)/arm64/lib/libAICURLConnection.a \
-	  $(INTERMEDIATE)/AICURLConnection-arm64.o
-	$(RANLIB_MODERN) $(PREFIX)/arm64/lib/libAICURLConnection.a
-	touch $@
-
-$(STAMP_DIR)/aicc-universal: $(STAMP_DIR)/aicc-armv7 \
-                             $(STAMP_DIR)/aicc-arm64
-	$(LIPO_MODERN) -create \
-	  $(PREFIX)/arm64/lib/libAICURLConnection.a \
-	  $(PREFIX)/armv7/lib/libAICURLConnection.a \
-	  -output $(PREFIX)/lib/libAICURLConnection.a
-	touch $@
-
-$(PREFIX)/lib/libAICURLConnection.a: $(STAMP_DIR)/aicc-universal
-	test -f $@
-
 $(PUBLIC_LIB_DIR)/%.a: $(PREFIX)/lib/%.a
 	mkdir -p $(PUBLIC_LIB_DIR)
-	cp $< $@
-
-$(PUBLIC_INCLUDE_DIR)/AICURLConnection.h: AICURLConnection.h
-	mkdir -p $(PUBLIC_INCLUDE_DIR)
 	cp $< $@
 
 $(PUBLIC_INCLUDE_DIR)/.stamp: $(PREFIX)/lib/libcurl.a \
                               $(PREFIX)/lib/libssl.a \
                               $(PREFIX)/lib/libcrypto.a \
-                              $(PREFIX)/lib/libz.a \
-                              $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h
+                              $(PREFIX)/lib/libz.a
 	mkdir -p $(PUBLIC_INCLUDE_DIR)
 	rm -rf $(PUBLIC_INCLUDE_DIR)/curl $(PUBLIC_INCLUDE_DIR)/openssl
+	rm -f $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h
 	cp -R $(PREFIX)/include/* $(PUBLIC_INCLUDE_DIR)/
 	touch $@
 
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: all static aicc verify-phone prune-build-files clean
+.PHONY: all static verify-phone prune-build-files clean

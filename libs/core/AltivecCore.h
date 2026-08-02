@@ -28,7 +28,6 @@ const char *AltivecCoreCertPath(void);
 
 @end
 
-#import <AltivecCore/AICURLConnection.h>
 #endif
 
 #include <AltivecCore/curl/curl.h>

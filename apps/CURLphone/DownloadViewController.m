@@ -1,5 +1,5 @@
 #import "DownloadViewController.h"
-#import <AltivecCore/AICURLConnection.h>
+#import "AICURLConnection.h"
 #import "CrossPlatform.h"
 
 @implementation DownloadViewController

@@ -1,6 +1,6 @@
 # Altivec Intelligence - CURLmac (Mac)
 APP_NAME = CURLmac
-SOURCES = main.m DownloadWindowController.m
+SOURCES = main.m DownloadWindowController.m AICURLConnection.m
 
 ALTIVECCORE_REQUIRED = 1
 ALTIVECCORE_LINKAGE = dynamic

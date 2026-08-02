@@ -6,7 +6,7 @@
 #import <UIKit/UIKit.h>
 #import "DownloadViewController.h"
 #import "CrossPlatform.h"
-#import <AltivecCore/AICURLConnection.h>
+#import "AICURLConnection.h"
 
 // --- KeyValueTableViewController Interface ---
 // A table view controller that displays the versions of the linked 

@@ -210,6 +210,7 @@ RUN npm install -g \
       @anthropic-ai/claude-code \
       @openai/codex \
       @earendil-works/pi-coding-agent \
+      @moonshot-ai/kimi-code \
       opencode-ai@latest \
       prettier \
       js-beautify \
@@ -412,8 +413,13 @@ RUN set -e; \
     test -f apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/LICENSE-Font-Awesome.txt; \
     test -f libs/core/build-mac/lib/libAltivecCore.a; \
     test -f libs/core/build-phone/lib/libAltivecCore.a; \
-    test -f libs/core/build-mac/lib/libAICURLConnection.a; \
-    test -f libs/core/build-phone/lib/libAICURLConnection.a; \
+    test -f apps/CURLmac/AICURLConnection.m; \
+    test -f apps/CURLphone/AICURLConnection.m; \
+    test ! -e libs/core/build-mac/lib/libAICURLConnection.a; \
+    test ! -e libs/core/build-phone/lib/libAICURLConnection.a; \
+    test ! -e libs/core/build-mac/include/AICURLConnection.h; \
+    test ! -e libs/core/build-phone/include/AICURLConnection.h; \
+    test ! -e libs/core/build-mac/lib/AltivecCore.framework/Headers/AICURLConnection.h; \
     test ! -d libs/libcurl/build-mac; \
     test ! -d libs/libcurl/build-phone; \
     test ! -d libs/sqlite/build-mac; \

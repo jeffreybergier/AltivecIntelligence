@@ -6,7 +6,17 @@
 
 + (NSString *)certPath;
 {
-  return [AICURLConnection certPath];
+  NSBundle *bundle;
+  NSString *certPath;
+
+  bundle = [NSBundle bundleForClass:self];
+  certPath = [bundle pathForResource:@"cacert" ofType:@"pem"];
+  if (certPath == nil) {
+    certPath = [[NSBundle mainBundle] pathForResource:@"cacert"
+                                               ofType:@"pem"];
+  }
+  NSParameterAssert(certPath);
+  return certPath;
 }
 
 @end

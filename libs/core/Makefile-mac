@@ -21,8 +21,7 @@ ARM64_COMPILE_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_AR
 
 CJSON_CFLAGS=$(OPT_FLAGS) $(COMMON_WARN_FLAGS) -std=c99 -I$(CJSON_DIR)
 
-CORE_COMPONENT_LIBS=libAICURLConnection.a \
-                    libcurl.a \
+CORE_COMPONENT_LIBS=libcurl.a \
                     libssl.a \
                     libcrypto.a \
                     libz.a \
@@ -31,8 +30,7 @@ CORE_COMPONENT_LIBS=libAICURLConnection.a \
 CORE_STATIC_LIBS=libAltivecCore.a $(CORE_COMPONENT_LIBS)
 PUBLIC_LIBS=$(addprefix $(PUBLIC_LIB_DIR)/,$(CORE_STATIC_LIBS))
 PUBLIC_COMPONENT_LIBS=$(addprefix $(PUBLIC_LIB_DIR)/,$(CORE_COMPONENT_LIBS))
-CURL_PUBLIC_FILES=libAICURLConnection.a \
-                  libcurl.a \
+CURL_PUBLIC_FILES=libcurl.a \
                   libssl.a \
                   libcrypto.a \
                   libz.a \
@@ -64,6 +62,7 @@ DYLIB_LINK_FLAGS=-dynamiclib \
 all: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
      $(PUBLIC_INCLUDE_DIR)/.stamp verify-mac \
      $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic
+	@rm -f $(PUBLIC_LIB_DIR)/libAICURLConnection.a
 	@echo "-----------------------------------------------------------"
 	@echo "MAC QUAD-FAT STATIC + ALTIVECCORE FRAMEWORK BUILD SUCCESSFUL"
 	@echo "Libraries: $(PUBLIC_LIB_DIR)"
@@ -74,6 +73,7 @@ all: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
 
 static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
         $(PUBLIC_INCLUDE_DIR)/.stamp verify-mac
+	@rm -f $(PUBLIC_LIB_DIR)/libAICURLConnection.a
 	@echo "-----------------------------------------------------------"
 	@echo "MAC ALTIVECCORE STATIC LIBS BUILD SUCCESSFUL"
 	@echo "Libraries: $(PUBLIC_LIB_DIR)"
@@ -84,6 +84,7 @@ static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
 dynamic: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
          $(PUBLIC_INCLUDE_DIR)/.stamp \
          $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) verify-dynamic
+	@rm -f $(PUBLIC_LIB_DIR)/libAICURLConnection.a
 	@echo "-----------------------------------------------------------"
 	@echo "MAC ALTIVECCORE FRAMEWORK BUILD SUCCESSFUL"
 	@echo "Framework: $(FRAMEWORK_BUNDLE)"
@@ -91,13 +92,11 @@ dynamic: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
 	@$(MAKE) --no-print-directory -f Makefile-mac prune-build-files
 
 curl-ready:
-	@if [ ! -f "$(CURL_DIR)/lib/libAICURLConnection.a" ] || \
-	    [ ! -f "$(CURL_DIR)/lib/libcurl.a" ] || \
+	@if [ ! -f "$(CURL_DIR)/lib/libcurl.a" ] || \
 	    [ ! -f "$(CURL_DIR)/lib/libssl.a" ] || \
 	    [ ! -f "$(CURL_DIR)/lib/libcrypto.a" ] || \
 	    [ ! -f "$(CURL_DIR)/lib/libz.a" ] || \
-	    [ ! -f "$(CURL_DIR)/lib/cacert.pem" ] || \
-	    [ ! -f "$(CURL_DIR)/include/AICURLConnection.h" ]; then \
+	    [ ! -f "$(CURL_DIR)/lib/cacert.pem" ]; then \
 		echo "--- Building Mac libcurl static dependency ---"; \
 		$(MAKE) -C $(CWD)/../libcurl mac-static; \
 	fi
@@ -291,14 +290,14 @@ $(PUBLIC_INCLUDE_DIR)/.stamp: AltivecCore.h | curl-ready sqlite-ready
 	rm -rf $(PUBLIC_INCLUDE_DIR)/curl $(PUBLIC_INCLUDE_DIR)/openssl \
 	       $(PUBLIC_INCLUDE_DIR)/AltivecCore
 	cp -R $(CURL_DIR)/include/* $(PUBLIC_INCLUDE_DIR)/
-	rm -f $(PUBLIC_INCLUDE_DIR)/AltivecCURL.h
+	rm -f $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h \
+	      $(PUBLIC_INCLUDE_DIR)/AltivecCURL.h
 	cp $(SQLITE_DIR)/include/sqlite3.h $(PUBLIC_INCLUDE_DIR)/
 	cp $(CJSON_DIR)/cJSON.h $(PUBLIC_INCLUDE_DIR)/
 	cp $(CJSON_DIR)/cJSON_Utils.h $(PUBLIC_INCLUDE_DIR)/
 	cp AltivecCore.h $(PUBLIC_INCLUDE_DIR)/
 	mkdir -p $(PUBLIC_INCLUDE_DIR)/AltivecCore
 	cp $(PUBLIC_INCLUDE_DIR)/AltivecCore.h \
-	   $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h \
 	   $(PUBLIC_INCLUDE_DIR)/zlib.h \
 	   $(PUBLIC_INCLUDE_DIR)/sqlite3.h \
 	   $(PUBLIC_INCLUDE_DIR)/cJSON.h \
@@ -331,6 +330,9 @@ verify-mac: $(PUBLIC_LIBS)
 	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (ppc)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (ppc)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '.objc_class_name_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (ppc)"; missing=1; }; \
+	if $(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q 'AICURLConnection'; then echo " [!] ERROR: aggregate still exports AICURLConnection (arm64)"; missing=1; fi; \
+	test ! -e $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h || { echo " [!] ERROR: AICURLConnection.h is still public"; missing=1; }; \
+	test ! -e $(PUBLIC_INCLUDE_DIR)/AltivecCore/AICURLConnection.h || { echo " [!] ERROR: nested AICURLConnection.h is still public"; missing=1; }; \
 	exit $$missing
 
 $(INTERMEDIATE)/c-exports.txt: $(PUBLIC_COMPONENT_LIBS)
@@ -359,18 +361,12 @@ $(INTERMEDIATE)/exports-legacy.txt: $(INTERMEDIATE)/c-exports.txt
 	cp $< $@
 	echo '_AltivecCoreCertPath' >> $@
 	echo '.objc_class_name_AltivecCore' >> $@
-	echo '.objc_class_name_AICURLConnection' >> $@
-	echo '.objc_class_name_AIHTTPURLResponse' >> $@
 
 $(INTERMEDIATE)/exports-modern.txt: $(INTERMEDIATE)/c-exports.txt
 	cp $< $@
 	echo '_AltivecCoreCertPath' >> $@
 	echo '_OBJC_CLASS_$$_AltivecCore' >> $@
 	echo '_OBJC_METACLASS_$$_AltivecCore' >> $@
-	echo '_OBJC_CLASS_$$_AICURLConnection' >> $@
-	echo '_OBJC_METACLASS_$$_AICURLConnection' >> $@
-	echo '_OBJC_CLASS_$$_AIHTTPURLResponse' >> $@
-	echo '_OBJC_METACLASS_$$_AIHTTPURLResponse' >> $@
 
 $(INTERMEDIATE)/AltivecCore-ppc.dylib: $(INTERMEDIATE)/exports-legacy.txt $(PUBLIC_LIBS)
 	@echo "--- Linking AltivecCore dylib (ppc) ---"
@@ -447,7 +443,7 @@ verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
 	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Info.plist || { echo " [!] ERROR: Info.plist missing"; missing=1; }; \
 	test -f $(FRAMEWORK_VERSION_DIR)/Resources/cacert.pem || { echo " [!] ERROR: cacert.pem missing"; missing=1; }; \
 	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AltivecCore.h || { echo " [!] ERROR: AltivecCore.h umbrella missing"; missing=1; }; \
-	test -f $(FRAMEWORK_VERSION_DIR)/Headers/AICURLConnection.h || { echo " [!] ERROR: AICURLConnection.h missing"; missing=1; }; \
+	test ! -e $(FRAMEWORK_VERSION_DIR)/Headers/AICURLConnection.h || { echo " [!] ERROR: AICURLConnection.h is still exported"; missing=1; }; \
 	test -f $(FRAMEWORK_VERSION_DIR)/Headers/sqlite3.h || { echo " [!] ERROR: sqlite3.h missing"; missing=1; }; \
 	test -f $(FRAMEWORK_VERSION_DIR)/Headers/cJSON.h || { echo " [!] ERROR: cJSON.h missing"; missing=1; }; \
 	test -d $(FRAMEWORK_VERSION_DIR)/Headers/curl || { echo " [!] ERROR: curl/ headers missing"; missing=1; }; \
@@ -460,10 +456,9 @@ verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: _cJSON_Parse not exported"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: _AltivecCoreCertPath not exported (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: AltivecCore class not exported (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported (arm64)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AltivecCore' || { echo " [!] ERROR: AltivecCore class not exported (ppc)"; missing=1; }; \
 	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: _AltivecCoreCertPath not exported (ppc)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIHTTPURLResponse' || { echo " [!] ERROR: AIHTTPURLResponse class not exported (ppc)"; missing=1; }; \
+	if $(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q 'AICURLConnection'; then echo " [!] ERROR: AICURLConnection still exported (arm64)"; missing=1; fi; \
 	exit $$missing
 
 prune-build-files:
