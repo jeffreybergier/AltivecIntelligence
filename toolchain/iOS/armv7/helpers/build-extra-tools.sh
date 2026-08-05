@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# Try each verified source independently before moving to its mirror.
+readonly SOURCE_DOWNLOAD_ATTEMPTS=3
+
 # Portable command-line tools.
 readonly DIFFUTILS_VERSION="3.12"
 readonly DIFFUTILS_SHA256="7c8b7f9fc8609141fdea9cece85249d308624391ff61dedaf528fcb337727dfd"
@@ -33,6 +36,7 @@ readonly MANDOC_VERSION="1.14.6"
 readonly MANDOC_SHA256="8bf0d570f01e70a6e124884088870cbed7537f36328d512909eb10cd53179d9c"
 readonly TREE_VERSION="2.2.1"
 readonly TREE_SHA256="70d9c6fc7c5f4cb1f7560b43e2785194594b9b8f6855ab53376f6bd88667ee04"
+readonly TREE_MIRROR_SHA256="5caddcbca805131ff590b126d3218019882e4ca10bc9eb490bba51c05b9b3b75"
 
 # Darwin-native tools.  The network versions are deliberately split:
 # network_cmds 481 supplies ping, while 356 supplies an ifconfig whose
@@ -300,29 +304,69 @@ readonly netcat_source="${sources_dir}/netcat-${NETCAT_VERSION}"
 
 fetch_file() {
   local destination="$1"
-  local url="$2"
-  local expected_sha256="$3"
+  local primary_url="$2"
+  local primary_sha256="$3"
+  local mirror_url="$4"
+  local mirror_sha256="${5:-$primary_sha256}"
   local actual_sha256=""
+  local attempt=0
+  local expected_sha256=""
+  local source_index=0
+  local source_label=""
   local temporary=""
+  local url=""
+  local -a expected_sha256s=("$primary_sha256" "$mirror_sha256")
+  local -a source_labels=(primary mirror)
+  local -a urls=("$primary_url" "$mirror_url")
 
-  if [[ ! -f "$destination" ]]; then
-    temporary="$(mktemp "${archives_dir}/.extra-download.XXXXXX")"
-    printf 'Downloading %s\n' "$url"
-    if ! curl -fL --retry 3 --retry-delay 2 -o "$temporary" "$url"; then
-      rm -f -- "$temporary"
-      die "download failed: ${url}"
+  if [[ -f "$destination" ]]; then
+    actual_sha256="$(sha256sum "$destination" | awk '{print $1}')"
+    if [[ "$actual_sha256" == "$primary_sha256" ||
+        "$actual_sha256" == "$mirror_sha256" ]]; then
+      return 0
     fi
-    actual_sha256="$(sha256sum "$temporary" | awk '{print $1}')"
-    if [[ "$actual_sha256" != "$expected_sha256" ]]; then
-      rm -f -- "$temporary"
-      die "checksum mismatch for ${url}: expected ${expected_sha256}, got ${actual_sha256}"
-    fi
-    mv -- "$temporary" "$destination"
+
+    printf 'warning: discarding cached source with checksum %s: %s\n' \
+      "$actual_sha256" "$destination" >&2
+    rm -f -- "$destination"
   fi
 
-  actual_sha256="$(sha256sum "$destination" | awk '{print $1}')"
-  [[ "$actual_sha256" == "$expected_sha256" ]] ||
-    die "cached source checksum mismatch: ${destination}"
+  for source_index in "${!urls[@]}"; do
+    url="${urls[$source_index]}"
+    expected_sha256="${expected_sha256s[$source_index]}"
+    source_label="${source_labels[$source_index]}"
+
+    if [[ "$source_label" == mirror ]]; then
+      printf 'Primary source exhausted; trying mirror %s\n' "$url"
+    fi
+
+    for ((attempt = 1; attempt <= SOURCE_DOWNLOAD_ATTEMPTS; attempt++)); do
+      temporary="$(mktemp "${archives_dir}/.extra-download.XXXXXX")"
+      printf 'Downloading %s source (attempt %d/%d): %s\n' \
+        "$source_label" "$attempt" "$SOURCE_DOWNLOAD_ATTEMPTS" "$url"
+
+      if curl -fL --connect-timeout 30 -o "$temporary" "$url"; then
+        actual_sha256="$(sha256sum "$temporary" | awk '{print $1}')"
+        if [[ "$actual_sha256" == "$expected_sha256" ]]; then
+          mv -- "$temporary" "$destination"
+          return 0
+        fi
+        printf 'warning: checksum mismatch for %s: expected %s, got %s\n' \
+          "$url" "$expected_sha256" "$actual_sha256" >&2
+      else
+        printf 'warning: download failed: %s\n' "$url" >&2
+      fi
+
+      rm -f -- "$temporary"
+      temporary=""
+
+      if ((attempt < SOURCE_DOWNLOAD_ATTEMPTS)); then
+        sleep $((attempt * 2))
+      fi
+    done
+  done
+
+  die "verified download failed from ${primary_url} and ${mirror_url}"
 }
 
 extract_archive() {
@@ -384,125 +428,152 @@ apply_patch_once() {
 prepare_sources() {
   fetch_file "$diffutils_archive" \
     "https://ftpmirror.gnu.org/diffutils/diffutils-${DIFFUTILS_VERSION}.tar.xz" \
-    "$DIFFUTILS_SHA256"
+    "$DIFFUTILS_SHA256" \
+    "https://mirrors.kernel.org/gnu/diffutils/diffutils-${DIFFUTILS_VERSION}.tar.xz"
   extract_archive "$diffutils_archive" "$diffutils_source" xz 1
 
   fetch_file "$findutils_archive" \
     "https://ftpmirror.gnu.org/findutils/findutils-${FINDUTILS_VERSION}.tar.xz" \
-    "$FINDUTILS_SHA256"
+    "$FINDUTILS_SHA256" \
+    "https://mirrors.kernel.org/gnu/findutils/findutils-${FINDUTILS_VERSION}.tar.xz"
   extract_archive "$findutils_archive" "$findutils_source" xz 1
 
   fetch_file "$grep_archive" \
     "https://ftpmirror.gnu.org/grep/grep-${GREP_VERSION}.tar.xz" \
-    "$GREP_SHA256"
+    "$GREP_SHA256" \
+    "https://mirrors.kernel.org/gnu/grep/grep-${GREP_VERSION}.tar.xz"
   extract_archive "$grep_archive" "$grep_source" xz 1
 
   fetch_file "$sed_archive" \
     "https://ftpmirror.gnu.org/sed/sed-${SED_VERSION}.tar.xz" \
-    "$SED_SHA256"
+    "$SED_SHA256" \
+    "https://mirrors.kernel.org/gnu/sed/sed-${SED_VERSION}.tar.xz"
   extract_archive "$sed_archive" "$sed_source" xz 1
 
   fetch_file "$tar_archive" \
     "https://ftpmirror.gnu.org/tar/tar-${TAR_VERSION}.tar.xz" \
-    "$TAR_SHA256"
+    "$TAR_SHA256" \
+    "https://mirrors.kernel.org/gnu/tar/tar-${TAR_VERSION}.tar.xz"
   extract_archive "$tar_archive" "$tar_source" xz 1
 
   fetch_file "$gzip_archive" \
     "https://ftpmirror.gnu.org/gzip/gzip-${GZIP_VERSION}.tar.xz" \
-    "$GZIP_SHA256"
+    "$GZIP_SHA256" \
+    "https://mirrors.kernel.org/gnu/gzip/gzip-${GZIP_VERSION}.tar.xz"
   extract_archive "$gzip_archive" "$gzip_source" xz 1
 
   fetch_file "$bzip2_archive" \
     "https://sourceware.org/pub/bzip2/bzip2-${BZIP2_VERSION}.tar.gz" \
-    "$BZIP2_SHA256"
+    "$BZIP2_SHA256" \
+    "https://distfiles.macports.org/bzip2/bzip2-${BZIP2_VERSION}.tar.gz"
   extract_archive "$bzip2_archive" "$bzip2_source" gz 1
 
   fetch_file "$ncurses_archive" \
     "https://invisible-island.net/archives/ncurses/ncurses-${NCURSES_VERSION}.tar.gz" \
-    "$NCURSES_SHA256"
+    "$NCURSES_SHA256" \
+    "https://ftp.gnu.org/gnu/ncurses/ncurses-${NCURSES_VERSION}.tar.gz"
   extract_archive "$ncurses_archive" "$ncurses_source" gz 1
 
   fetch_file "$less_archive" \
     "https://www.greenwoodsoftware.com/less/less-${LESS_VERSION}.tar.gz" \
-    "$LESS_SHA256"
+    "$LESS_SHA256" \
+    "https://ftp.gnu.org/gnu/less/less-${LESS_VERSION}.tar.gz"
   extract_archive "$less_archive" "$less_source" gz 1
 
   fetch_file "$vim_archive" \
     "https://github.com/vim/vim/archive/refs/tags/v${VIM_VERSION}.tar.gz" \
-    "$VIM_SHA256"
+    "$VIM_SHA256" \
+    "https://codeload.github.com/vim/vim/tar.gz/refs/tags/v${VIM_VERSION}"
   extract_archive "$vim_archive" "$vim_source" gz 1
 
   fetch_file "$htop_archive" \
     "https://hisham.hm/htop/releases/${HTOP_VERSION}/htop-${HTOP_VERSION}.tar.gz" \
-    "$HTOP_SHA256"
+    "$HTOP_SHA256" \
+    "https://sources.buildroot.net/htop/htop-${HTOP_VERSION}.tar.gz"
   extract_archive "$htop_archive" "$htop_source" gz 1
 
   fetch_file "$procps_archive" \
     "https://sourceforge.net/projects/procps-ng/files/Production/procps-ng-${PROCPS_VERSION}.tar.xz/download" \
-    "$PROCPS_SHA256"
+    "$PROCPS_SHA256" \
+    "https://sources.buildroot.net/procps-ng/procps-ng-${PROCPS_VERSION}.tar.xz"
   extract_archive "$procps_archive" "$procps_source" xz 1
 
   fetch_file "$mandoc_archive" \
     "https://mandoc.bsd.lv/snapshots/mandoc-${MANDOC_VERSION}.tar.gz" \
-    "$MANDOC_SHA256"
+    "$MANDOC_SHA256" \
+    "https://distfiles.macports.org/mandoc/mandoc-${MANDOC_VERSION}.tar.gz"
   extract_archive "$mandoc_archive" "$mandoc_source" gz 1
 
   fetch_file "$tree_archive" \
     "https://gitlab.com/OldManProgrammer/unix-tree/-/archive/${TREE_VERSION}/unix-tree-${TREE_VERSION}.tar.gz" \
-    "$TREE_SHA256"
+    "$TREE_SHA256" \
+    "https://codeload.github.com/Old-Man-Programmer/tree/tar.gz/refs/tags/${TREE_VERSION}" \
+    "$TREE_MIRROR_SHA256"
   extract_archive "$tree_archive" "$tree_source" gz 1
 
   fetch_file "$shell_cmds_archive" \
     "https://github.com/apple-oss-distributions/shell_cmds/archive/refs/tags/shell_cmds-${SHELL_CMDS_VERSION}.tar.gz" \
-    "$SHELL_CMDS_SHA256"
+    "$SHELL_CMDS_SHA256" \
+    "https://codeload.github.com/apple-oss-distributions/shell_cmds/tar.gz/refs/tags/shell_cmds-${SHELL_CMDS_VERSION}"
   extract_archive "$shell_cmds_archive" "$shell_cmds_source" gz 1
 
   fetch_file "$text_cmds_archive" \
     "https://github.com/apple-oss-distributions/text_cmds/archive/refs/tags/text_cmds-${TEXT_CMDS_VERSION}.tar.gz" \
-    "$TEXT_CMDS_SHA256"
+    "$TEXT_CMDS_SHA256" \
+    "https://codeload.github.com/apple-oss-distributions/text_cmds/tar.gz/refs/tags/text_cmds-${TEXT_CMDS_VERSION}"
   extract_archive "$text_cmds_archive" "$text_cmds_source" gz 1
 
   fetch_file "$adv_cmds_archive" \
     "https://github.com/apple-oss-distributions/adv_cmds/archive/refs/tags/adv_cmds-${ADV_CMDS_VERSION}.tar.gz" \
-    "$ADV_CMDS_SHA256"
+    "$ADV_CMDS_SHA256" \
+    "https://codeload.github.com/apple-oss-distributions/adv_cmds/tar.gz/refs/tags/adv_cmds-${ADV_CMDS_VERSION}"
   extract_archive "$adv_cmds_archive" "$adv_cmds_source" gz 1
   apply_patch_once "$adv_cmds_source" "$ps_patch" \
     "adv_cmds ps public-SDK workqueue fallback"
 
   fetch_file "$network_ping_archive" \
     "https://github.com/apple-oss-distributions/network_cmds/archive/refs/tags/network_cmds-${NETWORK_CMDS_PING_VERSION}.tar.gz" \
-    "$NETWORK_CMDS_PING_SHA256"
+    "$NETWORK_CMDS_PING_SHA256" \
+    "https://codeload.github.com/apple-oss-distributions/network_cmds/tar.gz/refs/tags/network_cmds-${NETWORK_CMDS_PING_VERSION}"
   extract_archive "$network_ping_archive" "$network_ping_source" gz 1
 
   fetch_file "$network_ifconfig_archive" \
     "https://github.com/apple-oss-distributions/network_cmds/archive/refs/tags/network_cmds-${NETWORK_CMDS_IFCONFIG_VERSION}.tar.gz" \
-    "$NETWORK_CMDS_IFCONFIG_SHA256"
+    "$NETWORK_CMDS_IFCONFIG_SHA256" \
+    "https://codeload.github.com/apple-oss-distributions/network_cmds/tar.gz/refs/tags/network_cmds-${NETWORK_CMDS_IFCONFIG_VERSION}"
   extract_archive "$network_ifconfig_archive" "$network_ifconfig_source" gz 1
 
   fetch_file "$netcat_archive" \
     "https://github.com/apple-oss-distributions/netcat/archive/refs/tags/netcat-${NETCAT_VERSION}.tar.gz" \
-    "$NETCAT_SHA256"
+    "$NETCAT_SHA256" \
+    "https://codeload.github.com/apple-oss-distributions/netcat/tar.gz/refs/tags/netcat-${NETCAT_VERSION}"
   extract_archive "$netcat_archive" "$netcat_source" gz 1
 
   fetch_file "$pkill_source" \
     "https://sourceforge.net/p/pkilldarwin/code/ci/default/tree/pkill.c?format=raw" \
-    "$PKILL_DARWIN_SHA256"
+    "$PKILL_DARWIN_SHA256" \
+    "https://archive.softwareheritage.org/api/1/content/sha256:${PKILL_DARWIN_SHA256}/raw/"
   fetch_file "$pkill_man" \
     "https://sourceforge.net/p/pkilldarwin/code/ci/default/tree/pkill.1?format=raw" \
-    "$PKILL_DARWIN_MAN_SHA256"
+    "$PKILL_DARWIN_MAN_SHA256" \
+    "https://archive.softwareheritage.org/api/1/content/sha256:${PKILL_DARWIN_MAN_SHA256}/raw/"
 
   fetch_file "$logger_source" \
     "https://raw.githubusercontent.com/freebsd/freebsd-src/release/10.2.0/usr.bin/logger/logger.c" \
-    "$FREEBSD_LOGGER_SHA256"
+    "$FREEBSD_LOGGER_SHA256" \
+    "https://cgit.freebsd.org/src/plain/usr.bin/logger/logger.c?h=release/10.2.0"
   fetch_file "$logger_man" \
     "https://raw.githubusercontent.com/freebsd/freebsd-src/release/10.2.0/usr.bin/logger/logger.1" \
-    "$FREEBSD_LOGGER_MAN_SHA256"
+    "$FREEBSD_LOGGER_MAN_SHA256" \
+    "https://cgit.freebsd.org/src/plain/usr.bin/logger/logger.1?h=release/10.2.0"
   fetch_file "$realpath_source" \
     "https://raw.githubusercontent.com/freebsd/freebsd-src/release/10.2.0/bin/realpath/realpath.c" \
-    "$FREEBSD_REALPATH_SHA256"
+    "$FREEBSD_REALPATH_SHA256" \
+    "https://cgit.freebsd.org/src/plain/bin/realpath/realpath.c?h=release/10.2.0"
   fetch_file "$realpath_man" \
     "https://raw.githubusercontent.com/freebsd/freebsd-src/release/10.2.0/bin/realpath/realpath.1" \
-    "$FREEBSD_REALPATH_MAN_SHA256"
+    "$FREEBSD_REALPATH_MAN_SHA256" \
+    "https://cgit.freebsd.org/src/plain/bin/realpath/realpath.1?h=release/10.2.0"
 }
 
 safe_remove_component() {
@@ -1151,6 +1222,8 @@ write_extra_documentation() {
       "https://mandoc.bsd.lv/snapshots/mandoc-${MANDOC_VERSION}.tar.gz"
     printf '%s  %s\n' "$TREE_SHA256" \
       "https://gitlab.com/OldManProgrammer/unix-tree/-/archive/${TREE_VERSION}/unix-tree-${TREE_VERSION}.tar.gz"
+    printf '%s  %s\n' "$TREE_MIRROR_SHA256" \
+      "https://codeload.github.com/Old-Man-Programmer/tree/tar.gz/refs/tags/${TREE_VERSION}"
     printf '%s  %s\n' "$SHELL_CMDS_SHA256" \
       "https://github.com/apple-oss-distributions/shell_cmds/archive/refs/tags/shell_cmds-${SHELL_CMDS_VERSION}.tar.gz"
     printf '%s  %s\n' "$TEXT_CMDS_SHA256" \

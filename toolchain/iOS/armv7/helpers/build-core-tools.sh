@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# Try each verified source independently before moving to its mirror.
+readonly SOURCE_DOWNLOAD_ATTEMPTS=3
+
 readonly CCTOOLS_VERSION="949.0.1"
 readonly LD64_VERSION="530"
 readonly CCTOOLS_COMMIT="b7230b3319891168397eae1c8f23670f48a6d1c1"
@@ -491,29 +494,69 @@ compiler_version() {
 
 fetch_archive() {
   local destination="$1"
-  local url="$2"
-  local expected_sha256="$3"
+  local primary_url="$2"
+  local primary_sha256="$3"
+  local mirror_url="$4"
+  local mirror_sha256="${5:-$primary_sha256}"
   local actual_sha256=""
+  local attempt=0
+  local expected_sha256=""
+  local source_index=0
+  local source_label=""
   local temporary=""
+  local url=""
+  local -a expected_sha256s=("$primary_sha256" "$mirror_sha256")
+  local -a source_labels=(primary mirror)
+  local -a urls=("$primary_url" "$mirror_url")
 
-  if [[ ! -f "$destination" ]]; then
-    temporary="$(mktemp "${archives_dir}/.download.XXXXXX")"
-    printf 'Downloading %s\n' "$url"
-    if ! curl -fL --retry 3 --retry-delay 2 -o "$temporary" "$url"; then
-      rm -f -- "$temporary"
-      die "download failed: ${url}"
+  if [[ -f "$destination" ]]; then
+    actual_sha256="$(sha256sum "$destination" | awk '{print $1}')"
+    if [[ "$actual_sha256" == "$primary_sha256" ||
+        "$actual_sha256" == "$mirror_sha256" ]]; then
+      return 0
     fi
-    actual_sha256="$(sha256sum "$temporary" | awk '{print $1}')"
-    if [[ "$actual_sha256" != "$expected_sha256" ]]; then
-      rm -f -- "$temporary"
-      die "checksum mismatch for ${url}: expected ${expected_sha256}, got ${actual_sha256}"
-    fi
-    mv -- "$temporary" "$destination"
+
+    printf 'warning: discarding cached archive with checksum %s: %s\n' \
+      "$actual_sha256" "$destination" >&2
+    rm -f -- "$destination"
   fi
 
-  actual_sha256="$(sha256sum "$destination" | awk '{print $1}')"
-  [[ "$actual_sha256" == "$expected_sha256" ]] ||
-    die "cached archive checksum mismatch: ${destination}"
+  for source_index in "${!urls[@]}"; do
+    url="${urls[$source_index]}"
+    expected_sha256="${expected_sha256s[$source_index]}"
+    source_label="${source_labels[$source_index]}"
+
+    if [[ "$source_label" == mirror ]]; then
+      printf 'Primary source exhausted; trying mirror %s\n' "$url"
+    fi
+
+    for ((attempt = 1; attempt <= SOURCE_DOWNLOAD_ATTEMPTS; attempt++)); do
+      temporary="$(mktemp "${archives_dir}/.download.XXXXXX")"
+      printf 'Downloading %s source (attempt %d/%d): %s\n' \
+        "$source_label" "$attempt" "$SOURCE_DOWNLOAD_ATTEMPTS" "$url"
+
+      if curl -fL --connect-timeout 30 -o "$temporary" "$url"; then
+        actual_sha256="$(sha256sum "$temporary" | awk '{print $1}')"
+        if [[ "$actual_sha256" == "$expected_sha256" ]]; then
+          mv -- "$temporary" "$destination"
+          return 0
+        fi
+        printf 'warning: checksum mismatch for %s: expected %s, got %s\n' \
+          "$url" "$expected_sha256" "$actual_sha256" >&2
+      else
+        printf 'warning: download failed: %s\n' "$url" >&2
+      fi
+
+      rm -f -- "$temporary"
+      temporary=""
+
+      if ((attempt < SOURCE_DOWNLOAD_ATTEMPTS)); then
+        sleep $((attempt * 2))
+      fi
+    done
+  done
+
+  die "verified download failed from ${primary_url} and ${mirror_url}"
 }
 
 apply_source_patch_once() {
@@ -558,7 +601,8 @@ prepare_sources() {
   fetch_archive \
     "$cctools_archive" \
     "https://github.com/tpoechtrager/cctools-port/archive/${CCTOOLS_COMMIT}.zip" \
-    "$CCTOOLS_ARCHIVE_SHA256"
+    "$CCTOOLS_ARCHIVE_SHA256" \
+    "https://codeload.github.com/tpoechtrager/cctools-port/zip/${CCTOOLS_COMMIT}"
   if [[ ! -d "$cctools_source" ]]; then
     printf 'Extracting cctools %s / ld64 %s\n' "$CCTOOLS_VERSION" "$LD64_VERSION"
     unzip -q "$cctools_archive" -d "$sources_dir"
@@ -575,7 +619,8 @@ prepare_sources() {
   fetch_archive \
     "$ldid_archive" \
     "https://github.com/ProcursusTeam/ldid/archive/${LDID_COMMIT}.zip" \
-    "$LDID_ARCHIVE_SHA256"
+    "$LDID_ARCHIVE_SHA256" \
+    "https://codeload.github.com/ProcursusTeam/ldid/zip/${LDID_COMMIT}"
   if [[ ! -d "$ldid_source" ]]; then
     printf 'Extracting ldid %s\n' "$LDID_VERSION"
     unzip -q "$ldid_archive" -d "$sources_dir"
@@ -584,7 +629,8 @@ prepare_sources() {
   fetch_archive \
     "$libplist_archive" \
     "https://github.com/libimobiledevice/libplist/releases/download/${LIBPLIST_VERSION}/libplist-${LIBPLIST_VERSION}.tar.bz2" \
-    "$LIBPLIST_ARCHIVE_SHA256"
+    "$LIBPLIST_ARCHIVE_SHA256" \
+    "https://distfiles.macports.org/libplist/libplist-${LIBPLIST_VERSION}.tar.bz2"
   if [[ ! -d "$libplist_source" ]]; then
     printf 'Extracting libplist %s\n' "$LIBPLIST_VERSION"
     tar -xjf "$libplist_archive" -C "$sources_dir"
@@ -593,7 +639,8 @@ prepare_sources() {
   fetch_archive \
     "$openssl_archive" \
     "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz" \
-    "$OPENSSL_ARCHIVE_SHA256"
+    "$OPENSSL_ARCHIVE_SHA256" \
+    "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz"
   if [[ ! -d "$openssl_source" ]]; then
     printf 'Extracting OpenSSL %s\n' "$OPENSSL_VERSION"
     tar -xzf "$openssl_archive" -C "$sources_dir"
@@ -602,11 +649,13 @@ prepare_sources() {
   fetch_archive \
     "$zip_archive" \
     "https://deb.debian.org/debian/pool/main/z/zip/zip_${ZIP_VERSION}.orig.tar.gz" \
-    "$ZIP_ARCHIVE_SHA256"
+    "$ZIP_ARCHIVE_SHA256" \
+    "https://mirrors.kernel.org/debian/pool/main/z/zip/zip_${ZIP_VERSION}.orig.tar.gz"
   fetch_archive \
     "$zip_debian_archive" \
     "https://deb.debian.org/debian/pool/main/z/zip/zip_${ZIP_VERSION}-${ZIP_DEBIAN_REVISION}.debian.tar.xz" \
-    "$ZIP_DEBIAN_ARCHIVE_SHA256"
+    "$ZIP_DEBIAN_ARCHIVE_SHA256" \
+    "https://mirrors.kernel.org/debian/pool/main/z/zip/zip_${ZIP_VERSION}-${ZIP_DEBIAN_REVISION}.debian.tar.xz"
   if [[ ! -d "$zip_source" ]]; then
     printf 'Extracting Info-ZIP %s and Debian revision %s metadata\n' \
       "$ZIP_VERSION" "$ZIP_DEBIAN_REVISION"
@@ -625,11 +674,13 @@ prepare_sources() {
   fetch_archive \
     "$unzip_archive" \
     "https://deb.debian.org/debian/pool/main/u/unzip/unzip_${UNZIP_VERSION}.orig.tar.gz" \
-    "$UNZIP_ARCHIVE_SHA256"
+    "$UNZIP_ARCHIVE_SHA256" \
+    "https://mirrors.kernel.org/debian/pool/main/u/unzip/unzip_${UNZIP_VERSION}.orig.tar.gz"
   fetch_archive \
     "$unzip_debian_archive" \
     "https://deb.debian.org/debian/pool/main/u/unzip/unzip_${UNZIP_VERSION}-${UNZIP_DEBIAN_REVISION}.debian.tar.xz" \
-    "$UNZIP_DEBIAN_ARCHIVE_SHA256"
+    "$UNZIP_DEBIAN_ARCHIVE_SHA256" \
+    "https://mirrors.kernel.org/debian/pool/main/u/unzip/unzip_${UNZIP_VERSION}-${UNZIP_DEBIAN_REVISION}.debian.tar.xz"
   if [[ ! -d "$unzip_source" ]]; then
     printf 'Extracting Info-ZIP UnZip %s and Debian revision %s metadata\n' \
       "$UNZIP_VERSION" "$UNZIP_DEBIAN_REVISION"
@@ -648,7 +699,8 @@ prepare_sources() {
   fetch_archive \
     "$zlib_archive" \
     "https://zlib.net/zlib-${ZLIB_VERSION}.tar.xz" \
-    "$ZLIB_ARCHIVE_SHA256"
+    "$ZLIB_ARCHIVE_SHA256" \
+    "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.xz"
   if [[ ! -d "$zlib_source" ]]; then
     printf 'Extracting zlib %s\n' "$ZLIB_VERSION"
     tar -xJf "$zlib_archive" -C "$sources_dir"
@@ -657,7 +709,8 @@ prepare_sources() {
   fetch_archive \
     "$curl_archive" \
     "https://curl.se/download/curl-${CURL_VERSION}.tar.xz" \
-    "$CURL_ARCHIVE_SHA256"
+    "$CURL_ARCHIVE_SHA256" \
+    "https://github.com/curl/curl/releases/download/curl-${CURL_VERSION//./_}/curl-${CURL_VERSION}.tar.xz"
   if [[ ! -d "$curl_source" ]]; then
     printf 'Extracting curl %s\n' "$CURL_VERSION"
     tar -xJf "$curl_archive" -C "$sources_dir"
@@ -666,12 +719,14 @@ prepare_sources() {
   fetch_archive \
     "$ca_bundle" \
     "https://curl.se/ca/cacert-${CA_BUNDLE_DATE}.pem" \
-    "$CA_BUNDLE_SHA256"
+    "$CA_BUNDLE_SHA256" \
+    "https://julialangcache.s3.amazonaws.com/c464e96f9a62fc4b1cbd46cc51453c11ed24c7a47b15711d8fed9e251fab68c0/cacert-${CA_BUNDLE_DATE}.pem"
 
   fetch_archive \
     "$git_archive" \
     "https://www.kernel.org/pub/software/scm/git/git-${GIT_VERSION}.tar.xz" \
-    "$GIT_ARCHIVE_SHA256"
+    "$GIT_ARCHIVE_SHA256" \
+    "https://distfiles.macports.org/git/git-${GIT_VERSION}.tar.xz"
   if [[ ! -d "$git_source" ]]; then
     printf 'Extracting Git %s\n' "$GIT_VERSION"
     tar -xJf "$git_archive" -C "$sources_dir"
@@ -680,7 +735,8 @@ prepare_sources() {
   fetch_archive \
     "$libpng_archive" \
     "https://download.sourceforge.net/libpng/libpng-${LIBPNG_VERSION}.tar.xz" \
-    "$LIBPNG_ARCHIVE_SHA256"
+    "$LIBPNG_ARCHIVE_SHA256" \
+    "https://distfiles.macports.org/libpng/libpng-${LIBPNG_VERSION}.tar.xz"
   if [[ ! -d "$libpng_source" ]]; then
     printf 'Extracting libpng %s\n' "$LIBPNG_VERSION"
     tar -xJf "$libpng_archive" -C "$sources_dir"
@@ -689,7 +745,8 @@ prepare_sources() {
   fetch_archive \
     "$libjpeg_archive" \
     "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/${LIBJPEG_TURBO_VERSION}/libjpeg-turbo-${LIBJPEG_TURBO_VERSION}.tar.gz" \
-    "$LIBJPEG_TURBO_ARCHIVE_SHA256"
+    "$LIBJPEG_TURBO_ARCHIVE_SHA256" \
+    "https://distfiles.macports.org/libjpeg-turbo/libjpeg-turbo-${LIBJPEG_TURBO_VERSION}.tar.gz"
   if [[ ! -d "$libjpeg_source" ]]; then
     printf 'Extracting libjpeg-turbo %s\n' "$LIBJPEG_TURBO_VERSION"
     tar -xzf "$libjpeg_archive" -C "$sources_dir"
@@ -698,7 +755,8 @@ prepare_sources() {
   fetch_archive \
     "$imagemagick_archive" \
     "https://github.com/ImageMagick/ImageMagick/archive/refs/tags/${IMAGEMAGICK_VERSION}.tar.gz" \
-    "$IMAGEMAGICK_ARCHIVE_SHA256"
+    "$IMAGEMAGICK_ARCHIVE_SHA256" \
+    "https://codeload.github.com/ImageMagick/ImageMagick/tar.gz/refs/tags/${IMAGEMAGICK_VERSION}"
   if [[ ! -d "$imagemagick_source" ]]; then
     printf 'Extracting ImageMagick %s\n' "$IMAGEMAGICK_VERSION"
     tar -xzf "$imagemagick_archive" -C "$sources_dir"
@@ -707,7 +765,8 @@ prepare_sources() {
   fetch_archive \
     "$gnu_make_archive" \
     "https://ftp.gnu.org/gnu/make/make-${GNU_MAKE_VERSION}.tar.gz" \
-    "$GNU_MAKE_ARCHIVE_SHA256"
+    "$GNU_MAKE_ARCHIVE_SHA256" \
+    "https://mirrors.kernel.org/gnu/make/make-${GNU_MAKE_VERSION}.tar.gz"
   if [[ ! -d "$gnu_make_source" ]]; then
     printf 'Extracting GNU Make %s\n' "$GNU_MAKE_VERSION"
     tar -xzf "$gnu_make_archive" -C "$sources_dir"
@@ -716,7 +775,8 @@ prepare_sources() {
   fetch_archive \
     "$file_archive" \
     "https://astron.com/pub/file/file-${FILE_VERSION}.tar.gz" \
-    "$FILE_ARCHIVE_SHA256"
+    "$FILE_ARCHIVE_SHA256" \
+    "https://distfiles.macports.org/file/file-${FILE_VERSION}.tar.gz"
   if [[ ! -d "$file_source" ]]; then
     printf 'Extracting file/libmagic %s\n' "$FILE_VERSION"
     tar -xzf "$file_archive" -C "$sources_dir"
@@ -725,7 +785,8 @@ prepare_sources() {
   fetch_archive \
     "$awk_archive" \
     "https://github.com/onetrueawk/awk/archive/refs/tags/${AWK_VERSION}.tar.gz" \
-    "$AWK_ARCHIVE_SHA256"
+    "$AWK_ARCHIVE_SHA256" \
+    "https://codeload.github.com/onetrueawk/awk/tar.gz/refs/tags/${AWK_VERSION}"
   if [[ ! -d "$awk_source" ]]; then
     printf 'Extracting One True Awk %s\n' "$AWK_VERSION"
     tar -xzf "$awk_archive" -C "$sources_dir"
@@ -734,7 +795,8 @@ prepare_sources() {
   fetch_archive \
     "$patch_archive" \
     "https://ftp.gnu.org/gnu/patch/patch-${PATCH_VERSION}.tar.xz" \
-    "$PATCH_ARCHIVE_SHA256"
+    "$PATCH_ARCHIVE_SHA256" \
+    "https://mirrors.kernel.org/gnu/patch/patch-${PATCH_VERSION}.tar.xz"
   if [[ ! -d "$patch_source" ]]; then
     printf 'Extracting GNU patch %s\n' "$PATCH_VERSION"
     tar -xJf "$patch_archive" -C "$sources_dir"
@@ -743,7 +805,8 @@ prepare_sources() {
   fetch_archive \
     "$jq_archive" \
     "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/jq-${JQ_VERSION}.tar.gz" \
-    "$JQ_ARCHIVE_SHA256"
+    "$JQ_ARCHIVE_SHA256" \
+    "https://distfiles.macports.org/jq/jq-${JQ_VERSION}.tar.gz"
   if [[ ! -d "$jq_source" ]]; then
     printf 'Extracting jq %s\n' "$JQ_VERSION"
     tar -xzf "$jq_archive" -C "$sources_dir"
@@ -756,7 +819,8 @@ prepare_sources() {
   fetch_archive \
     "$xz_archive" \
     "https://github.com/tukaani-project/xz/releases/download/v${XZ_VERSION}/xz-${XZ_VERSION}.tar.xz" \
-    "$XZ_ARCHIVE_SHA256"
+    "$XZ_ARCHIVE_SHA256" \
+    "https://tukaani.org/xz/xz-${XZ_VERSION}.tar.xz"
   if [[ ! -d "$xz_source" ]]; then
     printf 'Extracting XZ Utils %s\n' "$XZ_VERSION"
     tar -xJf "$xz_archive" -C "$sources_dir"
@@ -765,7 +829,8 @@ prepare_sources() {
   fetch_archive \
     "$sqlite_archive" \
     "https://www.sqlite.org/${SQLITE_YEAR}/sqlite-amalgamation-${SQLITE_AMALGAMATION_VERSION}.zip" \
-    "$SQLITE_ARCHIVE_SHA256"
+    "$SQLITE_ARCHIVE_SHA256" \
+    "https://sqlite.org/${SQLITE_YEAR}/sqlite-amalgamation-${SQLITE_AMALGAMATION_VERSION}.zip"
   if [[ ! -d "$sqlite_source" ]]; then
     printf 'Extracting SQLite %s amalgamation\n' "$SQLITE_VERSION"
     unzip -q "$sqlite_archive" -d "$sources_dir"

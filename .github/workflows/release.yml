@@ -280,15 +280,6 @@ jobs:
           set -euo pipefail
           scripts/ci/publish-release.sh stage \
             "$RELEASE_TAG" "$RELEASE_SHA" dist
-          is_draft="$(
-            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" \
-              --jq '.draft'
-          )"
-          if [[ "$is_draft" != true && "$is_draft" != false ]]; then
-            echo "GitHub returned an invalid release state: ${is_draft}" >&2
-            exit 1
-          fi
-          echo "is_draft=${is_draft}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         if: steps.release_state.outputs.is_draft == 'true'

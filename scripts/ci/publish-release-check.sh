@@ -48,6 +48,7 @@ export PATH="$check_root/bin:$PATH"
 export MOCK_GH_STATE="$check_root/state"
 export GITHUB_REPOSITORY='example/AltivecIntelligence'
 export GH_TOKEN='test-token'
+export GITHUB_OUTPUT="$check_root/github-output"
 
 readonly tag='v1.2.3'
 readonly sha='0123456789abcdef0123456789abcdef01234567'
@@ -56,14 +57,27 @@ readonly publisher="${script_dir}/publish-release.sh"
 "$publisher" stage "$tag" "$sha" "$check_root/dist" >/dev/null
 [[ "$(jq -r '.draft' "$check_root/state/release.json")" == true ]] ||
   die 'stage did not leave a draft release'
+[[ "$(awk 'END { print }' "$GITHUB_OUTPUT")" == 'is_draft=true' ]] ||
+  die 'stage did not report a draft release'
 [[ "$(find "$check_root/state/assets" -maxdepth 1 -type f | awk 'END { print NR }')" == 2 ]] ||
   die 'stage did not upload the expected assets'
+if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" \
+    > /dev/null 2>&1; then
+  die 'mock tag endpoint exposed a draft release'
+fi
 
 MOCK_GH_OMIT_DIGEST=1 \
   "$publisher" stage "$tag" "$sha" "$check_root/dist" >/dev/null
 "$publisher" publish "$tag" "$sha" "$check_root/dist" >/dev/null
 [[ "$(jq -r '.draft' "$check_root/state/release.json")" == false ]] ||
   die 'publish did not make the release public'
+gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" >/dev/null ||
+  die 'mock tag endpoint did not expose a published release'
+
+: > "$GITHUB_OUTPUT"
+"$publisher" stage "$tag" "$sha" "$check_root/dist" >/dev/null
+[[ "$(awk 'END { print }' "$GITHUB_OUTPUT")" == 'is_draft=false' ]] ||
+  die 'stage did not report an existing published release'
 
 "$publisher" publish "$tag" "$sha" "$check_root/dist" >/dev/null
 printf 'changed asset\n' > "$check_root/dist/Asset-1.2.3.zip"

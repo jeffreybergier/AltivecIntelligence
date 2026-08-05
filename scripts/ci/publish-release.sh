@@ -68,11 +68,43 @@ cleanup() {
 trap cleanup EXIT
 
 get_release() {
-  gh api "repos/${repository}/releases/tags/${release_tag}"
+  local page=1
+  local response=''
+  local page_count=''
+  local candidate=''
+  local match=''
+
+  while :; do
+    response="$(
+      gh api "repos/${repository}/releases?per_page=100&page=${page}"
+    )"
+    jq -e 'type == "array"' <<< "$response" >/dev/null ||
+      die 'GitHub returned an invalid release list'
+    page_count="$(jq 'length' <<< "$response")"
+    while IFS= read -r candidate; do
+      [[ -z "$match" ]] ||
+        die "GitHub returned duplicate releases for ${release_tag}"
+      match="$candidate"
+    done < <(
+      jq -c --arg tag "$release_tag" \
+        '.[] | select(.tag_name == $tag)' <<< "$response"
+    )
+    ((page_count < 100)) && break
+    ((page += 1))
+  done
+
+  printf '%s\n' "$match"
 }
 
-release_json=''
-if ! release_json="$(get_release 2>/dev/null)"; then
+set_release_state_output() {
+  local is_draft="$1"
+
+  [[ -z "${GITHUB_OUTPUT:-}" ]] ||
+    printf 'is_draft=%s\n' "$is_draft" >> "$GITHUB_OUTPUT"
+}
+
+release_json="$(get_release)"
+if [[ -z "$release_json" ]]; then
   if [[ "$mode" == publish ]]; then
     die "draft release does not exist: ${release_tag}"
   fi
@@ -189,12 +221,14 @@ verify_exact_assets() {
 if [[ "$mode" == stage ]]; then
   if [[ "$(jq -r '.draft' <<< "$release_json")" == false ]]; then
     verify_exact_assets "$release_json"
+    set_release_state_output false
     printf 'Release %s is already published with matching assets.\n' \
       "$release_tag"
     exit 0
   fi
   stage_assets "$release_json"
   verify_exact_assets "$release_json"
+  set_release_state_output true
   printf 'Draft release %s has all verified assets.\n' "$release_tag"
   exit 0
 fi

@@ -32,8 +32,28 @@ render_release() {
 }
 
 if [[ "$1" == api ]]; then
-  [[ -f "$MOCK_GH_STATE/release.json" ]] || exit 1
-  render_release
+  endpoint="$2"
+  case "$endpoint" in
+    repos/*/releases/tags/*)
+      [[ -f "$MOCK_GH_STATE/release.json" ]] || exit 1
+      [[ "$(jq -r '.draft' "$MOCK_GH_STATE/release.json")" == false ]] ||
+        exit 1
+      render_release
+      ;;
+    repos/*/releases\?per_page=100\&page=1)
+      if [[ -f "$MOCK_GH_STATE/release.json" ]]; then
+        render_release | jq -s '.'
+      else
+        printf '[]\n'
+      fi
+      ;;
+    repos/*/releases\?per_page=100\&page=*)
+      printf '[]\n'
+      ;;
+    *)
+      exit 2
+      ;;
+  esac
   exit 0
 fi
 
