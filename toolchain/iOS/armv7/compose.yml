@@ -1,0 +1,29 @@
+services:
+  # Run this file from toolchain/iOS/armv7. The repository root is mounted so
+  # the armv7 build can also read the sibling iOS/common helpers.
+  shell:
+    image: ghcr.io/jeffreybergier/altivec-intelligence:latest
+    stdin_open: true
+    tty: true
+    working_dir: ${ALTIVEC_CONTAINER_REPO:-/workspace/AltivecIntelligence}/toolchain/iOS/armv7
+    volumes:
+      - ~/.altivec:/root
+      - type: bind
+        source: ../../..
+        target: ${ALTIVEC_CONTAINER_REPO:-/workspace/AltivecIntelligence}
+    entrypoint: ["/bin/bash"]
+    command: ["-l"]
+
+  # Run any Make target, for example:
+  #   docker compose run --rm altivec release
+  # Build inputs and outputs live under build-release/Intermediates.
+  altivec:
+    image: ghcr.io/jeffreybergier/altivec-intelligence:latest
+    working_dir: ${ALTIVEC_CONTAINER_REPO:-/workspace/AltivecIntelligence}/toolchain/iOS/armv7
+    volumes:
+      - ~/.altivec:/root
+      - type: bind
+        source: ../../..
+        target: ${ALTIVEC_CONTAINER_REPO:-/workspace/AltivecIntelligence}
+    entrypoint: ["make"]
+    command: ["help"]

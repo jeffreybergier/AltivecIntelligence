@@ -1,0 +1,12 @@
+--- a/src/arscan.c
++++ b/src/arscan.c
+@@ -331,7 +331,8 @@
+ #endif
+ 
+ #ifndef WINDOWS32
+-# if !defined (__ANDROID__) && !defined (__BEOS__) && !defined(MK_OS_ZOS)
++# if !defined (__APPLE__) && !defined (__ANDROID__) \
++     && !defined (__BEOS__) && !defined(MK_OS_ZOS)
+ #  include <ar.h>
+ # else
+    /* These platforms don't have <ar.h> but have archives in the same format

@@ -36,9 +36,9 @@ simply pulling a newer image.
 
 See [templates/compose.yml](templates/compose.yml) for the full template and
 notes on first-time AI assistant setup. The GHCR image ships the entire
-`/altivec/` toolchain (cross-compilers, SDKs, AltivecCore/AltivecCocoa libs,
-sample apps, and AI CLIs), so your repo only needs the `compose.yml` plus your
-source.
+`/altivec/` runtime (cross-compilers, SDKs, prebuilt AltivecCore/AltivecCocoa
+libs, sample app sources, and AI CLIs), so your repo only needs the
+`compose.yml` plus your source.
 
 ```bash
 # 0. If you do not already have a repository for your app idea,
@@ -162,19 +162,18 @@ Host imacg4-tiger
 
 ## 🏃 Running a Sample App
 
-The sample apps come **prebuilt** inside the image, so you can try one without
-compiling anything. The steps below copy the release build of **CURLmac** out
-of the container and into your own repo, where you can unzip it and open the
-`.app` on your Mac.
+Sample source is included in the image, while tagged sample binaries live with
+the matching [GitHub Release](https://github.com/jeffreybergier/AltivecIntelligence/releases).
+With GitHub CLI installed on the host, download the newest **CURLmac** build
+without compiling it:
 
 ```bash
-# 1. Copy CURLmac's release zip from the image into your project.
-#    Your repo is mounted at /repo/user, so the file lands in your
-#    current directory on the host:
-docker compose run --rm altivec "cp /altivec/apps/CURLmac/build-release/CURLmac.zip /repo/user/"
+# 1. Download the latest matching release asset.
+gh release download --repo jeffreybergier/AltivecIntelligence \
+  --pattern 'CURLmac-*.zip'
 
 # 2. On your Mac, unzip and launch the app:
-unzip CURLmac.zip
+unzip CURLmac-*.zip
 open CURLmac.app
 ```
 
@@ -183,10 +182,18 @@ PowerPC, 32-bit Intel, 64-bit Intel, and Apple Silicon Macs (10.4 Tiger and
 newer). CURLmac links AltivecCore, so this app has modern TLS 1.2
 networking, SQLite, and cJSON even on Mac OS X Tiger.
 
-> **Note:** To copy a freshly compiled build instead of the prebuilt one, run
-> `docker compose run --rm altivec "cd /altivec/apps/CURLmac && make"` first,
-> then repeat step 1. Swap `CURLmac` for `SingleWindow` to grab the simpler,
-> non-networking sample.
+To make a fresh build instead, compile and copy it during the same disposable
+container run:
+
+```bash
+docker compose run --rm altivec \
+  "cd /altivec/apps/CURLmac && make release && cp build-release/CURLmac.zip /repo/user/"
+```
+
+Swap `CURLmac` for `SingleWindow` to build the simpler, non-networking sample.
+Each tagged release also carries AltivecCore/AltivecCocoa packages, the optional
+iOS armv7 `AltivecToolchain` `.deb`, and `SHA256SUMS`. No arm64 device-toolchain
+package is currently built.
 
 ## 📂 Project Structure
 - [`apps`](./apps/): Sample projects and Makefiles
@@ -196,6 +203,7 @@ networking, SQLite, and cJSON even on Mac OS X Tiger.
 - [`templates/compose.yml`](./templates/compose.yml): The compose file end users drop into their own app repo (prebuilt GHCR image, app mounted at `/repo/user`). **This is the file most people want.**
 - [`templates/altivec-release.yml`](./templates/altivec-release.yml): Optional release config for version bumps, tags, and staged release assets.
 - [`templates/github-release.yml`](./templates/github-release.yml): Optional GitHub Actions workflow that builds and uploads configured release assets.
+- [`toolchain`](./toolchain/): Optional toolchain package sources. The current release-extras workflow builds only `iOS/armv7`; shared iOS helpers live in `iOS/common`.
 - [`compose.yml`](./compose.yml): The **engine-development** compose — clone-and-build the image locally and mount your live checkout at `/repo/altivec`. Only needed if you are customizing the engine itself.
 - [`bin`](./bin/): Runtime scripts on `PATH` inside the image — `altivec-deploy` (push/run apps on hardware), `altivec-release` (version/tag helper), `altivec-chooser` (AI CLI picker)
 - `AGENTS.md`: AI mandates and technical constraints (also surfaced as CLAUDE.md / GEMINI.md via symlink).
@@ -303,8 +311,9 @@ its Settings → Resources tab:
 
 ### 3. Clone and Build
 This compiles the toolchain from source and can take **5–30 minutes** the first
-time (cached afterward). Tune the `JOBS=` line of the
-[`Containerfile`](Containerfile#L53) to match your allotted cores.
+time (cached afterward). Build parallelism automatically matches the CPU cores
+visible to Docker. To cap it, pass an explicit build argument, for example
+`docker compose build --build-arg JOBS=4`.
 
 ```bash
 git clone https://github.com/jeffreybergier/AltivecIntelligence.git

@@ -1,0 +1,20 @@
+diff --git a/llvm/lib/Support/Unix/Path.inc b/llvm/lib/Support/Unix/Path.inc
+--- a/llvm/lib/Support/Unix/Path.inc
++++ b/llvm/lib/Support/Unix/Path.inc
+@@ -41,6 +41,7 @@
+ #include <copyfile.h>
+ #if __has_include(<sys/clonefile.h>)
+ #include <sys/clonefile.h>
++#define LLVM_HAS_CLONEFILE 1
+ #endif
+ #elif defined(__FreeBSD__)
+ #include <osreldate.h>
+@@ -1476,7 +1477,7 @@
+ std::error_code copy_file(const Twine &From, const Twine &To) {
+   std::string FromS = From.str();
+   std::string ToS = To.str();
+-#if __has_builtin(__builtin_available)
++#if defined(LLVM_HAS_CLONEFILE) && __has_builtin(__builtin_available)
+   if (__builtin_available(macos 10.12, *)) {
+     // Optimistically try to use clonefile() and handle errors, rather than
+     // calling stat() to see if it'll work.

@@ -3,7 +3,11 @@ name: Build Release
 on:
   push:
     tags:
-      - "*"
+      - "v*"
+
+concurrency:
+  group: altivec-release
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -13,7 +17,7 @@ env:
 
 jobs:
   prepare:
-    name: Resolve release tag
+    name: Resolve immutable release inputs
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -33,26 +37,35 @@ jobs:
       - name: Resolve tag and commit
         id: release
         run: |
-          git fetch --force origin main
-          git fetch --force --tags
+          set -euo pipefail
+          git fetch --force origin \
+            main:refs/remotes/origin/main
 
-          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+          if [[ "$GITHUB_REF_TYPE" != tag ]]; then
             echo "Unsupported ref type: ${GITHUB_REF_TYPE}" >&2
             exit 1
           fi
-
-          tag="${GITHUB_REF_NAME}"
-          sha="$(git rev-list -n 1 "$tag")"
-          if ! git merge-base --is-ancestor "$sha" origin/main; then
-            echo "Tag $tag ($sha) is not reachable from origin/main." >&2
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+([.][0-9]+){0,2}$ ]]; then
+            echo "Release tag must be v followed by a numeric version: ${GITHUB_REF_NAME}" >&2
             exit 1
           fi
 
-          echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "release_sha=$sha" >> "$GITHUB_OUTPUT"
+          tag_sha="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
+          event_sha="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          if [[ "$tag_sha" != "$event_sha" ]]; then
+            echo "Event SHA ${event_sha} does not match tag SHA ${tag_sha}." >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$event_sha" origin/main; then
+            echo "Tag ${GITHUB_REF_NAME} (${event_sha}) is not reachable from origin/main." >&2
+            exit 1
+          fi
 
-  build-image:
-    name: Build GHCR image
+          echo "release_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_sha=${event_sha}" >> "$GITHUB_OUTPUT"
+
+  build_image:
+    name: Build GHCR image (${{ matrix.platform }})
     needs: prepare
     strategy:
       fail-fast: false
@@ -76,18 +89,17 @@ jobs:
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
-      - name: Check out source
+      - name: Check out exact release commit
         uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ needs.prepare.outputs.release_tag }}
-          submodules: recursive
+          ref: ${{ needs.prepare.outputs.release_sha }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -106,8 +118,13 @@ jobs:
 
       - name: Export digest
         run: |
-          mkdir -p /tmp/digests
+          set -euo pipefail
           digest="${{ steps.build.outputs.digest }}"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Build returned an invalid digest: ${digest}" >&2
+            exit 1
+          fi
+          mkdir -p /tmp/digests
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
@@ -117,16 +134,19 @@ jobs:
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
+          overwrite: true
 
-  merge-image:
-    name: Publish GHCR manifest
+  merge_image:
+    name: Assemble exact GHCR candidate
     needs:
       - prepare
-      - build-image
+      - build_image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    outputs:
+      build_image: ${{ steps.candidate.outputs.build_image }}
     defaults:
       run:
         shell: bash
@@ -144,98 +164,174 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Create manifest list and push
+      - name: Create candidate manifest list
+        id: candidate
+        env:
+          RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
         working-directory: /tmp/digests
         run: |
+          set -euo pipefail
+          mapfile -t digests < <(find . -maxdepth 1 -type f -printf '%f\n' | sort)
+          if [[ "${#digests[@]}" -ne 2 ]]; then
+            echo "Expected two platform digests, found ${#digests[@]}." >&2
+            exit 1
+          fi
+
           sources=()
-          for digest in *; do
-            sources+=("${{ env.IMAGE }}@sha256:${digest}")
+          for digest in "${digests[@]}"; do
+            if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "Invalid platform digest: ${digest}" >&2
+              exit 1
+            fi
+            sources+=("${IMAGE}@sha256:${digest}")
           done
+
+          candidate_tag="${IMAGE}:candidate-${RELEASE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker buildx imagetools create \
-            -t ${{ env.IMAGE }}:latest \
-            -t ${{ env.IMAGE }}:${{ needs.prepare.outputs.release_sha }} \
-            -t ${{ env.IMAGE }}:${{ needs.prepare.outputs.release_tag }} \
+            -t "$candidate_tag" \
+            --metadata-file /tmp/candidate-metadata.json \
             "${sources[@]}"
 
-      - name: Inspect image
-        run: docker buildx imagetools inspect ${{ env.IMAGE }}:${{ needs.prepare.outputs.release_tag }}
+          manifest_digest="$(
+            jq -r '."containerimage.descriptor".digest // empty' \
+              /tmp/candidate-metadata.json
+          )"
+          if [[ ! "$manifest_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Invalid candidate manifest digest: ${manifest_digest}" >&2
+            cat /tmp/candidate-metadata.json >&2
+            exit 1
+          fi
+          echo "build_image=${IMAGE}@${manifest_digest}" >> "$GITHUB_OUTPUT"
 
-  release-assets:
-    name: Build and stage release packages
+      - name: Inspect candidate image
+        run: docker buildx imagetools inspect "${{ steps.candidate.outputs.build_image }}"
+
+  release_extras:
+    name: Build release extras from candidate image
     needs:
       - prepare
-      - merge-image
+      - merge_image
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/release-extras.yml
+    with:
+      build_image: ${{ needs.merge_image.outputs.build_image }}
+      release_tag: ${{ needs.prepare.outputs.release_tag }}
+      release_sha: ${{ needs.prepare.outputs.release_sha }}
+
+  publish:
+    name: Publish image and release assets
+    needs:
+      - prepare
+      - merge_image
+      - release_extras
     runs-on: ubuntu-22.04
     permissions:
       contents: write
-      packages: read
+      packages: write
     env:
-      BUILD_IMAGE: ghcr.io/${{ github.repository_owner }}/altivec-intelligence:${{ needs.prepare.outputs.release_tag }}
+      BUILD_IMAGE: ${{ needs.merge_image.outputs.build_image }}
       RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
       RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
+      RELEASE_VERSION: ${{ needs.release_extras.outputs.release_version }}
     defaults:
       run:
         shell: bash
 
     steps:
-      - name: Check out source
+      - name: Check out exact release commit
         uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ needs.prepare.outputs.release_tag }}
-          submodules: recursive
+          ref: ${{ needs.prepare.outputs.release_sha }}
+          fetch-depth: 0
 
-      - name: Restore source tarball cache
-        uses: actions/cache@v4
+      - name: Download completed release assets
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            libs/libcurl/tarballs
-            libs/sqlite/tarballs
-          key: release-source-tarballs-${{ runner.os }}-${{ hashFiles('libs/libcurl/Makefile*', 'libs/libcurl/libcurl_common.mk', 'libs/sqlite/Makefile*', 'libs/sqlite/sqlite_common.mk') }}
-          restore-keys: |
-            release-source-tarballs-${{ runner.os }}-
+          path: dist
+          pattern: release-assets-*
+          merge-multiple: true
+
+      - name: Verify assets and generate checksums
+        run: scripts/ci/prepare-release-assets.sh dist "$RELEASE_VERSION"
+
+      - name: Confirm the remote tag is unchanged
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --force origin \
+            "refs/tags/${RELEASE_TAG}:refs/ci/remote-release-tag"
+          remote_sha="$(git rev-parse 'refs/ci/remote-release-tag^{commit}')"
+          if [[ "$remote_sha" != "$RELEASE_SHA" ]]; then
+            echo "Remote tag moved from ${RELEASE_SHA} to ${remote_sha}." >&2
+            exit 1
+          fi
+
+      - name: Stage draft GitHub release
+        id: release_state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          scripts/ci/publish-release.sh stage \
+            "$RELEASE_TAG" "$RELEASE_SHA" dist
+          is_draft="$(
+            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" \
+              --jq '.draft'
+          )"
+          if [[ "$is_draft" != true && "$is_draft" != false ]]; then
+            echo "GitHub returned an invalid release state: ${is_draft}" >&2
+            exit 1
+          fi
+          echo "is_draft=${is_draft}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
+        if: steps.release_state.outputs.is_draft == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
-      - name: Check configured versions
-        run: |
-          docker run --rm \
-            --entrypoint /bin/bash \
-            -v "${{ github.workspace }}:/repo/user" \
-            -w /repo/user \
-            "$BUILD_IMAGE" \
-            -lc "altivec-release ci-env '$RELEASE_TAG'" > release.env
-          cat release.env >> "$GITHUB_ENV"
-          cat release.env
+      - name: Set up Docker Buildx
+        if: steps.release_state.outputs.is_draft == 'true'
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build configured targets and stage assets
+      - name: Promote verified image
+        if: steps.release_state.outputs.is_draft == 'true'
         run: |
-          docker run --rm \
-            --entrypoint /bin/bash \
-            -e IS_SANDBOX=1 \
-            -e ALTIVEC_RELEASE_PREBUILT_ROOT=/altivec \
-            -v "${{ github.workspace }}:/repo/user" \
-            -w /repo/user \
-            "$BUILD_IMAGE" \
-            -lc "altivec-release build && altivec-release stage '$RELEASE_VERSION'"
-          ls -lh dist
-
-      - name: Create or update GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" \
-              --target "$RELEASE_SHA" \
-              --generate-notes
+          set -euo pipefail
+          git fetch --no-tags --force origin \
+            "refs/tags/${RELEASE_TAG}:refs/ci/remote-release-tag"
+          remote_sha="$(git rev-parse 'refs/ci/remote-release-tag^{commit}')"
+          if [[ "$remote_sha" != "$RELEASE_SHA" ]]; then
+            echo "Remote tag moved from ${RELEASE_SHA} to ${remote_sha}." >&2
+            exit 1
           fi
-          gh release upload "$RELEASE_TAG" dist/* --clobber
+          docker buildx imagetools create \
+            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:${RELEASE_TAG}" \
+            -t "${IMAGE}:${RELEASE_SHA}" \
+            "$BUILD_IMAGE"
+          docker buildx imagetools inspect "${IMAGE}:${RELEASE_TAG}"
+
+      - name: Publish GitHub release
+        if: steps.release_state.outputs.is_draft == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --force origin \
+            "refs/tags/${RELEASE_TAG}:refs/ci/remote-release-tag"
+          remote_sha="$(git rev-parse 'refs/ci/remote-release-tag^{commit}')"
+          if [[ "$remote_sha" != "$RELEASE_SHA" ]]; then
+            echo "Remote tag moved from ${RELEASE_SHA} to ${remote_sha}." >&2
+            exit 1
+          fi
+          scripts/ci/publish-release.sh publish \
+            "$RELEASE_TAG" "$RELEASE_SHA" dist

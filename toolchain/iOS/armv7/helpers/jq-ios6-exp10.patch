@@ -1,0 +1,20 @@
+diff --git a/src/builtin.c b/src/builtin.c
+--- a/src/builtin.c
++++ b/src/builtin.c
+@@ -111,7 +111,15 @@
+ #define HAVE_GAMMA
+ #define gamma tgamma
+ #endif
+-#ifdef HAVE___EXP10
++#ifdef HAVE_POW
++// Apple's __exp10 is unavailable before iOS 7.  pow is available on every
++// supported target and keeps jq's exp10 builtin functional on iOS 6.
++static double jq_exp10_compat(double x) {
++  return pow(10.0, x);
++}
++#define HAVE_EXP10
++#define exp10 jq_exp10_compat
++#elif defined(HAVE___EXP10)
+ #define HAVE_EXP10
+ #define exp10 __exp10
+ #endif

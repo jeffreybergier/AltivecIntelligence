@@ -1,0 +1,50 @@
+diff --git a/cctools/ld64/src/ld/Options.cpp b/cctools/ld64/src/ld/Options.cpp
+index 44fd0b1..1945de3 100644
+--- a/cctools/ld64/src/ld/Options.cpp
++++ b/cctools/ld64/src/ld/Options.cpp
+@@ -4646,6 +4646,16 @@ void Options::reconfigureDefaults()
+ 		});
+ 	}
+ 
++	// arm64 first shipped with iOS 7.  Keep that architecture-specific floor
++	// while allowing 32-bit ARM outputs to use the platform's iOS 4.3 floor.
++	if ( (fArchitecture == CPU_TYPE_ARM64) &&
++		 platforms().contains(ld::Platform::iOS) ) {
++		if ( !platforms().minOS(ld::iOS_7_0) )
++			fPlatforms.updateMinVersion(ld::Platform::iOS, ld::iOS_7_0.minVersion);
++		if ( platforms().sdkOS(ld::Platform::iOS) < ld::iOS_7_0.sdkVersion )
++			fPlatforms.updateSDKVersion(ld::Platform::iOS, ld::iOS_7_0.sdkVersion);
++	}
++
+ 	// sync reader options
+ 	switch ( fOutputKind ) {
+ 		case Options::kObjectFile:
+diff --git a/cctools/ld64/src/ld/ld.hpp b/cctools/ld64/src/ld/ld.hpp
+index 841b2d4..0b3bb40 100644
+--- a/cctools/ld64/src/ld/ld.hpp
++++ b/cctools/ld64/src/ld/ld.hpp
+@@ -140,6 +140,15 @@ public:
+ 		return 0;
+ 	}
+ 
++	uint32_t sdkOS(ld::Platform platform) const {
++		for (const auto& version : _versions) {
++			if (basePlatform(version.platform) == platform) {
++				return version.sdkVersion;
++			}
++		}
++		return 0;
++	}
++
+ 	bool minOS(const PlatformVersion& version) const {
+ 		return minOS(version.platform) >= version.minVersion;
+ 	}
+diff --git a/cctools/ld64/src/ld/PlatformSupport.cpp b/cctools/ld64/src/ld/PlatformSupport.cpp
+index e9b8f02..28742be 100644
+--- a/cctools/ld64/src/ld/PlatformSupport.cpp
++++ b/cctools/ld64/src/ld/PlatformSupport.cpp
+@@ -54,3 +54,3 @@ static const PlatformInfo sAllSupportedPlatforms[] = {
+     { Platform::macOS,             Platform::macOS,        "macOS",             "-macos_version_min",             "MACOSX_DEPLOYMENT_TARGET",   0x000A0E00, 0x000A0400, LC_VERSION_MIN_MACOSX,   false, true,  PlatEnforce::warning, PlatEnforce::warning },
+-    { Platform::iOS,               Platform::iOS,          "iOS",               "-ios_version_min",               "IPHONEOS_DEPLOYMENT_TARGET", 0x000C0000, 0x00070000, LC_VERSION_MIN_IPHONEOS, true,  true,  PlatEnforce::warning, PlatEnforce::warning },
++    { Platform::iOS,               Platform::iOS,          "iOS",               "-ios_version_min",               "IPHONEOS_DEPLOYMENT_TARGET", 0x000C0000, 0x00040300, LC_VERSION_MIN_IPHONEOS, true,  true,  PlatEnforce::warning, PlatEnforce::warning },
+     { Platform::tvOS,              Platform::tvOS,         "tvOS",              "-tvos_version_min",              "TVOS_DEPLOYMENT_TARGET",     0x000C0000, 0x00070000, LC_VERSION_MIN_TVOS,     true,  true,  PlatEnforce::warning, PlatEnforce::warning },

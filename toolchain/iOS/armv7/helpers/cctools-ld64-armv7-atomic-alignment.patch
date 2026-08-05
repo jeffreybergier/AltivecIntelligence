@@ -1,0 +1,15 @@
+diff --git a/cctools/ld64/src/ld/InputFiles.h b/cctools/ld64/src/ld/InputFiles.h
+index 2dc6bb8..6b737aa 100644
+--- a/cctools/ld64/src/ld/InputFiles.h
++++ b/cctools/ld64/src/ld/InputFiles.h
+@@ -77,8 +77,8 @@ public:
+ 	void						createIndirectDylibs();
+ 
+ 	// for -print_statistics
+-	volatile int64_t			_totalObjectSize;
+-	volatile int64_t			_totalArchiveSize;
++	volatile int64_t			_totalObjectSize __attribute__((aligned(8)));
++	volatile int64_t			_totalArchiveSize __attribute__((aligned(8)));
+ 	volatile int32_t			_totalObjectLoaded;
+ 	volatile int32_t			_totalArchivesLoaded;
+ 	volatile int32_t			_totalDylibsLoaded;

@@ -106,9 +106,9 @@ RUN gem install bundler --no-document
 
 # 2a. Settings for the User
 
-# Change to 1 less than the number of CPU cores on your computer
-# Also make sure Docker is configured to use every CPU core
-ENV JOBS=6
+# Use every CPU visible to the build container by default. Builds can be capped
+# with `--build-arg JOBS=<count>` when memory or host responsiveness requires it.
+ARG JOBS
 
 # Comment this out to make clang fully bootstrap itself
 # This makes the build take significantly longer
@@ -140,7 +140,7 @@ RUN curl $CURL_RETRY_FLAGS -o /tmp/radare2.tar.xz \
     && tar xJf /tmp/radare2.tar.xz \
     && cd radare2-6.1.4 \
     && ./configure --prefix=/usr \
-    && make -j"$JOBS" \
+    && make -j"${JOBS:-$(nproc)}" \
     && make install \
     && cd / && rm -rf radare2-6.1.4 /tmp/radare2.tar.xz \
     && ldconfig \
@@ -161,15 +161,15 @@ RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sh
 
 RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
     echo "Build: osxcross" \
-      && ./build.sh
+      && JOBS="${JOBS:-$(nproc)}" ./build.sh
 
 RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
     echo "Build: Apple GCC 4.2 (PPC)" \
-      && POWERPC=1 ./build_gcc_ppc.sh \
+      && JOBS="${JOBS:-$(nproc)}" POWERPC=1 ./build_gcc_ppc.sh \
       && rm -rf build
 RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
     echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
-      && ./build_gcc.sh \
+      && JOBS="${JOBS:-$(nproc)}" ./build_gcc.sh \
       && rm -rf build
 
 RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
@@ -282,6 +282,32 @@ RUN set -eux; \
     rm -rf /tmp/ipsw.tar.gz /tmp/ipsw-install; \
     ipsw version
 
+# 9d. actionlint — Ubuntu 22.04 does not package it, so install the verified
+#     upstream binary for each image architecture. Keep this behind the
+#     heavyweight toolchain layers so version bumps preserve their cache.
+ARG ACTIONLINT_VERSION=1.7.12
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in \
+      amd64) \
+        ACTIONLINT_ARCH=amd64; \
+        ACTIONLINT_SHA256=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8 \
+        ;; \
+      arm64) \
+        ACTIONLINT_ARCH=arm64; \
+        ACTIONLINT_SHA256=325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6 \
+        ;; \
+      *) echo "unsupported architecture for actionlint" >&2; exit 1 ;; \
+    esac; \
+    ACTIONLINT_ARCHIVE="actionlint_${ACTIONLINT_VERSION}_linux_${ACTIONLINT_ARCH}.tar.gz"; \
+    curl $CURL_RETRY_FLAGS -o "/tmp/${ACTIONLINT_ARCHIVE}" \
+      "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${ACTIONLINT_ARCHIVE}"; \
+    echo "${ACTIONLINT_SHA256}  /tmp/${ACTIONLINT_ARCHIVE}" | sha256sum -c -; \
+    mkdir -p /tmp/actionlint-install; \
+    tar -xzf "/tmp/${ACTIONLINT_ARCHIVE}" -C /tmp/actionlint-install; \
+    install -m 0755 /tmp/actionlint-install/actionlint /usr/local/bin/actionlint; \
+    rm -rf "/tmp/${ACTIONLINT_ARCHIVE}" /tmp/actionlint-install; \
+    actionlint -version
+
 # 10. Working Directory & Runtime
 WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-lc"]
@@ -327,7 +353,7 @@ RUN chmod +x /altivec/bin/* \
 # the objc_loadClassref dependency in modern Xcode's replacement archive.
 # Keep this stable input late in the builder stage so changing it does not
 # invalidate the unrelated OSXCross, Node, and native-tool installation layers.
-COPY --chmod=0644 toolchain/lib/arc/libarclite_iphoneos.a /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a
+COPY --chmod=0644 toolchain/iOS/armv7/payload/lib/arc/libarclite_iphoneos.a /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a
 RUN set -eux; \
     echo 'f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8  /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a' \
       | sha256sum -c -; \
@@ -381,36 +407,22 @@ RUN --mount=type=cache,id=altivec-libcurl-tarballs,target=/altivec/libs/libcurl/
            libs/sqlite/build-mac libs/sqlite/build-phone
 RUN rm -rf libs/libcurl/tarballs libs/sqlite/tarballs
 
-# Build AltivecCocoa before sample apps so CURLmac can embed the Mac framework
-# and CURLphone can statically link the phone archive and stage its fonts.
+# Build AltivecCocoa after Core. The separately run release-extras workflow
+# uses these exact image outputs to build and package the sample applications.
 COPY libs/cocoa/   ./libs/cocoa/
 RUN cd libs/cocoa && make all && make prune-intermediates
 
-# Common mk fragments must land before the apps build below — each app's
-# Makefile does `include /altivec/altivec_common_{mac,phone}.mk` by
-# absolute path.
+# Ship common make fragments and sample source, but do not compile the samples
+# into the image. Each app includes the fragments from /altivec by absolute
+# path. Tagged sample binaries are release assets built from this image.
 COPY altivec_common_app.mk   ./
 COPY altivec_common_mac.mk   ./
 COPY altivec_common_phone.mk ./
-
-# Bake prebuilt sample apps into the image so consumers get ready-to-run
-# .app bundles (Mac quad-fat: ppc/i386/x86_64/arm64; Phone dual:
-# armv7/arm64) without needing to compile anything. This also doubles as
-# an end-to-end CI smoke test — any regression in AltivecCore, the mk
-# fragments, or the toolchain will fail this step long before users hit
-# it. Outputs land in apps/*/build-release/ and survive in the final
-# image. Kept as a separate RUN from the libcurl build above so trivial
-# app-source edits do not invalidate the multi-hour libcurl layer.
 COPY apps/                   ./apps/
+
+# Validate the retained library layout and dry-run the sample build rules.
+# The real sample compilation is deliberately deferred to release extras.
 RUN set -e; \
-    for app in SingleWindow SingleScreen CURLmac CURLphone; do \
-      echo "=== Building $app (release) ==="; \
-      make -C apps/$app release; \
-    done; \
-    test -d apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCore.framework; \
-    test -d apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework; \
-    test -f apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/FA7-Solid-900.otf; \
-    test -f apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/LICENSE-Font-Awesome.txt; \
     test -f libs/core/build-mac/lib/libAltivecCore.a; \
     test -f libs/core/build-phone/lib/libAltivecCore.a; \
     test -f apps/CURLmac/AICURLConnection.m; \
@@ -431,10 +443,12 @@ RUN set -e; \
     test -f libs/cocoa/build-phone/Resources/Fonts/FA7-Solid-900.otf; \
     test -f libs/cocoa/build-phone/Resources/Fonts/LICENSE-Font-Awesome.txt; \
     test ! -d libs/cocoa/build-phone/lib/AltivecCocoa.framework; \
-    test -f apps/CURLphone/build-release/CURLphone.app/Fonts/FA7-Solid-900.otf; \
-    test -f apps/CURLphone/build-release/CURLphone.app/Fonts/LICENSE-Font-Awesome.txt; \
-    test ! -d apps/CURLphone/build-release/CURLphone.app/Frameworks; \
-    make -C apps/CURLphone -Bn release PHONE_SOURCE_FLAGS=-fobjc-arc \
+    test -z "$(find apps -type d -name 'build-*' -print -quit)"; \
+    for app in SingleWindow SingleScreen CURLmac CURLphone; do \
+      make -C "apps/$app" -n release ALTIVEC_ROOT=/altivec >/dev/null; \
+    done; \
+    make -C apps/CURLphone -Bn release ALTIVEC_ROOT=/altivec \
+      PHONE_SOURCE_FLAGS=-fobjc-arc \
       > /tmp/curlphone-arc-link-plan; \
     awk '/Linking Phone universal/ { in_link = 1 }; \
          in_link && /-Xarch_armv7 -fobjc-arc/ { found = 1 }; \
@@ -444,8 +458,8 @@ RUN set -e; \
 
 # Bake the rest of the runtime repo into /altivec/. Build-time-only files
 # (Containerfile, compose.yml, docker/, .github/) are deliberately
-# excluded. Kept after the apps build so edits to docs/README/
-# templates do not invalidate the apps layer.
+# excluded. Kept after the runtime source so edits to docs/README/templates do
+# not invalidate the library layers.
 COPY AGENTS.md               ./
 COPY README.md               ./
 COPY LICENSE                 ./

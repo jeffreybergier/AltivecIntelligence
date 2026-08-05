@@ -1,0 +1,26 @@
+# Cross-build settings substituted by helpers/build-extra-tools.sh.
+CC="@CC@"
+AR="@AR@"
+CFLAGS="@CFLAGS@"
+LDFLAGS="@LDFLAGS@"
+
+PREFIX="@PREFIX@"
+BINDIR="@PREFIX@/bin"
+SBINDIR="@PREFIX@/sbin"
+MANDIR="@PREFIX@/share/man"
+MANPATH_BASE="@PREFIX@/share/man:/usr/share/man"
+MANPATH_DEFAULT="@PREFIX@/share/man:/usr/share/man"
+BINM_PAGER="less"
+OSENUM=MANDOC_OS_OTHER
+
+# Configure cannot execute target probes while cross-compiling.  These two
+# functions are required and are available in the iOS 6 libc.
+HAVE_ATTRIBUTE=1
+HAVE_NANOSLEEP=1
+HAVE_NTOHL=1
+
+# Keep the small phone build independent of host locale availability.
+HAVE_WCHAR=0
+BUILD_CGI=0
+BUILD_CATMAN=0
+INSTALL_LIBMANDOC=0

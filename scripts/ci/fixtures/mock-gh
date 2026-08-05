@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: "${MOCK_GH_STATE:?}"
+
+render_release() {
+  local assets='[]'
+  local path=''
+  local name=''
+  local digest=''
+  local item=''
+
+  shopt -s nullglob
+  for path in "$MOCK_GH_STATE"/assets/*; do
+    name="${path##*/}"
+    digest="sha256:$(sha256sum "$path" | awk '{ print $1 }')"
+    if [[ "${MOCK_GH_OMIT_DIGEST:-0}" == 1 ]]; then
+      digest=''
+    fi
+    item="$(jq -n \
+      --arg name "$name" \
+      --arg digest "$digest" \
+      --argjson size "$(stat -c %s "$path")" \
+      '{name: $name, size: $size,
+        digest: (if $digest == "" then null else $digest end)}')"
+    assets="$(jq -n --argjson old "$assets" --argjson item "$item" \
+      '$old + [$item]')"
+  done
+  jq --argjson assets "$assets" '. + {assets: $assets}' \
+    "$MOCK_GH_STATE/release.json"
+}
+
+if [[ "$1" == api ]]; then
+  [[ -f "$MOCK_GH_STATE/release.json" ]] || exit 1
+  render_release
+  exit 0
+fi
+
+[[ "$1" == release ]] || exit 2
+action="$2"
+shift 2
+
+case "$action" in
+  create)
+    tag="$1"
+    jq -n --arg tag "$tag" \
+      '{id: 101, tag_name: $tag, draft: true, assets: []}' \
+      > "$MOCK_GH_STATE/release.json"
+    printf 'mock release created\n'
+    ;;
+  upload)
+    path="$2"
+    name="${path##*/}"
+    [[ ! -e "$MOCK_GH_STATE/assets/$name" ]] || exit 1
+    cp "$path" "$MOCK_GH_STATE/assets/$name"
+    ;;
+  download)
+    shift
+    pattern=''
+    destination=''
+    while (($#)); do
+      case "$1" in
+        --pattern) pattern="$2"; shift 2 ;;
+        --dir) destination="$2"; shift 2 ;;
+        --repo) shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    mkdir -p "$destination"
+    cp "$MOCK_GH_STATE/assets/$pattern" "$destination/$pattern"
+    ;;
+  edit)
+    temporary="$MOCK_GH_STATE/release.json.tmp"
+    jq '.draft = false' "$MOCK_GH_STATE/release.json" > "$temporary"
+    mv "$temporary" "$MOCK_GH_STATE/release.json"
+    ;;
+  *)
+    exit 2
+    ;;
+esac

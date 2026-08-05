@@ -21,14 +21,15 @@ targets:
   - name: AltivecCore
     workdir: libs/core
     build:
-      - make clean
-      - make all
-      - mkdir -p build-release
-      - cd build-mac/lib && zip -rqy ../../build-release/AltivecCore-macOS.framework.zip AltivecCore.framework
+      - test -n "$ALTIVEC_RELEASE_PREBUILT_ROOT"
+      - test -d "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/core/build-mac/lib/AltivecCore.framework"
+      - test -f "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/core/build-phone/lib/libAltivecCore.a"
+      - rm -rf build-release && mkdir -p build-release
+      - output="$(pwd)/build-release/AltivecCore-macOS.framework.zip"; cd "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/core/build-mac/lib" && zip -rqy "$output" AltivecCore.framework
       - rm -rf build-release/AltivecCore-iOS-static
       - mkdir -p build-release/AltivecCore-iOS-static
-      - cp -R build-phone/lib build-release/AltivecCore-iOS-static/
-      - cp -R build-phone/include build-release/AltivecCore-iOS-static/
+      - cp -R "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/core/build-phone/lib" build-release/AltivecCore-iOS-static/
+      - cp -R "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/core/build-phone/include" build-release/AltivecCore-iOS-static/
       - cd build-release && zip -rqy AltivecCore-iOS-static.zip AltivecCore-iOS-static
     artifacts:
       - path: libs/core/build-release/AltivecCore-macOS.framework.zip
@@ -39,15 +40,16 @@ targets:
   - name: AltivecCocoa
     workdir: libs/cocoa
     build:
-      - make clean
-      - make all
-      - mkdir -p build-release
-      - cd build-mac/lib && zip -rqy ../../build-release/AltivecCocoa-macOS.framework.zip AltivecCocoa.framework
+      - test -n "$ALTIVEC_RELEASE_PREBUILT_ROOT"
+      - test -d "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/cocoa/build-mac/lib/AltivecCocoa.framework"
+      - test -f "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/cocoa/build-phone/lib/libAltivecCocoa.a"
+      - rm -rf build-release && mkdir -p build-release
+      - output="$(pwd)/build-release/AltivecCocoa-macOS.framework.zip"; cd "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/cocoa/build-mac/lib" && zip -rqy "$output" AltivecCocoa.framework
       - rm -rf build-release/AltivecCocoa-iOS-static
       - mkdir -p build-release/AltivecCocoa-iOS-static
-      - cp -R build-phone/lib build-release/AltivecCocoa-iOS-static/
-      - cp -R build-phone/include build-release/AltivecCocoa-iOS-static/
-      - cp -R build-phone/Resources build-release/AltivecCocoa-iOS-static/
+      - cp -R "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/cocoa/build-phone/lib" build-release/AltivecCocoa-iOS-static/
+      - cp -R "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/cocoa/build-phone/include" build-release/AltivecCocoa-iOS-static/
+      - cp -R "$ALTIVEC_RELEASE_PREBUILT_ROOT/libs/cocoa/build-phone/Resources" build-release/AltivecCocoa-iOS-static/
       - cd build-release && zip -rqy AltivecCocoa-iOS-static.zip AltivecCocoa-iOS-static
     artifacts:
       - path: libs/cocoa/build-release/AltivecCocoa-macOS.framework.zip
@@ -59,30 +61,37 @@ targets:
     workdir: apps/SingleWindow
     build:
       - make clean
-      - make release
+      - ALTIVEC_ROOT="$ALTIVEC_RELEASE_PREBUILT_ROOT" make release
     artifact: apps/SingleWindow/build-release/SingleWindow.zip
-    asset_name: SingleWindow-{version}-macOS.zip
+    asset_name: SingleWindow-{version}.zip
 
   - name: SingleScreen
     workdir: apps/SingleScreen
     build:
       - make clean
-      - make release
+      - ALTIVEC_ROOT="$ALTIVEC_RELEASE_PREBUILT_ROOT" make release
     artifact: apps/SingleScreen/build-release/SingleScreen.ipa
-    asset_name: SingleScreen-{version}-iOS.ipa
+    asset_name: SingleScreen-{version}.ipa
 
   - name: CURLmac
     workdir: apps/CURLmac
     build:
-      - ALTIVEC_ROOT=../.. make clean
-      - ALTIVEC_ROOT=../.. make release
+      - make clean
+      - ALTIVEC_ROOT="$ALTIVEC_RELEASE_PREBUILT_ROOT" make release
     artifact: apps/CURLmac/build-release/CURLmac.zip
-    asset_name: CURLmac-{version}-macOS.zip
+    asset_name: CURLmac-{version}.zip
 
   - name: CURLphone
     workdir: apps/CURLphone
     build:
-      - ALTIVEC_ROOT=../.. make clean
-      - ALTIVEC_ROOT=../.. make release
+      - make clean
+      - ALTIVEC_ROOT="$ALTIVEC_RELEASE_PREBUILT_ROOT" make release
     artifact: apps/CURLphone/build-release/CURLphone.ipa
-    asset_name: CURLphone-{version}-iOS.ipa
+    asset_name: CURLphone-{version}.ipa
+
+  - name: AltivecToolchain
+    workdir: toolchain/iOS/armv7
+    build:
+      - version="$(../../../bin/altivec-release current)"; make release DEB_VERSION="$version" DEB_OUTPUT=build-release/AltivecToolchain-iOS-armv7.deb
+    artifact: toolchain/iOS/armv7/build-release/AltivecToolchain-iOS-armv7.deb
+    asset_name: AltivecToolchain-{version}-iOS-armv7.deb

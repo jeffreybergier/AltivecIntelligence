@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE delegatemap [
+  <!ELEMENT delegatemap (delegate)*>
+  <!ELEMENT delegate EMPTY>
+  <!ATTLIST delegate xmlns CDATA #FIXED "">
+]>
+  <!-- Altivec Toolchain intentionally ships no external ImageMagick delegates.
+     PNG and JPEG are linked directly into the magick executable. -->
+<delegatemap>
+</delegatemap>

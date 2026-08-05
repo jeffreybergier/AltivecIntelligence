@@ -1,0 +1,413 @@
+name: Build Release Extras
+
+on:
+  workflow_call:
+    inputs:
+      build_image:
+        description: Exact GHCR image reference, pinned by digest
+        required: true
+        type: string
+      release_tag:
+        description: Version tag being released
+        required: true
+        type: string
+      release_sha:
+        description: Commit represented by the release tag
+        required: true
+        type: string
+    outputs:
+      release_version:
+        description: Numeric version validated against the repository plists
+        value: ${{ jobs.validate.outputs.release_version }}
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  BUILD_IMAGE: ${{ inputs.build_image }}
+  RELEASE_TAG: ${{ inputs.release_tag }}
+  RELEASE_SHA: ${{ inputs.release_sha }}
+
+jobs:
+  validate:
+    name: Validate candidate and release inputs
+    runs-on: ubuntu-22.04
+    outputs:
+      release_version: ${{ steps.version.outputs.release_version }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Verify checkout
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$RELEASE_SHA" ]]; then
+            echo "Checked out ${actual_sha}, expected ${RELEASE_SHA}." >&2
+            exit 1
+          fi
+          if [[ ! "$BUILD_IMAGE" =~ ^ghcr[.]io/.+@sha256:[0-9a-f]{64}$ ]]; then
+            echo "Build image is not pinned by digest: ${BUILD_IMAGE}" >&2
+            exit 1
+          fi
+
+      - name: Validate resumable release publisher
+        run: scripts/ci/publish-release-check.sh
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Pull exact build image
+        run: docker pull "$BUILD_IMAGE"
+
+      - name: Check configured versions
+        id: version
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -e RELEASE_TAG \
+            -v "${GITHUB_WORKSPACE}:/repo/user" \
+            -w /repo/user \
+            "$BUILD_IMAGE" \
+            -lc 'altivec-release ci-env "$RELEASE_TAG"' > release.env
+          cat release.env
+          source release.env
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+([.][0-9]+){0,2}$ ]]; then
+            echo "Invalid configured release version: ${RELEASE_VERSION}" >&2
+            exit 1
+          fi
+          echo "release_version=${RELEASE_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Run toolchain preflight checks
+        run: |
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -v "${GITHUB_WORKSPACE}:/repo/user" \
+            -w /repo/user/toolchain/iOS/armv7 \
+            "$BUILD_IMAGE" \
+            -lc 'make --no-print-directory check core-tools-check sdk-manager-check lib-manager-check ios-app-make-check'
+
+  standard_assets:
+    name: Package libraries and build samples
+    needs: validate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.release_version }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Pull exact build image
+        run: docker pull "$BUILD_IMAGE"
+
+      - name: Build standard extras
+        run: |
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -e ALTIVEC_RELEASE_PREBUILT_ROOT=/altivec \
+            -e RELEASE_VERSION \
+            -v "${GITHUB_WORKSPACE}:/repo/user" \
+            -w /repo/user \
+            "$BUILD_IMAGE" \
+            -lc 'scripts/ci/build-standard-extras.sh'
+
+      - name: Upload standard release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-standard
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+  core_tools:
+    name: Build iOS armv7 core-tools payload
+    needs: validate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Resolve core-tools cache key
+        id: payload_cache_key
+        env:
+          SOURCE_HASH: ${{ hashFiles('toolchain/iOS/common/**', 'toolchain/iOS/armv7/**', '!toolchain/iOS/armv7/build-release/**') }}
+        run: |
+          set -euo pipefail
+          image_digest="${BUILD_IMAGE##*@sha256:}"
+          if [[ ! "$image_digest" =~ ^[0-9a-f]{64}$ || ! "$SOURCE_HASH" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Cannot construct a safe core-tools cache key." >&2
+            exit 1
+          fi
+          echo "key=toolchain-core-${RUNNER_OS}-${image_digest}-${SOURCE_HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore core-tools payload cache
+        id: payload_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: toolchain/iOS/armv7/build-release/Intermediates/core-tools-armv7/artifacts
+          key: ${{ steps.payload_cache_key.outputs.key }}
+
+      - name: Reclaim runner disk for core-tools
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        run: scripts/ci/reclaim-runner-disk.sh
+
+      - name: Log in to GHCR
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Pull exact build image
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        run: docker pull "$BUILD_IMAGE"
+
+      - name: Report available disk
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        run: df -h / "${GITHUB_WORKSPACE}"
+
+      - name: Build core-tools package
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        run: |
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -v "${GITHUB_WORKSPACE}:/repo/user" \
+            -w /repo/user/toolchain/iOS/armv7 \
+            "$BUILD_IMAGE" \
+            -lc 'make --no-print-directory core-tools-package'
+
+      - name: Validate core-tools handoff
+        id: payload
+        run: |
+          set -euo pipefail
+          payload_dir=toolchain/iOS/armv7/build-release/Intermediates/core-tools-armv7/artifacts
+          mapfile -t archives < <(find "$payload_dir" -maxdepth 1 -type f -name '*.tar.gz' -print)
+          if [[ "${#archives[@]}" -ne 1 ]]; then
+            echo "Expected one core-tools archive, found ${#archives[@]}." >&2
+            exit 1
+          fi
+          tar -tzf "${archives[0]}" >/dev/null
+          sha256sum "${archives[0]}"
+          echo "archive=${archives[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Save core-tools payload cache
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: toolchain/iOS/armv7/build-release/Intermediates/core-tools-armv7/artifacts
+          key: ${{ steps.payload_cache_key.outputs.key }}
+
+      - name: Upload core-tools handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-core-payload
+          path: ${{ steps.payload.outputs.archive }}
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+  llvm:
+    name: Build iOS armv7 LLVM payload
+    needs: validate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Resolve LLVM cache key
+        id: payload_cache_key
+        env:
+          SOURCE_HASH: ${{ hashFiles('toolchain/iOS/common/**', 'toolchain/iOS/armv7/**', '!toolchain/iOS/armv7/build-release/**') }}
+        run: |
+          set -euo pipefail
+          image_digest="${BUILD_IMAGE##*@sha256:}"
+          if [[ ! "$image_digest" =~ ^[0-9a-f]{64}$ || ! "$SOURCE_HASH" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Cannot construct a safe LLVM cache key." >&2
+            exit 1
+          fi
+          echo "key=toolchain-llvm-${RUNNER_OS}-${image_digest}-${SOURCE_HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore LLVM payload cache
+        id: payload_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: toolchain/iOS/armv7/build-release/Intermediates/llvm15-armv7/artifacts
+          key: ${{ steps.payload_cache_key.outputs.key }}
+
+      - name: Reclaim runner disk for LLVM
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        run: scripts/ci/reclaim-runner-disk.sh
+
+      - name: Log in to GHCR
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Pull exact build image
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        run: docker pull "$BUILD_IMAGE"
+
+      - name: Report available disk
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        run: df -h / "${GITHUB_WORKSPACE}"
+
+      - name: Build LLVM package
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        run: |
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -v "${GITHUB_WORKSPACE}:/repo/user" \
+            -w /repo/user/toolchain/iOS/armv7 \
+            "$BUILD_IMAGE" \
+            -lc 'make --no-print-directory llvm-package'
+
+      - name: Validate LLVM handoff
+        id: payload
+        run: |
+          set -euo pipefail
+          payload_dir=toolchain/iOS/armv7/build-release/Intermediates/llvm15-armv7/artifacts
+          mapfile -t archives < <(find "$payload_dir" -maxdepth 1 -type f -name '*.tar.gz' -print)
+          if [[ "${#archives[@]}" -ne 1 ]]; then
+            echo "Expected one LLVM archive, found ${#archives[@]}." >&2
+            exit 1
+          fi
+          tar -tzf "${archives[0]}" >/dev/null
+          sha256sum "${archives[0]}"
+          echo "archive=${archives[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Save LLVM payload cache
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: toolchain/iOS/armv7/build-release/Intermediates/llvm15-armv7/artifacts
+          key: ${{ steps.payload_cache_key.outputs.key }}
+
+      - name: Upload LLVM handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-llvm-payload
+          path: ${{ steps.payload.outputs.archive }}
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+  toolchain_package:
+    name: Package iOS armv7 toolchain deb
+    needs:
+      - validate
+      - core_tools
+      - llvm
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.release_version }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Download core-tools handoff
+        uses: actions/download-artifact@v4
+        with:
+          name: toolchain-core-payload
+          path: toolchain/iOS/armv7/build-release/Intermediates/core-tools-armv7/artifacts
+
+      - name: Download LLVM handoff
+        uses: actions/download-artifact@v4
+        with:
+          name: toolchain-llvm-payload
+          path: toolchain/iOS/armv7/build-release/Intermediates/llvm15-armv7/artifacts
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Pull exact build image
+        run: docker pull "$BUILD_IMAGE"
+
+      - name: Build and validate Debian package
+        run: |
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -e RELEASE_VERSION \
+            -v "${GITHUB_WORKSPACE}:/repo/user" \
+            -w /repo/user/toolchain/iOS/armv7 \
+            "$BUILD_IMAGE" \
+            -lc 'make --no-print-directory deb DEB_VERSION="$RELEASE_VERSION" DEB_OUTPUT=build-release/AltivecToolchain-iOS-armv7.deb && /repo/user/scripts/ci/validate-toolchain-deb.sh build-release/AltivecToolchain-iOS-armv7.deb "$RELEASE_VERSION"'
+
+      - name: Stage toolchain release asset
+        run: |
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -e RELEASE_VERSION \
+            -v "${GITHUB_WORKSPACE}:/repo/user" \
+            -w /repo/user \
+            "$BUILD_IMAGE" \
+            -lc 'altivec-release stage "$RELEASE_VERSION" --target AltivecToolchain'
+          test -s "dist/AltivecToolchain-${RELEASE_VERSION}-iOS-armv7.deb"
+
+      - name: Upload toolchain release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-toolchain
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true

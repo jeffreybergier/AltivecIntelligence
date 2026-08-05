@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policymap [
+  <!ELEMENT policymap (policy)*>
+  <!ATTLIST policymap xmlns CDATA #FIXED "">
+  <!ELEMENT policy EMPTY>
+  <!ATTLIST policy xmlns CDATA #FIXED "" domain NMTOKEN #REQUIRED
+    name NMTOKEN #IMPLIED pattern CDATA #IMPLIED rights NMTOKEN #IMPLIED
+    stealth NMTOKEN #IMPLIED value CDATA #IMPLIED>
+]>
+<!-- Resource and delegate limits for ImageMagick running under an AI harness
+     on memory-constrained jailbroken iPhones. -->
+<policymap>
+  <policy domain="resource" name="thread" value="1"/>
+  <policy domain="resource" name="time" value="120"/>
+  <policy domain="resource" name="file" value="128"/>
+  <policy domain="resource" name="memory" value="128MiB"/>
+  <policy domain="resource" name="map" value="256MiB"/>
+  <policy domain="resource" name="area" value="16MP"/>
+  <policy domain="resource" name="disk" value="512MiB"/>
+  <policy domain="resource" name="list-length" value="32"/>
+  <policy domain="resource" name="width" value="8KP"/>
+  <policy domain="resource" name="height" value="8KP"/>
+  <policy domain="system" name="max-memory-request" value="128MiB"/>
+  <policy domain="delegate" rights="none" pattern="*"/>
+  <policy domain="filter" rights="none" pattern="*"/>
+  <policy domain="path" rights="none" pattern="/etc/*"/>
+  <policy domain="path" rights="none" pattern="@*"/>
+  <policy domain="module" rights="write"
+    pattern="{MSL,MVG,PS,PDF,SVG,TXT,URL,XPS}"/>
+</policymap>

@@ -33,7 +33,7 @@ deprecation warnings as those will be common when dealing with these old API's.
 - **Primary Toolchain:** OSXCross 0.13 (ppc-test branch)
 - **Host Architecture:** Ubuntu 22 (aarch64/x86_64)
 - **Toolchain Path:** `/osxcross/target/bin` (on `PATH`)
-- **Altivec Root:** `/altivec` (toolchain repo baked into the image — `altivec_common_*.mk`, example `apps/`, `libs/core/build-{mac,phone}` prebuilt outputs, `templates/`, `bin/`)
+- **Altivec Root:** `/altivec` (runtime repo baked into the image — `altivec_common_*.mk`, example app sources, prebuilt `libs/{core,cocoa}/build-{mac,phone}` outputs, `templates/`, and `bin/`). Sample binaries and the optional jailbroken-device toolchain are release assets, not image contents.
 - **User Root:** `/repo/user` (the user's app project, mounted from the host)
 - **Altivec Scripts on PATH:** `/altivec/bin` provides `altivec-deploy` (push/run an app on real hardware) and `altivec-chooser` (interactive AI CLI launcher)
 
