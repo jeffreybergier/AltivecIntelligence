@@ -216,7 +216,42 @@ RUN npm install -g \
       js-beautify \
       webcrack
 
-# 8b. Antigravity CLI (Google's replacement for Gemini CLI)
+# 8b. Headless browser testing and MCP browser control. Keep Playwright in a
+#     separate layer so updating it does not reinstall every global npm tool.
+ARG PLAYWRIGHT_VERSION=1.62.1
+ARG PLAYWRIGHT_MCP_VERSION=0.0.78
+ENV NODE_PATH=/usr/lib/node_modules \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
+    PLAYWRIGHT_MCP_EXECUTABLE_PATH=/usr/local/bin/playwright-chromium \
+    PLAYWRIGHT_MCP_HEADLESS=true \
+    PLAYWRIGHT_MCP_ISOLATED=true \
+    PLAYWRIGHT_MCP_NO_SANDBOX=true \
+    PLAYWRIGHT_MCP_OUTPUT_DIR=/cache/playwright-mcp
+
+RUN npm install -g \
+      "@playwright/test@${PLAYWRIGHT_VERSION}" \
+      "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"
+
+# Install only Chromium, rather than Playwright's full three-browser matrix.
+# MCP follows its own Playwright prerelease, so point it at the stable test
+# runner's managed Chromium instead of downloading a duplicate revision.
+# The image runs as root, which requires Chromium's sandbox to be disabled;
+# MCP remains headless and uses an isolated in-memory profile by default.
+RUN set -eux; \
+    playwright install --with-deps --no-progress chromium; \
+    PLAYWRIGHT_CHROMIUM_PATH="$( \
+      NODE_PATH="$(npm root -g)" \
+      node -e 'process.stdout.write(require("@playwright/test").chromium.executablePath())' \
+    )"; \
+    test -x "${PLAYWRIGHT_CHROMIUM_PATH}"; \
+    ln -s "${PLAYWRIGHT_CHROMIUM_PATH}" /usr/local/bin/playwright-chromium; \
+    NODE_PATH="$(npm root -g)" node -e \
+      'const { chromium } = require("@playwright/test"); (async () => { const browser = await chromium.launch({ headless: true }); const page = await browser.newPage(); await page.setContent("<!doctype html><title>playwright-smoke</title>"); if (await page.title() !== "playwright-smoke") throw new Error("Chromium smoke test failed"); await browser.close(); })().catch(error => { console.error(error); process.exit(1); });'; \
+    playwright --version; \
+    playwright-mcp --version; \
+    rm -rf /var/lib/apt/lists/*
+
+# 8c. Antigravity CLI (Google's replacement for Gemini CLI)
 RUN curl $CURL_RETRY_FLAGS -o /tmp/antigravity-install.sh \
       https://antigravity.google/cli/install.sh \
     && bash /tmp/antigravity-install.sh --dir /usr/local/bin \
