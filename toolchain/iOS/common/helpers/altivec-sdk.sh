@@ -14,6 +14,7 @@ readonly receipt_dir="${state_root}/receipts"
 readonly download_dir="${cache_root}/downloads"
 readonly lock_dir="${state_root}/install.lock"
 readonly github_download_prefix='https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1'
+readonly testing="${ALTIVEC_SDK_TESTING:-0}"
 
 staging_dir=""
 verify_dir=""
@@ -35,6 +36,7 @@ usage() {
     'Usage:' \
     '  altivec-sdk install <version>' \
     '  altivec-sdk list' \
+    '  altivec-sdk remove <version>' \
     '  altivec-sdk select <version>' \
     '  altivec-sdk verify <version>' \
     '' \
@@ -98,6 +100,9 @@ for system_tool in "$mkdir_tool" "$mv_tool" "$rm_tool" "$ln_tool" \
   [[ -x "$system_tool" ]] ||
     die "required system command is missing: ${system_tool}"
 done
+
+[[ "$testing" == "0" || "$testing" == "1" ]] ||
+  die 'ALTIVEC_SDK_TESTING must be 0 or 1'
 
 [[ -r "$catalog_path" ]] ||
   die "SDK catalog is missing: ${catalog_path}"
@@ -186,6 +191,9 @@ cleanup() {
 trap cleanup EXIT
 
 require_root() {
+  if [[ "$testing" == "1" ]]; then
+    return 0
+  fi
   [[ "${EUID}" -eq 0 ]] || die 'this command must run as root'
 }
 
@@ -777,6 +785,37 @@ command_install() {
   printf 'Installed iPhoneOS SDK %s at %s.\n' "$version" "$sdk_path"
 }
 
+command_remove() {
+  local version="$1"
+  local entry=""
+  local directory=""
+  local sdk_path=""
+  local receipt_path="${receipt_dir}/${version}.json"
+
+  require_root
+  entry="$(catalog_entry "$version")"
+  directory="$(entry_value "$entry" '.directory')"
+  [[ "$directory" == "iPhoneOS${version}.sdk" ]] ||
+    die "SDK ${version} has an unsafe catalog directory: ${directory}"
+  sdk_path="${sdk_root}/${directory}"
+
+  ensure_runtime_dirs
+  acquire_lock "remove ${version}"
+
+  [[ -d "$sdk_path" && ! -L "$sdk_path" ]] ||
+    die "SDK ${version} is not installed"
+  if [[ -L "$current_sdk" && -e "$current_sdk" &&
+      "$current_sdk" -ef "$sdk_path" ]]; then
+    die "cannot remove selected iPhoneOS SDK ${version}; select another version first"
+  fi
+  [[ -f "$receipt_path" && ! -L "$receipt_path" ]] ||
+    die "SDK ${version} is not managed by altivec-sdk"
+
+  "$rm_tool" -r -- "$sdk_path"
+  "$rm_tool" -f -- "$receipt_path"
+  printf 'Removed iPhoneOS SDK %s from %s.\n' "$version" "$sdk_path"
+}
+
 command_select() {
   local version="$1"
 
@@ -824,6 +863,11 @@ case "$1" in
     (($# == 2)) || die 'install requires exactly one SDK version'
     validate_version "$2"
     command_install "$2"
+    ;;
+  remove)
+    (($# == 2)) || die 'remove requires exactly one SDK version'
+    validate_version "$2"
+    command_remove "$2"
     ;;
   select)
     (($# == 2)) || die 'select requires exactly one SDK version'

@@ -235,6 +235,8 @@ grep -Fq 'altivec-lib install <version>' "$check_root/help.txt" ||
   die 'library manager help omits install usage'
 grep -Fq 'altivec-lib update' "$check_root/help.txt" ||
   die 'library manager help omits update usage'
+grep -Fq 'altivec-lib remove <version>' "$check_root/help.txt" ||
+  die 'library manager help omits remove usage'
 
 mkdir -p "$cache_root/downloads"
 cp "$release_root/v1.0.9/AltivecCore-1.0.9-iOS-static.zip" \
@@ -280,6 +282,18 @@ run_manager verify 1.0.9 > "$check_root/verify.txt"
 grep -Fq 'verification passed' "$check_root/verify.txt" ||
   die 'verify did not report success'
 
+if run_manager remove 1.0.9 > "$check_root/remove-current.txt" 2>&1; then
+  die 'remove accepted the selected library version'
+fi
+grep -Fq \
+  'cannot remove selected Altivec libraries 1.0.9; select another version first' \
+  "$check_root/remove-current.txt" ||
+  die 'remove did not explain how to remove the selected library version'
+[[ -d "$library_root/1.0.9" &&
+  -f "$state_root/receipts/1.0.9.json" &&
+  "$(readlink "$library_root/Current")" == '1.0.9' ]] ||
+  die 'failed removal changed the selected library version'
+
 cp "$api_root/tags/v1.0.11" "$api_root/latest"
 if run_manager update > "$check_root/broken-update.txt" 2>&1; then
   die 'update accepted a release with no AltivecCocoa asset'
@@ -305,5 +319,24 @@ run_manager select 1.0.9 > "$check_root/select.txt"
 grep -Fq 'ALTIVEC_MANAGED_VERSION := 1.0.9' \
   "$fake_prefix/share/altivec-lib/current.mk" ||
   die 'rollback did not refresh the selected Make fragment'
+
+run_manager remove 1.0.10 > "$check_root/remove.txt"
+grep -Fq \
+  "Removed Altivec libraries 1.0.10 from ${library_root}/1.0.10." \
+  "$check_root/remove.txt" ||
+  die 'remove did not report the removed library version'
+[[ ! -e "$library_root/1.0.10" && ! -L "$library_root/1.0.10" &&
+  ! -e "$state_root/receipts/1.0.10.json" &&
+  ! -L "$state_root/receipts/1.0.10.json" ]] ||
+  die 'remove left the library version or its manager receipt behind'
+[[ "$(readlink "$library_root/Current")" == '1.0.9' ]] ||
+  die 'remove changed the selected library version'
+grep -Fq 'ALTIVEC_MANAGED_VERSION := 1.0.9' \
+  "$fake_prefix/share/altivec-lib/current.mk" ||
+  die 'remove changed the selected Make fragment'
+run_manager list > "$check_root/list-after-remove.txt"
+if grep -Eq '^1[.]0[.]10[[:space:]]' "$check_root/list-after-remove.txt"; then
+  die 'list still reports the removed library version'
+fi
 
 printf '%s\n' 'Altivec library manager validation passed.'

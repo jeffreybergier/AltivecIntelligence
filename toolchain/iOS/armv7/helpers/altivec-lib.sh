@@ -54,6 +54,7 @@ usage() {
     '  altivec-lib install <version>' \
     '  altivec-lib update' \
     '  altivec-lib list' \
+    '  altivec-lib remove <version>' \
     '  altivec-lib select <version>' \
     '  altivec-lib verify <version>' \
     '' \
@@ -1026,6 +1027,34 @@ command_update() {
   printf 'Updated Altivec libraries to %s.\n' "$latest"
 }
 
+command_remove() {
+  local version="$1"
+  local version_root="${library_root}/${version}"
+  local internal_receipt="${version_root}/.altivec-lib-receipt.json"
+  local external_receipt="${receipt_dir}/${version}.json"
+
+  require_root
+  ensure_runtime_dirs
+  acquire_lock "remove ${version}"
+
+  [[ -d "$version_root" && ! -L "$version_root" ]] ||
+    die "library version ${version} is not installed"
+  if [[ -L "$current_link" && -e "$current_link" &&
+      "$current_link" -ef "$version_root" ]]; then
+    die "cannot remove selected Altivec libraries ${version}; select another version first"
+  fi
+  validate_receipt "$version" "$internal_receipt"
+  if [[ -e "$external_receipt" || -L "$external_receipt" ]]; then
+    [[ -f "$external_receipt" && ! -L "$external_receipt" ]] ||
+      die "manager receipt path is unsafe: ${external_receipt}"
+  fi
+
+  "$rm_tool" -r -- "$version_root"
+  "$rm_tool" -f -- "$external_receipt"
+  printf 'Removed Altivec libraries %s from %s.\n' \
+    "$version" "$version_root"
+}
+
 command_select() {
   local version="$1"
 
@@ -1068,6 +1097,11 @@ case "$1" in
   update)
     (($# == 1)) || die 'update takes no arguments'
     command_update
+    ;;
+  remove)
+    (($# == 2)) || die 'remove requires exactly one library version'
+    validate_version "$2"
+    command_remove "$2"
     ;;
   select)
     (($# == 2)) || die 'select requires exactly one library version'

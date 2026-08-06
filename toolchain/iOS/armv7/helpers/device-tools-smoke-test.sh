@@ -674,6 +674,8 @@ test_altivec_sdk() {
   [[ "$output" == *"13.2"* ]]
   "$bin_dir/altivec-sdk" --help > altivec-sdk.help
   [[ "$(/bin/cat altivec-sdk.help)" == *"altivec-sdk install <version>"* ]]
+  [[ "$(/bin/cat altivec-sdk.help)" == \
+    *"altivec-sdk remove <version>"* ]]
 }
 
 test_altivec_lib() {
@@ -687,6 +689,8 @@ test_altivec_lib() {
   [[ "$(/bin/cat altivec-lib.help)" == \
     *"altivec-lib install <version>"* ]]
   [[ "$(/bin/cat altivec-lib.help)" == *"altivec-lib update"* ]]
+  [[ "$(/bin/cat altivec-lib.help)" == \
+    *"altivec-lib remove <version>"* ]]
 }
 
 test_awk() {

@@ -13,15 +13,21 @@ if (($# != 2)); then
   exit 2
 fi
 
-readonly manager_script="$1"
-readonly catalog_path="$2"
+manager_script="$1"
+catalog_path="$2"
 
 [[ -f "$manager_script" ]] ||
   die "SDK manager script not found: ${manager_script}"
 [[ -f "$catalog_path" ]] ||
   die "SDK catalog not found: ${catalog_path}"
-command -v bash >/dev/null 2>&1 || die 'bash is required'
-command -v jq >/dev/null 2>&1 || die 'jq is required'
+for tool in awk bash chmod env grep jq mktemp readlink realpath rm; do
+  command -v "$tool" >/dev/null 2>&1 ||
+    die "required validation tool not found: ${tool}"
+done
+
+manager_script="$(realpath -m "$manager_script")"
+catalog_path="$(realpath -m "$catalog_path")"
+readonly manager_script catalog_path
 
 bash -n "$manager_script"
 
@@ -85,3 +91,117 @@ done < <(
 
 printf 'SDK manager inputs are valid: %s catalog entries.\n' \
   "$(jq -r '.sdks | length' "$catalog_path")"
+
+check_root="$(mktemp -d "${TMPDIR:-/tmp}/altivec-sdk-check.XXXXXX")"
+readonly check_root
+
+cleanup() {
+  local rc=$?
+
+  trap - EXIT
+  case "$check_root" in
+    "${TMPDIR:-/tmp}"/altivec-sdk-check.*)
+      if [[ -d "$check_root" && ! -L "$check_root" ]]; then
+        rm -r "$check_root"
+      fi
+      ;;
+    *)
+      printf 'error: refusing to remove unsafe validation path: %s\n' \
+        "$check_root" >&2
+      rc=1
+      ;;
+  esac
+  exit "$rc"
+}
+trap cleanup EXIT
+
+readonly fake_prefix="${check_root}/prefix"
+readonly sdk_root="${check_root}/sdks"
+readonly state_root="${check_root}/state"
+readonly cache_root="${check_root}/cache"
+readonly temporary_root="${check_root}/tmp"
+
+mkdir -p "$fake_prefix/bin" "$sdk_root/iPhoneOS8.4.sdk" \
+  "$sdk_root/iPhoneOS9.3.sdk" "$state_root/receipts" "$temporary_root"
+ln -s iPhoneOS8.4.sdk "$sdk_root/Current.sdk"
+printf '{}\n' > "$state_root/receipts/8.4.json"
+printf '{}\n' > "$state_root/receipts/9.3.json"
+
+write_fake_tool() {
+  local name="$1"
+  shift
+  {
+    printf '%s\n' '#!/bin/sh'
+    printf '%s\n' "$@"
+  } > "$fake_prefix/bin/$name"
+  chmod 0755 "$fake_prefix/bin/$name"
+}
+
+# The quoted lines are the literal body of the generated fake tool.
+# shellcheck disable=SC2016
+write_fake_tool clang \
+  'case "${1:-}" in' \
+  '  --print-targets) printf "  arm - ARM\\n" ;;' \
+  '  --version) printf "fake clang\\n" ;;' \
+  'esac'
+write_fake_tool ld 'printf "fake ld; binary framework inputs only\\n" >&2'
+for tool in curl file openssl otool tar; do
+  write_fake_tool "$tool" 'exit 0'
+done
+
+run_manager() {
+  env \
+    ALTIVEC_SDK_TESTING=1 \
+    ALTIVEC_SDK_INSTALL_PREFIX="$fake_prefix" \
+    ALTIVEC_SDK_ROOT="$sdk_root" \
+    ALTIVEC_SDK_CATALOG="$catalog_path" \
+    ALTIVEC_SDK_STATE_ROOT="$state_root" \
+    ALTIVEC_SDK_CACHE_ROOT="$cache_root" \
+    ALTIVEC_SDK_TMP_ROOT="$temporary_root" \
+    "$manager_script" "$@"
+}
+
+run_manager --help > "$check_root/help.txt"
+grep -Fq 'altivec-sdk remove <version>' "$check_root/help.txt" ||
+  die 'SDK manager help omits remove usage'
+
+if run_manager remove 8.4 > "$check_root/remove-current.txt" 2>&1; then
+  die 'remove accepted the selected SDK version'
+fi
+grep -Fq \
+  'cannot remove selected iPhoneOS SDK 8.4; select another version first' \
+  "$check_root/remove-current.txt" ||
+  die 'remove did not explain how to remove the selected SDK version'
+[[ -d "$sdk_root/iPhoneOS8.4.sdk" &&
+  -f "$state_root/receipts/8.4.json" &&
+  "$(readlink "$sdk_root/Current.sdk")" == 'iPhoneOS8.4.sdk' ]] ||
+  die 'failed removal changed the selected SDK version'
+
+run_manager remove 9.3 > "$check_root/remove.txt"
+grep -Fq \
+  "Removed iPhoneOS SDK 9.3 from ${sdk_root}/iPhoneOS9.3.sdk." \
+  "$check_root/remove.txt" ||
+  die 'remove did not report the removed SDK version'
+[[ ! -e "$sdk_root/iPhoneOS9.3.sdk" &&
+  ! -L "$sdk_root/iPhoneOS9.3.sdk" &&
+  ! -e "$state_root/receipts/9.3.json" &&
+  ! -L "$state_root/receipts/9.3.json" ]] ||
+  die 'remove left the SDK version or its manager receipt behind'
+[[ "$(readlink "$sdk_root/Current.sdk")" == 'iPhoneOS8.4.sdk' ]] ||
+  die 'remove changed the selected SDK version'
+run_manager list > "$check_root/list-after-remove.txt"
+grep -Eq '^9[.]3[[:space:]]+available[[:space:]]+-' \
+  "$check_root/list-after-remove.txt" ||
+  die 'list does not report the removed SDK version as available'
+
+mkdir "$sdk_root/iPhoneOS10.3.sdk"
+if run_manager remove 10.3 > "$check_root/remove-unmanaged.txt" 2>&1; then
+  die 'remove accepted an unmanaged SDK directory'
+fi
+grep -Fq 'SDK 10.3 is not managed by altivec-sdk' \
+  "$check_root/remove-unmanaged.txt" ||
+  die 'remove did not identify the unmanaged SDK directory'
+[[ -d "$sdk_root/iPhoneOS10.3.sdk" ]] ||
+  die 'failed removal deleted an unmanaged SDK directory'
+
+printf '%s\n' 'SDK manager removal validation passed.'
