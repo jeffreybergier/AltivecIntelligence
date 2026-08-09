@@ -23,7 +23,10 @@ source_archive="llvm-project-${source_commit}.zip"
 source_url="https://github.com/llvm/llvm-project/archive/${source_commit}.zip"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-patch_file="${script_dir}/llvm15-ios-clonefile.patch"
+patch_files=(
+    "${script_dir}/llvm15-ios-clonefile.patch"
+    "${script_dir}/llvm15-host-clang21.patch"
+)
 arclite_archive_source="${script_dir}/../payload/lib/arc/libarclite_iphoneos.a"
 arclite_archive_sha256="f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8"
 arclite_deployment_target="4.3"
@@ -376,11 +379,15 @@ prepare_build_cache() {
 
 prepare_source() {
     local download_path="${archive_path}.part"
+    local patch_file=""
+    local patch_name=""
 
     command -v curl >/dev/null 2>&1 || die "curl is required"
     command -v unzip >/dev/null 2>&1 || die "unzip is required"
     command -v patch >/dev/null 2>&1 || die "patch is required"
-    [[ -f "$patch_file" ]] || die "missing source patch: ${patch_file}"
+    for patch_file in "${patch_files[@]}"; do
+        [[ -f "$patch_file" ]] || die "missing source patch: ${patch_file}"
+    done
 
     if [[ ! -f "$archive_path" ]]; then
         printf 'Downloading LLVM %s source to %s\n' "$llvm_version" "$archive_path"
@@ -399,16 +406,19 @@ prepare_source() {
         unzip -q "$archive_path" -d "$sources_dir"
     fi
 
-    if patch -d "$source_dir" -p1 -s -f -N -F 0 --dry-run \
-        < "$patch_file" >/dev/null 2>&1; then
-        printf 'Applying old-iOS clonefile guard\n'
-        patch -d "$source_dir" -p1 -s -f -N -F 0 < "$patch_file"
-    elif patch -d "$source_dir" -p1 -s -f -R -F 0 --dry-run \
-        < "$patch_file" >/dev/null 2>&1; then
-        printf 'Old-iOS clonefile guard is already applied\n'
-    else
-        die "LLVM source does not match the recorded clonefile patch"
-    fi
+    for patch_file in "${patch_files[@]}"; do
+        patch_name="$(basename "$patch_file")"
+        if patch -d "$source_dir" -p1 -s -f -N -F 0 --dry-run \
+            < "$patch_file" >/dev/null 2>&1; then
+            printf 'Applying LLVM source patch: %s\n' "$patch_name"
+            patch -d "$source_dir" -p1 -s -f -N -F 0 < "$patch_file"
+        elif patch -d "$source_dir" -p1 -s -f -R -F 0 --dry-run \
+            < "$patch_file" >/dev/null 2>&1; then
+            printf 'LLVM source patch is already applied: %s\n' "$patch_name"
+        else
+            die "LLVM source does not match the recorded patch: ${patch_name}"
+        fi
+    done
 }
 
 ensure_native_tools() {
@@ -658,7 +668,11 @@ package_armv7() {
         printf 'SDK: %s\n' "${sdk_dir##*/}"
         printf 'LLVM targets: ARM\n'
         printf 'Threads: disabled\n'
-        printf 'Source patch: %s\n' "$(basename "$patch_file")"
+        printf 'Source patches:'
+        for patch_file in "${patch_files[@]}"; do
+            printf ' %s' "$(basename "$patch_file")"
+        done
+        printf '\n'
         printf 'ARC back-deployment runtime: Apple Xcode 6.4 %s\n' \
             "$(basename "$arclite_archive_source")"
         printf 'ARC back-deployment runtime SHA-256: %s\n' \

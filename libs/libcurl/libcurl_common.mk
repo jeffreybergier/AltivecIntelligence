@@ -9,7 +9,7 @@ BIN_DIR=$(MODERN_BIN)
 OPT_FLAGS=-O3
 COMMON_WARN_FLAGS=-Wall -Wimplicit-function-declaration
 # zlib 1.2.13 defines fdopen as a function-like NULL macro whenever Apple's
-# TARGET_OS_MAC macro exists. Clang 18 then expands that macro inside the iOS
+# TARGET_OS_MAC macro exists. Modern Clang then expands that macro inside the iOS
 # SDK's stdio declaration. A self-referential object macro marks fdopen as
 # available without rewriting either the SDK or the vendored source.
 ZLIB_MODERN_CFLAGS=$(OPT_FLAGS) -Dfdopen=fdopen \

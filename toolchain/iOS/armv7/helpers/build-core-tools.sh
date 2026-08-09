@@ -105,8 +105,8 @@ cctools_bin="/osxcross/target/bin"
 deployment_target="6.0"
 jobs="2"
 install_prefix="/var/altivec"
-cc="/usr/bin/clang-18"
-cxx="/usr/bin/clang++-18"
+cc="/usr/bin/clang"
+cxx="/usr/bin/clang++"
 ldid_signer="ldid"
 
 usage() {

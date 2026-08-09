@@ -30,9 +30,10 @@ deprecation warnings as those will be common when dealing with these old API's.
 # AltivecIntelligence: Environment Summary
 
 ## 🛠 Toolchain Overview
-- **Modern Toolchain:** Current pinned OSXCross stable build at `/osxcross/modern` (Clang 18 plus current cctools/ld64).
+- **Modern Toolchain:** Current pinned OSXCross stable build at `/osxcross/modern` (Clang 21 plus current cctools/ld64).
 - **Legacy Toolchain:** Pinned OSXCross `ppc-test` build at `/osxcross/legacy/target` (Apple GCC 4.2.1 plus PowerPC-capable cctools/ld64).
-- **Host Architecture:** Ubuntu 24.04 (aarch64/x86_64)
+- **Legacy Host Build:** Ubuntu Clang 21 compiles the C portions of legacy cctools, while packaged G++ 14 compiles its antique ld64 C++ sources; generated Darwin code still uses Apple GCC 4.2.1.
+- **Host Architecture:** Ubuntu 26.04 (aarch64/x86_64)
 - **Compatibility Path:** `/osxcross/target` is a symlink to `/osxcross/modern`; build files should use `altivec_toolchains.mk` rather than assuming this alias.
 - **Altivec Root:** `/altivec` (runtime repo baked into the image — `altivec_common_*.mk`, example app sources, prebuilt `libs/{core,cocoa}/build-{mac,phone}` outputs, `templates/`, and `bin/`). Sample binaries and the optional jailbroken-device toolchain are release assets, not image contents.
 - **User Root:** `/repo/user` (the user's app project, mounted from the host)
@@ -49,8 +50,8 @@ deprecation warnings as those will be common when dealing with these old API's.
 | Target | Compiler | SDK | Architectures | Optimization |
 | :--- | :--- | :--- | :--- | :--- |
 | **Mac (Legacy)** | `oppc32-gcc` / `o32-gcc` | 10.5 | ppc, i386 (32-bit) | -O3 / -O0 |
-| **Mac (Modern)**| OSXCross Clang 18 wrappers | 11.3 | x86_64, arm64 (64-bit) | -O3 / -O0 |
-| **iPhone** | Ubuntu Clang 18 + current cctools | 8.4 | armv7, arm64 | -O3 / -O0 |
+| **Mac (Modern)**| OSXCross Clang 21 wrappers | 11.3 | x86_64, arm64 (64-bit) | -O3 / -O0 |
+| **iPhone** | Ubuntu Clang 21 + current cctools | 8.4 | armv7, arm64 | -O3 / -O0 |
 
 ## 🔗 Library Build System (AltivecCore)
 Libraries (libcurl, OpenSSL, zlib, SQLite, cJSON) are built as static binaries (`.a`). Mac builds also bundle them into `AltivecCore.framework`.
@@ -115,7 +116,7 @@ Logs must use a 1-space indentation increment and the `>` symbol for details:
 ```
 
 ### 3. Debug Symbols (dSYMs)
-- Status: Fully operational for X64 and ARM64 slices using the system LLVM 18 `dsymutil`. Legacy PPC and i386 symbols are primarily embedded in the binary.
+- Status: Fully operational for X64 and ARM64 slices using the system LLVM 21 `dsymutil`. Legacy PPC and i386 symbols are primarily embedded in the binary.
 
 - **Location:** Produced in the root of the build folder (e.g., `SingleWindow.X64.dSYM`).
 

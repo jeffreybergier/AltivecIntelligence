@@ -27,7 +27,9 @@ LLVM_WORK_DIR := $(abspath $(INTERMEDIATES_DIR)/llvm15-armv7)
 LLVM_SOURCES_DIR := $(LLVM_WORK_DIR)/sources
 LLVM_BUILD_ENGINE := $(HELPERS_DIR)/build-llvm15-ios.sh
 LLVM_PACKAGE_SCRIPT := $(HELPERS_DIR)/llvm-package.sh
-LLVM_PATCH := $(HELPERS_DIR)/llvm15-ios-clonefile.patch
+LLVM_PATCHES := \
+	$(HELPERS_DIR)/llvm15-ios-clonefile.patch \
+	$(HELPERS_DIR)/llvm15-host-clang21.patch
 LLVM_ARCLITE_ARCHIVE := payload/lib/arc/libarclite_iphoneos.a
 LLVM_PACKAGE_NAME := clang-$(LLVM_VERSION)-armv7-apple-ios$(DEPLOYMENT_TARGET)
 LLVM_PACKAGE_ARCHIVE := $(LLVM_WORK_DIR)/artifacts/$(LLVM_PACKAGE_NAME).tar.gz
@@ -51,8 +53,8 @@ CORE_TOOLS_SOURCES_DIR := $(CORE_TOOLS_WORK_DIR)/sources
 # resolves it onto the writable data partition at /private/var.
 INSTALL_PREFIX := /var/altivec
 INSTALL_PREFIX_TAG := $(subst /,-,$(patsubst /%,%,$(INSTALL_PREFIX)))
-CORE_TOOLS_CC ?= /usr/bin/clang-18
-CORE_TOOLS_CXX ?= /usr/bin/clang++-18
+CORE_TOOLS_CC ?= /usr/bin/clang
+CORE_TOOLS_CXX ?= /usr/bin/clang++
 CORE_TOOLS_PACKAGE_NAME := altivec-toolchain-core-tools-armv7-ios$(DEPLOYMENT_TARGET)-$(INSTALL_PREFIX_TAG)
 CORE_TOOLS_PACKAGE_ARCHIVE := $(CORE_TOOLS_WORK_DIR)/artifacts/$(CORE_TOOLS_PACKAGE_NAME).tar.gz
 
@@ -273,7 +275,7 @@ device-tools-smoke-test: $(DEVICE_TOOLS_SMOKE_TEST)
 device-ios-app-smoke-test: $(DEVICE_IOS_APP_SMOKE_TEST)
 	@"$(DEVICE_IOS_APP_SMOKE_TEST)" "$(DEVICE)"
 
-$(LLVM_PACKAGE_ARCHIVE): $(LLVM_BUILD_ENGINE) $(LLVM_PATCH) \
+$(LLVM_PACKAGE_ARCHIVE): $(LLVM_BUILD_ENGINE) $(LLVM_PATCHES) \
 		$(LLVM_ARCLITE_ARCHIVE) | check $(LLVM_PACKAGE_SCRIPT)
 	@mkdir -p "$(INTERMEDIATES_DIR)"
 	$(call run_llvm_target,llvm-package)

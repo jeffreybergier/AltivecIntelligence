@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM ubuntu:24.04 AS altivec-builder
+FROM ubuntu:26.04 AS altivec-builder
 
 # 1. Install Dependencies
 ENV DEBIAN_FRONTEND=noninteractive
@@ -21,6 +21,9 @@ RUN apt-get update && apt-get install -y \
     llvm-dev \
     lld \
     lldb \
+    # GCC 14's C++ library preserves the unchecked behavior expected by the
+    # legacy ld64 sources; Ubuntu 26's default GCC 15 enables bounds assertions.
+    g++-14 \
     # --- Compiler & math libs (GCC toolchain deps) ---
     libgmp-dev \
     libmpfr-dev \
@@ -34,6 +37,9 @@ RUN apt-get update && apt-get install -y \
     liblzma-dev \
     libbz2-dev \
     uuid-dev \
+    # --- Headless browser runtime ---
+    libnspr4 \
+    libnss3 \
     # --- Build systems / scripting ---
     bc \
     cmake \
@@ -137,7 +143,8 @@ RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarbal
 
 RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarballs,sharing=locked \
     echo "Build: legacy OSXCross" \
-      && SDK_VERSION=10.5 OSX_VERSION_MIN=10.5 UNATTENDED=1 \
+      && CC=/usr/bin/clang CXX=/usr/bin/g++-14 \
+         SDK_VERSION=10.5 OSX_VERSION_MIN=10.5 UNATTENDED=1 \
          JOBS="${JOBS:-$(nproc)}" ./build.sh
 
 RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarballs,sharing=locked \
@@ -247,32 +254,6 @@ RUN npm install -g \
       "@playwright/test@${PLAYWRIGHT_VERSION}" \
       "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"
 
-# These are the only Chromium runtime libraries not already supplied by the
-# base tool set. Install pinned Ubuntu packages directly because a second apt
-# metadata refresh is unreliable under Docker Desktop (see the Node stage).
-RUN case "${TARGETARCH}" in \
-      amd64) \
-        UBUNTU_ARCHIVE=https://archive.ubuntu.com/ubuntu; \
-        NSPR_SHA256=e579e72d091f6c7a13f5a756c31065b15aae5b81840d61b069355aa2283c07b4; \
-        NSS_SHA256=4254f11d782dfb970e78113519a59d440112ed43c4b56f709da0aef81da8651a ;; \
-      arm64) \
-        UBUNTU_ARCHIVE=https://ports.ubuntu.com/ubuntu-ports; \
-        NSPR_SHA256=0bd5994126c41aa05aa380954a3cb2ae56a0a8ebe368a0e01a411fdcc0cb9c68; \
-        NSS_SHA256=daf32de5e12139aa84fde7a3e2784d5d7277259e22f14affcd82d81545b5312e ;; \
-      *) echo "Unsupported Playwright architecture: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac \
-    && curl $CURL_RETRY_FLAGS -o /tmp/libnspr4.deb \
-      "${UBUNTU_ARCHIVE}/pool/main/n/nspr/libnspr4_4.35-1.1build1_${TARGETARCH}.deb" \
-    && curl $CURL_RETRY_FLAGS -o /tmp/libnss3.deb \
-      "${UBUNTU_ARCHIVE}/pool/main/n/nss/libnss3_3.98-1ubuntu0.2_${TARGETARCH}.deb" \
-    && printf '%s  %s\n%s  %s\n' \
-      "${NSPR_SHA256}" /tmp/libnspr4.deb \
-      "${NSS_SHA256}" /tmp/libnss3.deb \
-      | sha256sum -c - \
-    && apt-get install -y --no-install-recommends \
-      /tmp/libnspr4.deb /tmp/libnss3.deb \
-    && rm -f /tmp/libnspr4.deb /tmp/libnss3.deb
-
 # Install only Chromium, rather than Playwright's full three-browser matrix.
 # MCP follows its own Playwright prerelease, so point it at the stable test
 # runner's managed Chromium instead of downloading a duplicate revision.
@@ -358,7 +339,7 @@ RUN set -eux; \
     rm -rf /tmp/ipsw.tar.gz /tmp/ipsw-install; \
     ipsw version
 
-# 9d. actionlint — Ubuntu 24.04 does not package it, so install the verified
+# 9d. actionlint — Ubuntu 26.04 does not package it, so install the verified
 #     upstream binary for each image architecture. Keep this behind the
 #     heavyweight toolchain layers so version bumps preserve their cache.
 ARG ACTIONLINT_VERSION=1.7.12

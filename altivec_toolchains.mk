@@ -33,7 +33,7 @@ MODERN_LD ?= $(MODERN_BIN)/ld
 # Current Apple ld64 omits CPU_SUBTYPE_LIB64 from x86_64 Mach-O headers,
 # causing Tiger on 64-bit-capable Intel CPUs to select that incompatible slice
 # instead of i386. LLVM's Mach-O linker retains the legacy capability bit.
-LD64_LLD ?= /usr/bin/ld64.lld-18
+LD64_LLD ?= /usr/bin/ld64.lld
 
 # The legacy lipo is retained for final quad-fat assembly because it is the
 # member of the pair explicitly built with PowerPC support.

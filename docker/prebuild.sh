@@ -54,6 +54,10 @@ sed -i '/extract "$OSXCROSS_TARBALL_DIR\/gcc-$APPLE_GCC_VERSION.tar.gz" 1/a \  f
 echo "--- Applying Global Patches ---"
 # osxcross-build.patch eliminated (native 10.5 support)
 # osxcross-tools.patch eliminated (10.5 SDK has ppc64)
+# Ubuntu 26's legacy host build uses G++ 14 for the antique ld64 C++ sources.
+# Apple's headers expect Clang's __private_extern__ spelling, so define it away
+# for that isolated host build just as cctools already does for its C sources.
+patch build.sh --quiet < docker/patches/osxcross-build-host-gcc14.patch
 
 # 4. Prepare GCC scripts
 # Create PPC copy from original first

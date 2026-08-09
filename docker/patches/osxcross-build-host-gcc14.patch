@@ -1,0 +1,11 @@
+--- build.sh
++++ build.sh
+@@ -168,7 +168,7 @@
+ else
+   LLVM_INCLUDE=""
+ fi
+-CXXFLAGS="${LLVM_INCLUDE} " CFLAGS="${LLVM_INCLUDE} " \
++CXXFLAGS="${LLVM_INCLUDE} -D__private_extern__= " CFLAGS="${LLVM_INCLUDE} " \
+   ./configure $CONFFLAGS
+ $MAKE -j$JOBS
+ $MAKE install -j$JOBS
