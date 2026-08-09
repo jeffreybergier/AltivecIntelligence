@@ -2,10 +2,11 @@
 # Targets: iOS 4.3+ (armv7, arm64)
 
 # --- Tools and Paths ---
-CLANG14 = /usr/bin/clang
-DSYMUTIL = /usr/bin/dsymutil-14
-BIN_DIR = /osxcross/target/bin
-IOS_SDK_PATH = /osxcross/target/SDK/iPhoneOS8.4.sdk
+_altivec_common_phone_dir := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+include $(_altivec_common_phone_dir)/altivec_toolchains.mk
+CLANG = $(COMPILER_IOS)
+BIN_DIR = $(MODERN_BIN)
+IOS_SDK_PATH = $(SDK_IOS_PATH)
 # Capture self-dir immediately (:=) so it resolves while this file is still
 # $(lastword MAKEFILE_LIST). With ?= alone the RHS is deferred and re-evaluates
 # later, after downstream Makefiles include other .mk/.env files — then
@@ -19,6 +20,8 @@ INT_DIR = $(BUILD_DIR)/Intermediates
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 PHONE_IPA = $(BUILD_DIR)/$(APP_NAME).ipa
 OPT_FLAGS ?= -O3
+IOS_MIN_ARMV7 ?= 4.3
+IOS_MIN_ARM64 ?= 7.0
 
 # --- Bundle Resources ---
 # iPhone bundles have a flat resource root. RES_DIR is a verbatim copy root
@@ -129,13 +132,16 @@ IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wco
             -Wno-unused-command-line-argument -Wunguarded-availability -Wno-semicolon-before-method-body \
             -isysroot $(IOS_SDK_PATH) \
             -B$(BIN_DIR)
+IOS_ARCH_FLAGS = -target arm64-apple-ios -arch armv7 -arch arm64 \
+                 -Xarch_armv7 -miphoneos-version-min=$(IOS_MIN_ARMV7) \
+                 -Xarch_arm64 -miphoneos-version-min=$(IOS_MIN_ARM64)
 
 PHONE_SOURCE_FLAGS ?=
 PHONE_EXTRA_SOURCE_FLAGS ?=
 PHONE_ANALYZE_SOURCE_FLAGS ?= $(PHONE_SOURCE_FLAGS)
 PHONE_ANALYZE_EXTRA_SOURCE_FLAGS ?= $(PHONE_EXTRA_SOURCE_FLAGS)
 PHONE_LINK_FLAGS ?=
-PHONE_ARCLITE_ARCHIVE ?= /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a
+PHONE_ARCLITE_ARCHIVE ?= /opt/altivec/lib/arc/libarclite_iphoneos.a
 # Clang force-loads ARCLite for deployment targets below iOS 5 whenever ARC
 # is present at link time. Restrict the flag to armv7: arm64 only runs on iOS
 # 7 and newer, where the system Objective-C runtime already provides ARC.
@@ -179,15 +185,15 @@ analyze: validate
 	@: > $(ANALYZE_OUTPUT)
 	@if [ -n "$(strip $(ANALYZE_SOURCE_FILES))" ]; then \
 		echo "  > analyzing app sources"; \
-		$(CLANG14) --analyze -Xanalyzer -analyzer-output=text \
-			-target arm64-apple-ios4.3 -arch arm64 -isysroot $(IOS_SDK_PATH) \
+		$(CLANG) --analyze -Xanalyzer -analyzer-output=text \
+			-target arm64-apple-ios$(IOS_MIN_ARM64) -arch arm64 -isysroot $(IOS_SDK_PATH) \
 			$(IOS_FLAGS) $(PHONE_ANALYZE_SOURCE_FLAGS) \
 			$(ANALYZE_SOURCE_FILES) >> $(ANALYZE_OUTPUT) 2>&1 || true; \
 	fi
 	@if [ -n "$(strip $(ANALYZE_EXTRA_SOURCE_FILES))" ]; then \
 		echo "  > analyzing extra sources"; \
-		$(CLANG14) --analyze -Xanalyzer -analyzer-output=text \
-			-target arm64-apple-ios4.3 -arch arm64 -isysroot $(IOS_SDK_PATH) \
+		$(CLANG) --analyze -Xanalyzer -analyzer-output=text \
+			-target arm64-apple-ios$(IOS_MIN_ARM64) -arch arm64 -isysroot $(IOS_SDK_PATH) \
 			$(IOS_FLAGS) $(PHONE_ANALYZE_EXTRA_SOURCE_FLAGS) \
 			$(ANALYZE_EXTRA_SOURCE_FILES) >> $(ANALYZE_OUTPUT) 2>&1 || true; \
 	fi
@@ -250,7 +256,7 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin $(PHONE_BUNDLE_DEPS)
 $(INT_DIR)/$(APP_NAME)-bin: $(OBJS) | validate-arclite
 	@echo " [2/4] Linking Phone universal binary (armv7, arm64)..."
 	@export PATH=$(BIN_DIR):$(PATH); \
-	$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
+	$(CLANG) $(IOS_ARCH_FLAGS) \
 	           $(IOS_FLAGS) $(PHONE_ARC_LINK_FLAGS) $(PHONE_LINK_FLAGS) \
 	           $(IOS_FRAMEWORKS) $(LIBS_IPHONE) $^ -o $@
 
@@ -260,7 +266,7 @@ $(INT_DIR)/%.o: %.m
 		echo " [1/4] Compiling Files..."; \
 	fi
 	@echo "  > $(notdir $<)"
-	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
+	@$(CLANG) $(IOS_ARCH_FLAGS) \
 	           $(IOS_FLAGS) -c $< -o $@
 
 $(INT_DIR)/%.o: %.c
@@ -269,7 +275,7 @@ $(INT_DIR)/%.o: %.c
 		echo " [1/4] Compiling Files..."; \
 	fi
 	@echo "  > $(notdir $<)"
-	@$(CLANG14) -target arm64-apple-ios4.3 -arch armv7 -arch arm64 \
+	@$(CLANG) $(IOS_ARCH_FLAGS) \
 	           $(IOS_FLAGS) -c $< -o $@
 
 .PHONY: release debug clean analyze validate validate-sdk validate-arclite altiveccore-bootstrap libs-ready \

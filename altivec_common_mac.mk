@@ -9,17 +9,12 @@ MAC_MIN_OLD = 10.4
 MAC_MIN_MID = 10.9
 MAC_MIN_NEW = 11.0
 
-# --- Compilers ---
-COMPILER_PPC=oppc32-gcc
-COMPILER_X86=o32-gcc
-COMPILER_X64=/usr/bin/clang
-COMPILER_ARM=/usr/bin/clang
-DSYMUTIL=/usr/bin/dsymutil-14
-
-# --- SDK Paths ---
-SDK_MAC_OLD_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_OLD).sdk
-SDK_MAC_NEW_PATH=/osxcross/target/SDK/MacOSX$(SDK_MAC_NEW).sdk
-LD64_LLD=/osxcross/target/bin/ld64.lld
+# --- Toolchain Profiles ---
+_altivec_common_mac_dir := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+include $(_altivec_common_mac_dir)/altivec_toolchains.mk
+COMPILER_ARM=$(COMPILER_ARM64)
+SDK_MAC_OLD_PATH=$(SDK_PPC_PATH)
+SDK_MAC_NEW_PATH=$(SDK_X64_PATH)
 export OSXCROSS_NO_DSYMUTIL=1
 
 # --- Engine Root ---
@@ -272,7 +267,7 @@ $(BUNDLE): $(UNIVERSAL_BIN)
 
 $(INT_DIR)/$(APP_NAME)-universal: $(INT_DIR)/ppc.bin $(INT_DIR)/x86.bin $(INT_DIR)/x64.bin $(INT_DIR)/arm.bin
 	@echo " [5/7] Merging quad-fat binary (ppc, x86, x64, arm)..."
-	@lipo -create $^ -output $@
+	@$(LIPO) -create $^ -output $@
 
 # --- ppc slice (10.4, 10.5 sdk) ---
 $(INT_DIR)/ppc.bin: $(PPC_OBJS)
@@ -320,7 +315,8 @@ $(INT_DIR)/x86/%.o: %.c
 $(INT_DIR)/x64.bin: $(X64_OBJS)
 	@echo "  > linking x64 binary"
 	@$(COMPILER_X64) -target x86_64-apple-macos$(MAC_MIN_MID) -isysroot $(SDK_MAC_NEW_PATH) \
-		-fuse-ld=$(LD64_LLD) -Wl,-platform_version,macos,$(MAC_MIN_MID),$(SDK_MAC_NEW) \
+	    -fuse-ld=$(LD64_LLD) \
+	    -Wl,-platform_version,macos,$(MAC_MIN_MID),$(SDK_MAC_NEW) \
 	    $^ $(MAC_LIBS) -o $@
 
 $(INT_DIR)/x64/%.o: %.m
@@ -342,7 +338,6 @@ $(INT_DIR)/x64/%.o: %.c
 $(INT_DIR)/arm.bin: $(ARM_OBJS)
 	@echo "  > linking arm64 binary"
 	@$(COMPILER_ARM) -target arm64-apple-macos$(MAC_MIN_NEW) -isysroot $(SDK_MAC_NEW_PATH) \
-		-fuse-ld=$(LD64_LLD) -Wl,-platform_version,macos,$(MAC_MIN_NEW),$(SDK_MAC_NEW) \
 	    $^ $(MAC_LIBS) -o $@
 
 $(INT_DIR)/arm/%.o: %.m

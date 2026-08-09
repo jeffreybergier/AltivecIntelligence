@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM ubuntu:22.04 AS altivec-builder
+FROM ubuntu:24.04 AS altivec-builder
 
 # 1. Install Dependencies
 ENV DEBIAN_FRONTEND=noninteractive
@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     make \
     patch \
+    autotools-dev \
     clang \
     llvm-dev \
     lld \
@@ -29,13 +30,14 @@ RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
     libxml2-dev \
     libssl-dev \
-    libz-dev \
+    zlib1g-dev \
+    liblzma-dev \
+    libbz2-dev \
     uuid-dev \
     # --- Build systems / scripting ---
     bc \
     cmake \
     python3 \
-    python3-distutils \
     python3-yaml \
     m4 \
     texinfo \
@@ -88,8 +90,10 @@ RUN apt-get update && apt-get install -y \
     mitmproxy \
     strace \
     ltrace \
+    radare2 \
     # --- Ruby / Jekyll static-site toolchain ---
     ruby-full \
+    bundler \
     libffi-dev \
     # --- Document conversion ---
     pandoc \
@@ -99,111 +103,119 @@ RUN apt-get update && apt-get install -y \
 
 ENV CURL_RETRY_FLAGS="--fail --silent --show-error --location --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 30"
 
-# 1b. Bundler — install the current release from RubyGems. apt's
-#      `bundler` is pinned to an older version that newer Gemfile.lock
-#      files (via their `BUNDLED WITH` line) frequently refuse to accept.
-RUN gem install bundler --no-document
-
 # 2a. Settings for the User
 
 # Use every CPU visible to the build container by default. Builds can be capped
 # with `--build-arg JOBS=<count>` when memory or host responsiveness requires it.
 ARG JOBS
 
-# Comment this out to make clang fully bootstrap itself
-# This makes the build take significantly longer
-ENV DISABLE_BOOTSTRAP=1
-
 # 2b. Set up environment
 
-ENV GCC_VERSION=4.2.1
-ENV APPLE_GCC=1
-ENV SDK_VERSION=10.5
-ENV OSX_VERSION_MIN=10.5
-ENV UNATTENDED=1
-ENV OSXCROSS_NO_DSYMUTIL=1
-ENV INSTALLPREFIX=/osxcross/target
-ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib"
+ENV ALTIVEC_MODERN_TOOLCHAIN=/osxcross/modern \
+    ALTIVEC_LEGACY_TOOLCHAIN=/osxcross/legacy/target \
+    OSXCROSS_NO_DSYMUTIL=1
 
 # Host bind mounts often carry the macOS UID/GID, so Git running as root inside
 # the container otherwise rejects them as dubious ownership.
 RUN git config --system --add safe.directory "*"
 
-# 3. Install Radare to help with decompilation 
-#    and reverse engineering (optional)
+# 3. Build the isolated Apple GCC 4.2 / PowerPC toolchain. This deliberately
+# remains on OSXCross ppc-test and installs under /osxcross/legacy/target.
+# Keeping it before the current OSXCross build means modern-toolchain changes
+# do not invalidate the expensive Apple GCC layers.
+WORKDIR /osxcross/legacy
+COPY --chmod=0755 docker/prebuild.sh docker/postbuild.sh ./docker/
+COPY docker/patches/ ./docker/patches/
 
-# NOTE: use the acr copy-install, NOT sys/install.sh — the latter is a
-# developer install that symlinks /usr/local/bin/* back into the build
-# tree, which the `rm -rf` below then deletes (→ dangling symlinks).
-RUN curl $CURL_RETRY_FLAGS -o /tmp/radare2.tar.xz \
-      https://github.com/radareorg/radare2/releases/download/6.1.4/radare2-6.1.4.tar.xz \
-    && tar xJf /tmp/radare2.tar.xz \
-    && cd radare2-6.1.4 \
-    && ./configure --prefix=/usr \
-    && make -j"${JOBS:-$(nproc)}" \
-    && make install \
-    && cd / && rm -rf radare2-6.1.4 /tmp/radare2.tar.xz \
-    && ldconfig \
-    && radare2 -v
-
-# 4. Copy OSXCross and build base toolchain
-WORKDIR /osxcross
-COPY docker/ ./docker/
-
-# 5. Build OSXCross and Compilers
 # Keep SDK/GCC source tarballs out of committed image layers. They are large,
 # and leaving them in an early layer can make the final image export fail even
 # when a later layer deletes /osxcross/tarballs.
 
-RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
-    echo "Pre-Build: Altivec Intelligence" \
+RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarballs,sharing=locked \
+    echo "Prepare: legacy OSXCross" \
       && ./docker/prebuild.sh
 
-RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
-    echo "Build: osxcross" \
-      && JOBS="${JOBS:-$(nproc)}" ./build.sh
+RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarballs,sharing=locked \
+    echo "Build: legacy OSXCross" \
+      && SDK_VERSION=10.5 OSX_VERSION_MIN=10.5 UNATTENDED=1 \
+         JOBS="${JOBS:-$(nproc)}" ./build.sh
 
-RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
+RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarballs,sharing=locked \
     echo "Build: Apple GCC 4.2 (PPC)" \
-      && JOBS="${JOBS:-$(nproc)}" POWERPC=1 ./build_gcc_ppc.sh \
+      && GCC_VERSION=4.2.1 APPLE_GCC=1 JOBS="${JOBS:-$(nproc)}" \
+         POWERPC=1 ./build_gcc_ppc.sh \
       && rm -rf build
-RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
+RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarballs,sharing=locked \
     echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
-      && JOBS="${JOBS:-$(nproc)}" ./build_gcc.sh \
+      && GCC_VERSION=4.2.1 APPLE_GCC=1 JOBS="${JOBS:-$(nproc)}" \
+         ./build_gcc.sh \
       && rm -rf build
 
-RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
-    echo "Post-Build: Altivec Intelligence" \
-      && ./postbuild.sh
+# 4. Build current OSXCross as the primary macOS foundation. The stable flavor
+# uses current cctools/ld64 while retaining i386-capable Apple tooling.
+WORKDIR /osxcross/modern-source
+COPY --chmod=0755 docker/prebuild-modern.sh docker/postbuild-modern.sh ./docker/
 
-# 6. Keep native Linux tools ahead of osxcross by default. Ruby/Bundler and
+RUN --mount=type=cache,id=altivec-modern-tarballs,target=/osxcross/modern-source/tarballs,sharing=locked \
+    ./docker/prebuild-modern.sh
+
+RUN --mount=type=cache,id=altivec-modern-tarballs,target=/osxcross/modern-source/tarballs,sharing=locked \
+    echo "Build: current OSXCross (stable)" \
+      && TARGET_DIR=/osxcross/modern SDK_VERSION=11.3 OSX_VERSION_MIN=10.9 \
+         ENABLE_ARCHS="x86_64 arm64" BUILD_FLAVOR=stable UNATTENDED=1 \
+         JOBS="${JOBS:-$(nproc)}" ./build.sh
+
+RUN --mount=type=cache,id=altivec-modern-tarballs,target=/osxcross/modern-source/tarballs,sharing=locked \
+    ./docker/postbuild-modern.sh /osxcross/modern-source /osxcross/modern \
+    && ln -s /osxcross/modern /osxcross/target
+
+COPY --chmod=0755 docker/toolchain-smoke.sh /osxcross/legacy/docker/toolchain-smoke.sh
+COPY docker/fixtures/ /osxcross/legacy/docker/fixtures/
+RUN bash /osxcross/legacy/docker/toolchain-smoke.sh
+
+# 5. Keep native Linux tools ahead of OSXCross by default. Ruby/Bundler and
 # other host-native extension builds may invoke tools like `ld` indirectly
 # through GCC and do not always honor LD=/usr/bin/ld. Altivec makefiles invoke
 # osxcross compilers/linkers explicitly, or prepend /osxcross/target/bin only
 # for the commands that need it.
-ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/altivec/bin:/osxcross/target/bin" \
+ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/altivec/bin:/osxcross/modern/bin:/osxcross/legacy/target/bin" \
     CC=/usr/bin/gcc \
     CXX=/usr/bin/g++ \
     LD=/usr/bin/ld \
     AR=/usr/bin/ar
 
-# 7. Node.js 22 LTS (matches wrangler's supported runtime)
-RUN curl $CURL_RETRY_FLAGS -o /tmp/nodesource-setup.sh \
-      https://deb.nodesource.com/setup_22.x \
-    && bash /tmp/nodesource-setup.sh \
-    && rm -f /tmp/nodesource-setup.sh \
-    && apt-get install -y --no-install-recommends nodejs \
+# 7. Node.js 24 LTS (matches wrangler's supported runtime). Pin and verify the
+# NodeSource package itself: repository metadata signatures occasionally fail
+# under Docker Desktop even though the package and its checksums are valid.
+ARG TARGETARCH
+ARG NODE_VERSION=24.19.0
+RUN case "${TARGETARCH}" in \
+      amd64) NODE_SHA256=132518334c7b6a30cb77731ecd2951d59b7714d18f8e3ce6d970323b561a272d ;; \
+      arm64) NODE_SHA256=46bf2bf76991c7e1e9a2b7ceb5b232e516103ced363bcb2e0f16c740873fc2f7 ;; \
+      *) echo "Unsupported Node.js architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl $CURL_RETRY_FLAGS -o /tmp/nodejs.deb \
+      "https://deb.nodesource.com/node_24.x/pool/main/n/nodejs/nodejs_${NODE_VERSION}-1nodesource1_${TARGETARCH}.deb" \
+    && echo "${NODE_SHA256}  /tmp/nodejs.deb" | sha256sum -c - \
+    && apt-get install -y --no-install-recommends /tmp/nodejs.deb \
+    && rm -f /tmp/nodejs.deb \
     && rm -rf /var/lib/apt/lists/*
 
-# 8a. Fix broken npm bundled with nodesource, then install globals
+# 8a. Pin npm independently of the NodeSource package, then install globals
 RUN curl $CURL_RETRY_FLAGS -o /tmp/npm.tgz \
-      https://registry.npmjs.org/npm/-/npm-11.14.1.tgz \
+      https://registry.npmjs.org/npm/-/npm-12.0.2.tgz \
     && mkdir -p /tmp/npm-install \
     && tar xzf /tmp/npm.tgz -C /tmp/npm-install \
-    && node /tmp/npm-install/package/bin/npm-cli.js install -g npm@11.14.1 \
+    && node /tmp/npm-install/package/bin/npm-cli.js install -g npm@12.0.2 \
     && rm -rf /tmp/npm.tgz /tmp/npm-install
 
+# This development image intentionally installs the latest CLI releases, so
+# allow their install-time lifecycle scripts and verify the results below.
+
+COPY --chmod=0644 docker/npm-tool-smoke.mjs /usr/local/lib/altivec/npm-tool-smoke.mjs
+
 RUN npm install -g \
+      --dangerously-allow-all-scripts \
       wrangler \
       jsdom \
       qrcode-terminal \
@@ -215,6 +227,8 @@ RUN npm install -g \
       prettier \
       js-beautify \
       webcrack
+
+RUN node /usr/local/lib/altivec/npm-tool-smoke.mjs
 
 # 8b. Headless browser testing and MCP browser control. Keep Playwright in a
 #     separate layer so updating it does not reinstall every global npm tool.
@@ -229,8 +243,35 @@ ENV NODE_PATH=/usr/lib/node_modules \
     PLAYWRIGHT_MCP_OUTPUT_DIR=/cache/playwright-mcp
 
 RUN npm install -g \
+      --dangerously-allow-all-scripts \
       "@playwright/test@${PLAYWRIGHT_VERSION}" \
       "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"
+
+# These are the only Chromium runtime libraries not already supplied by the
+# base tool set. Install pinned Ubuntu packages directly because a second apt
+# metadata refresh is unreliable under Docker Desktop (see the Node stage).
+RUN case "${TARGETARCH}" in \
+      amd64) \
+        UBUNTU_ARCHIVE=https://archive.ubuntu.com/ubuntu; \
+        NSPR_SHA256=e579e72d091f6c7a13f5a756c31065b15aae5b81840d61b069355aa2283c07b4; \
+        NSS_SHA256=4254f11d782dfb970e78113519a59d440112ed43c4b56f709da0aef81da8651a ;; \
+      arm64) \
+        UBUNTU_ARCHIVE=https://ports.ubuntu.com/ubuntu-ports; \
+        NSPR_SHA256=0bd5994126c41aa05aa380954a3cb2ae56a0a8ebe368a0e01a411fdcc0cb9c68; \
+        NSS_SHA256=daf32de5e12139aa84fde7a3e2784d5d7277259e22f14affcd82d81545b5312e ;; \
+      *) echo "Unsupported Playwright architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl $CURL_RETRY_FLAGS -o /tmp/libnspr4.deb \
+      "${UBUNTU_ARCHIVE}/pool/main/n/nspr/libnspr4_4.35-1.1build1_${TARGETARCH}.deb" \
+    && curl $CURL_RETRY_FLAGS -o /tmp/libnss3.deb \
+      "${UBUNTU_ARCHIVE}/pool/main/n/nss/libnss3_3.98-1ubuntu0.2_${TARGETARCH}.deb" \
+    && printf '%s  %s\n%s  %s\n' \
+      "${NSPR_SHA256}" /tmp/libnspr4.deb \
+      "${NSS_SHA256}" /tmp/libnss3.deb \
+      | sha256sum -c - \
+    && apt-get install -y --no-install-recommends \
+      /tmp/libnspr4.deb /tmp/libnss3.deb \
+    && rm -f /tmp/libnspr4.deb /tmp/libnss3.deb
 
 # Install only Chromium, rather than Playwright's full three-browser matrix.
 # MCP follows its own Playwright prerelease, so point it at the stable test
@@ -238,7 +279,7 @@ RUN npm install -g \
 # The image runs as root, which requires Chromium's sandbox to be disabled;
 # MCP remains headless and uses an isolated in-memory profile by default.
 RUN set -eux; \
-    playwright install --with-deps --no-progress chromium; \
+    playwright install --no-progress chromium; \
     PLAYWRIGHT_CHROMIUM_PATH="$( \
       NODE_PATH="$(npm root -g)" \
       node -e 'process.stdout.write(require("@playwright/test").chromium.executablePath())' \
@@ -317,7 +358,7 @@ RUN set -eux; \
     rm -rf /tmp/ipsw.tar.gz /tmp/ipsw-install; \
     ipsw version
 
-# 9d. actionlint — Ubuntu 22.04 does not package it, so install the verified
+# 9d. actionlint — Ubuntu 24.04 does not package it, so install the verified
 #     upstream binary for each image architecture. Keep this behind the
 #     heavyweight toolchain layers so version bumps preserve their cache.
 ARG ACTIONLINT_VERSION=1.7.12
@@ -380,6 +421,7 @@ RUN mkdir -p /cache
 # interpreted Python script, but this placement keeps script validation and
 # future generated helpers in the per-architecture builder stage.
 COPY bin/ /altivec/bin/
+COPY --chmod=0644 altivec_toolchains.mk /altivec/altivec_toolchains.mk
 RUN chmod +x /altivec/bin/* \
  && altivec-release --help >/dev/null
 
@@ -388,19 +430,24 @@ RUN chmod +x /altivec/bin/* \
 # the objc_loadClassref dependency in modern Xcode's replacement archive.
 # Keep this stable input late in the builder stage so changing it does not
 # invalidate the unrelated OSXCross, Node, and native-tool installation layers.
-COPY --chmod=0644 toolchain/iOS/armv7/payload/lib/arc/libarclite_iphoneos.a /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a
+COPY --chmod=0644 toolchain/iOS/armv7/payload/lib/arc/libarclite_iphoneos.a /opt/altivec/lib/arc/libarclite_iphoneos.a
 RUN set -eux; \
-    echo 'f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8  /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a' \
+    echo 'f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8  /opt/altivec/lib/arc/libarclite_iphoneos.a' \
       | sha256sum -c -; \
-    /osxcross/target/bin/lipo \
-      /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
+    clang_bin="$(readlink -f "$(command -v clang)")"; \
+    clang_arc_dir="$(dirname "$(dirname "$clang_bin")")/lib/arc"; \
+    mkdir -p "$clang_arc_dir"; \
+    ln -s /opt/altivec/lib/arc/libarclite_iphoneos.a \
+      "$clang_arc_dir/libarclite_iphoneos.a"; \
+    /osxcross/modern/bin/lipo \
+      /opt/altivec/lib/arc/libarclite_iphoneos.a \
       -verify_arch armv7; \
-    strings /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
+    strings /opt/altivec/lib/arc/libarclite_iphoneos.a \
       | grep -Fq -- '-miphoneos-version-min=4.3'; \
-    /usr/bin/llvm-nm-14 /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
+    /osxcross/modern/bin/nm /opt/altivec/lib/arc/libarclite_iphoneos.a \
       | grep -Fq '_OBJC_METACLASS_$___ARCLite__'; \
-    if /usr/bin/llvm-nm-14 \
-        /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
+    if /osxcross/modern/bin/nm \
+        /opt/altivec/lib/arc/libarclite_iphoneos.a \
         | grep -Eq '[[:space:]]_objc_loadClassref$'; then \
       echo 'error: ARCLite requires objc_loadClassref from a newer SDK' >&2; \
       exit 1; \
@@ -455,8 +502,10 @@ COPY altivec_common_mac.mk   ./
 COPY altivec_common_phone.mk ./
 COPY apps/                   ./apps/
 
-# Validate the retained library layout and dry-run the sample build rules.
-# The real sample compilation is deliberately deferred to release extras.
+# Validate the retained library layout and sample build rules. Compile the
+# smallest phone sample here so the production fat-build path and deployment
+# targets are checked before the image is published; the remaining real sample
+# builds are deferred to release extras.
 RUN set -e; \
     test -f libs/core/build-mac/lib/libAltivecCore.a; \
     test -f libs/core/build-phone/lib/libAltivecCore.a; \
@@ -482,6 +531,26 @@ RUN set -e; \
     for app in SingleWindow SingleScreen CURLmac CURLphone; do \
       make -C "apps/$app" -n release ALTIVEC_ROOT=/altivec >/dev/null; \
     done; \
+    make -C apps/SingleScreen release ALTIVEC_ROOT=/altivec; \
+    phone_bin=apps/SingleScreen/build-release/SingleScreen.app/SingleScreen; \
+    /osxcross/modern/bin/lipo "$phone_bin" -verify_arch armv7 arm64; \
+    for arch_and_version in armv7:4.3 arm64:7.0; do \
+      arch="${arch_and_version%%:*}"; \
+      expected="${arch_and_version##*:}"; \
+      thin="/tmp/singlescreen-$arch"; \
+      /osxcross/modern/bin/lipo "$phone_bin" -thin "$arch" -output "$thin"; \
+      actual="$(/osxcross/modern/bin/otool -l "$thin" | awk \
+        '$1 == "cmd" && ($2 == "LC_VERSION_MIN_IPHONEOS" || \
+                         $2 == "LC_BUILD_VERSION") { found = 1; next } \
+         found && ($1 == "version" || $1 == "minos") { print $2; exit }')"; \
+      test "$actual" = "$expected" || { \
+        echo "error: $arch minimum is $actual; expected $expected" >&2; \
+        exit 1; \
+      }; \
+      rm -f "$thin"; \
+    done; \
+    make -C apps/SingleScreen clean ALTIVEC_ROOT=/altivec; \
+    test -z "$(find apps/SingleScreen -type d -name 'build-*' -print -quit)"; \
     make -C apps/CURLphone -Bn release ALTIVEC_ROOT=/altivec \
       PHONE_SOURCE_FLAGS=-fobjc-arc \
       > /tmp/curlphone-arc-link-plan; \

@@ -30,8 +30,8 @@ CACERT_URLS=https://curl.se/ca/cacert.pem
 # Architecture Specific Flags
 PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(LEGACY_GCC_FLAGS)
 X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH) $(LEGACY_GCC_FLAGS)
-X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_X64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
-ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
+X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -B$(BIN_DIR)
+ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -B$(BIN_DIR)
 X64_COMPILE_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -B$(BIN_DIR)
 ARM64_COMPILE_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -B$(BIN_DIR)
 
@@ -158,6 +158,7 @@ $(STAMP_DIR)/zlib-x64.done: $(STAMP_DIR)/zlib-x64.extract
 	cd $(ZLIB_X64_SRC) && \
 	./configure --static --prefix=$(PREFIX)/x64 && \
 	sed -i 's|^CC=.*|CC=$(COMPILER_X64) $(X64_FLAGS)|g' Makefile && \
+	sed -i 's|^CFLAGS=.*|CFLAGS=$(ZLIB_MODERN_CFLAGS)|g' Makefile && \
 	sed -i 's|^AR=.*|AR=$(AR_MODERN)|g' Makefile && \
 	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MODERN)|g' Makefile && \
 	make clean && make -j$(JOBS) ARFLAGS="rc" install
@@ -168,6 +169,7 @@ $(STAMP_DIR)/zlib-arm64.done: $(STAMP_DIR)/zlib-arm64.extract
 	cd $(ZLIB_ARM64_SRC) && \
 	./configure --static --prefix=$(PREFIX)/arm64 && \
 	sed -i 's|^CC=.*|CC=$(COMPILER_ARM64) $(ARM64_FLAGS)|g' Makefile && \
+	sed -i 's|^CFLAGS=.*|CFLAGS=$(ZLIB_MODERN_CFLAGS)|g' Makefile && \
 	sed -i 's|^AR=.*|AR=$(AR_MODERN)|g' Makefile && \
 	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MODERN)|g' Makefile && \
 	make clean && make -j$(JOBS) ARFLAGS="rc" install

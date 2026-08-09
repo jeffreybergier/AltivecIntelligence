@@ -76,9 +76,12 @@ the Apple cross-linker that is also available on `PATH`.
 #### Introduction Prompt
 
 ```
-Hello, you are inside of a docker container that has a cross-compile 
-environment for building retro Mac and iPhone Apps. My app code is in /repo/user. The Altivec engine and examples are in /altivec. The cross-compiler 
-toolchain is in /osxcross. Please start by reading the README.md and AGENTS.md 
+Hello, you are inside of a docker container that has a cross-compile
+environment for building retro Mac and iPhone Apps. My app code is in
+/repo/user. The Altivec engine and examples are in /altivec. The modern
+cross-compiler toolchain is in /osxcross/modern and the Apple GCC/PowerPC
+toolchain is in /osxcross/legacy/target. Please start by reading the README.md
+and AGENTS.md
 files in /altivec. Please always create makefiles for my app using 
 the altivec_common_[mac|phone].mk files in /altivec so I can ensure my 
 makefiles are small and make apps compatible with many retro Apple devices. 
@@ -304,16 +307,19 @@ library, or rebuild `AltivecCore` and its dependencies from source.
 - [**Docker Desktop**](https://www.docker.com/get-started/) or an alternative
 
 ### 2. Docker Resources
-The from-source build compiles Apple GCC 4.2.1, so give Docker some headroom in
+The from-source build compiles Apple GCC 4.2.1 and current OSXCross, so give Docker some headroom in
 its Settings → Resources tab:
 - 6–8 GB RAM
 - As many CPU cores as you can spare
+- At least 50 GB of free Docker disk space (separate from free host disk space)
 
 ### 3. Clone and Build
-This compiles the toolchain from source and can take **5–30 minutes** the first
-time (cached afterward). Build parallelism automatically matches the CPU cores
-visible to Docker. To cap it, pass an explicit build argument, for example
-`docker compose build --build-arg JOBS=4`.
+This builds the isolated legacy toolchain first, then the modern toolchain, and
+is a heavyweight first-time build. Plan on **5+ hours**, depending on the host
+and the resources assigned to Docker; subsequent builds are much faster when
+the expensive layers are cached. Build parallelism automatically matches the
+CPU cores visible to Docker. To cap it, pass an explicit build argument, for
+example `docker compose build --build-arg JOBS=4`.
 
 ```bash
 git clone https://github.com/jeffreybergier/AltivecIntelligence.git
@@ -346,7 +352,7 @@ edits. To make engine changes take effect you must either:
 1. [X] Improve Deploy Script
 1.    [X] Enable AI to debug apps directly on the host Mac
 1. [X] Remove Custom-Built 10.5/10.6 Hybrid SDK 
-   1. [X] Change x64 Build to use Clang-14 and macOS 11.3 SDK
+   1. [X] Change x64/arm64 builds to use current OSXCross, Clang 18, and macOS 11.3 SDK
    1. [X] Change PPC and x86 Build to use Apple GCC 4.2.1 and Mac OS X 10.5 SDK
  
 

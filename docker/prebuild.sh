@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
-# AltivecIntelligence Pre-build Script
-# This script clones osxcross and prepares the Hybrid SDK
+# AltivecIntelligence legacy-toolchain preparation.
+#
+# The PowerPC-capable ppc-test branch is intentionally isolated under the
+# legacy prefix. Modern macOS and iOS builds are prepared separately by
+# prebuild-modern.sh.
 
 set -e
 
@@ -9,7 +12,7 @@ BASE_DIR=$(pwd)
 TARBALLS_DIR="$BASE_DIR/tarballs"
 TEMP_DIR="$BASE_DIR/temp_build_assets"
 OSXCROSS_GIT="https://github.com/tpoechtrager/osxcross.git"
-OSXCROSS_BRANCH="ppc-test"
+OSXCROSS_COMMIT="af8300c6b3e099c91970a8d2d0f3bffe703f2421"
 
 curl_retry() {
     curl --fail --location --silent --show-error \
@@ -26,18 +29,25 @@ mkdir -p "$TEMP_DIR/downloads"
 
 # 1. Clone osxcross
 echo "--- Initializing Toolchain Source ---"
-echo "  > Cloning osxcross ($OSXCROSS_BRANCH)"
-git clone --branch $OSXCROSS_BRANCH $OSXCROSS_GIT "$TEMP_DIR/osxcross" --depth 1
-cp -r "$TEMP_DIR/osxcross"/* ./
+echo "  > Fetching legacy osxcross ($OSXCROSS_COMMIT)"
+git -C "$TEMP_DIR" init --quiet osxcross
+git -C "$TEMP_DIR/osxcross" remote add origin "$OSXCROSS_GIT"
+git -C "$TEMP_DIR/osxcross" fetch --quiet --depth 1 origin "$OSXCROSS_COMMIT"
+git -C "$TEMP_DIR/osxcross" checkout --quiet --detach FETCH_HEAD
+cp -a "$TEMP_DIR/osxcross"/. ./
 
 # 2. BASE REPAIR
 echo "--- Repairing Build Scripts ---"
 # Ensure build directory exists (Fix for some environments)
+# shellcheck disable=SC2016 # Match literal variables in the upstream script.
 sed -i '/pushd $OSXCROSS_BUILD_DIR/i mkdir -p $OSXCROSS_BUILD_DIR' build_gcc.sh
 
-# Update config.guess/sub to support modern architectures (like aarch64) during GCC build
-curl_retry 'https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.guess' -o config.guess.new
-curl_retry 'https://raw.githubusercontent.com/gcc-mirror/gcc/master/config.sub' -o config.sub.new
+# Update config.guess/sub to support modern host architectures during the
+# Apple GCC build. Ubuntu's autotools-dev package supplies maintained copies,
+# avoiding mutable downloads from GCC master.
+cp /usr/share/misc/config.guess config.guess.new
+cp /usr/share/misc/config.sub config.sub.new
+# shellcheck disable=SC2016 # Insert literal variables into the upstream script.
 sed -i '/extract "$OSXCROSS_TARBALL_DIR\/gcc-$APPLE_GCC_VERSION.tar.gz" 1/a \  find . -name "config.guess" -exec cp ../config.guess.new {} \\; \n  find . -name "config.sub" -exec cp ../config.sub.new {} \\;' build_gcc.sh
 
 # 3. Apply Global OSXCross patches
@@ -64,12 +74,7 @@ echo "--- Downloading SDKs ---"
 
 echo "> Mac OS X 10.5  SDK"
 curl_retry https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.5.sdk.tar.xz -o "$TARBALLS_DIR/MacOSX10.5.sdk.tar.xz"
-
-echo ">    macOS 11.3  SDK"
-curl_retry https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz -o "$TARBALLS_DIR/MacOSX11.3.sdk.tar.xz"
-
-echo ">      iOS  8.4  SDK"
-curl_retry https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS8.4.sdk.tar.gz -o "$TARBALLS_DIR/iPhoneOS8.4.sdk.tar.gz"
+echo "3970800422a5e22122b92e7ce2f30513714272e4cd9096e551b8bd27466e3c2b  $TARBALLS_DIR/MacOSX10.5.sdk.tar.xz" | sha256sum -c -
 
 # Finalize
 cp docker/postbuild.sh ./

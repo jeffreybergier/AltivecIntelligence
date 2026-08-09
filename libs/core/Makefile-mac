@@ -14,8 +14,8 @@ CJSON_DIR=third_party/cJSON
 
 PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(LEGACY_GCC_FLAGS)
 X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH) $(LEGACY_GCC_FLAGS)
-X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_X64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
-ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
+X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -B$(BIN_DIR)
+ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -B$(BIN_DIR)
 X64_COMPILE_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -B$(BIN_DIR)
 ARM64_COMPILE_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -B$(BIN_DIR)
 
@@ -188,12 +188,12 @@ $(PREFIX)/x86/lib/libAltivecCore.a: $(CORE_INPUTS_X86)
 $(PREFIX)/x64/lib/libAltivecCore.a: $(CORE_INPUTS_X64)
 	@echo "--- Aggregating AltivecCore static archive (x86_64) ---"
 	mkdir -p $(PREFIX)/x64/lib
-	$(LIBTOOL_MODERN) -static --no_warning_for_no_symbols -o $@ $^
+	$(LIBTOOL_MODERN) -static -no_warning_for_no_symbols -o $@ $^
 
 $(PREFIX)/arm64/lib/libAltivecCore.a: $(CORE_INPUTS_ARM64)
 	@echo "--- Aggregating AltivecCore static archive (arm64) ---"
 	mkdir -p $(PREFIX)/arm64/lib
-	$(LIBTOOL_MODERN) -static --no_warning_for_no_symbols -o $@ $^
+	$(LIBTOOL_MODERN) -static -no_warning_for_no_symbols -o $@ $^
 
 $(PREFIX)/lib/libAltivecCore.a: $(PREFIX)/ppc/lib/libAltivecCore.a \
                                 $(PREFIX)/x86/lib/libAltivecCore.a \
@@ -320,17 +320,17 @@ verify-mac: $(PUBLIC_LIBS)
 			}; \
 		done; \
 	done; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (ppc)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (ppc)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (ppc)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (ppc)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '.objc_class_name_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (ppc)"; missing=1; }; \
-	if $(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q 'AICURLConnection'; then echo " [!] ERROR: aggregate still exports AICURLConnection (arm64)"; missing=1; fi; \
+	$(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (arm64)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (arm64)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (arm64)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (arm64)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (arm64)"; missing=1; }; \
+	$(NM) -gU -arch ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (ppc)"; missing=1; }; \
+	$(NM) -gU -arch ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (ppc)"; missing=1; }; \
+	$(NM) -gU -arch ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (ppc)"; missing=1; }; \
+	$(NM) -gU -arch ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (ppc)"; missing=1; }; \
+	$(NM) -gU -arch ppc $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '.objc_class_name_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (ppc)"; missing=1; }; \
+	if $(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q 'AICURLConnection'; then echo " [!] ERROR: aggregate still exports AICURLConnection (arm64)"; missing=1; fi; \
 	test ! -e $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h || { echo " [!] ERROR: AICURLConnection.h is still public"; missing=1; }; \
 	test ! -e $(PUBLIC_INCLUDE_DIR)/AltivecCore/AICURLConnection.h || { echo " [!] ERROR: nested AICURLConnection.h is still public"; missing=1; }; \
 	exit $$missing
@@ -341,17 +341,17 @@ $(INTERMEDIATE)/c-exports.txt: $(PUBLIC_COMPONENT_LIBS)
 	{ \
 	  for arch in ppc i386 x86_64 arm64; do \
 	    { \
-	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libcurl.a 2>/dev/null \
+	      $(NM) -gmU -arch $$arch $(PUBLIC_LIB_DIR)/libcurl.a 2>/dev/null \
 	        | awk '!/private external/ && / external / && $$NF ~ /^_curl_/ {print $$NF}'; \
-	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libssl.a 2>/dev/null \
+	      $(NM) -gmU -arch $$arch $(PUBLIC_LIB_DIR)/libssl.a 2>/dev/null \
 	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
-	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libcrypto.a 2>/dev/null \
+	      $(NM) -gmU -arch $$arch $(PUBLIC_LIB_DIR)/libcrypto.a 2>/dev/null \
 	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ && $$NF != "_OPENSSL_armcap_P" {print $$NF}'; \
-	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libz.a 2>/dev/null \
+	      $(NM) -gmU -arch $$arch $(PUBLIC_LIB_DIR)/libz.a 2>/dev/null \
 	        | awk '!/private external/ && / external / && $$NF ~ /^_[A-Za-z]/ {print $$NF}'; \
-	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libsqlite3.a 2>/dev/null \
+	      $(NM) -gmU -arch $$arch $(PUBLIC_LIB_DIR)/libsqlite3.a 2>/dev/null \
 	        | awk '!/private external/ && / external / && $$NF ~ /^_sqlite3_/ {print $$NF}'; \
-	      $(NM) -gm --defined-only --extern-only --arch=$$arch $(PUBLIC_LIB_DIR)/libcjson.a 2>/dev/null \
+	      $(NM) -gmU -arch $$arch $(PUBLIC_LIB_DIR)/libcjson.a 2>/dev/null \
 	        | awk '!/private external/ && / external / && $$NF ~ /^_cJSON/ {print $$NF}'; \
 	    } | sort -u; \
 	  done; \
@@ -449,16 +449,16 @@ verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
 	test -d $(FRAMEWORK_VERSION_DIR)/Headers/curl || { echo " [!] ERROR: curl/ headers missing"; missing=1; }; \
 	test -f $(FRAMEWORK_VERSION_DIR)/Headers/openssl/ssl.h || { echo " [!] ERROR: openssl/ headers missing"; missing=1; }; \
 	test -f $(FRAMEWORK_VERSION_DIR)/Headers/zlib.h || { echo " [!] ERROR: zlib.h missing"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _SSL_new' || { echo " [!] ERROR: _SSL_new not exported"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _deflate' || { echo " [!] ERROR: _deflate not exported"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: _curl_easy_init not exported"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: _sqlite3_open not exported"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: _cJSON_Parse not exported"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: _AltivecCoreCertPath not exported (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: AltivecCore class not exported (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AltivecCore' || { echo " [!] ERROR: AltivecCore class not exported (ppc)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: _AltivecCoreCertPath not exported (ppc)"; missing=1; }; \
-	if $(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q 'AICURLConnection'; then echo " [!] ERROR: AICURLConnection still exported (arm64)"; missing=1; fi; \
+	$(NM) -gU -arch arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _SSL_new' || { echo " [!] ERROR: _SSL_new not exported"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _deflate' || { echo " [!] ERROR: _deflate not exported"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: _curl_easy_init not exported"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: _sqlite3_open not exported"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: _cJSON_Parse not exported"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: _AltivecCoreCertPath not exported (arm64)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: AltivecCore class not exported (arm64)"; missing=1; }; \
+	$(NM) -gU -arch ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AltivecCore' || { echo " [!] ERROR: AltivecCore class not exported (ppc)"; missing=1; }; \
+	$(NM) -gU -arch ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: _AltivecCoreCertPath not exported (ppc)"; missing=1; }; \
+	if $(NM) -gU -arch arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q 'AICURLConnection'; then echo " [!] ERROR: AICURLConnection still exported (arm64)"; missing=1; fi; \
 	exit $$missing
 
 prune-build-files:

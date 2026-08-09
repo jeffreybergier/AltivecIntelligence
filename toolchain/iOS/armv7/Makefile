@@ -12,6 +12,7 @@ GENERATOR ?= auto
 
 SDK ?= /osxcross/target/SDK/iPhoneOS8.4.sdk
 CCTOOLS_BIN ?= /osxcross/target/bin
+MACOS_COMPAT_SDK ?= /osxcross/legacy/target/SDK/MacOSX10.5.sdk
 LDID ?= ldid
 FAKEROOT ?= fakeroot
 DPKG_DEB ?= dpkg-deb
@@ -50,8 +51,8 @@ CORE_TOOLS_SOURCES_DIR := $(CORE_TOOLS_WORK_DIR)/sources
 # resolves it onto the writable data partition at /private/var.
 INSTALL_PREFIX := /var/altivec
 INSTALL_PREFIX_TAG := $(subst /,-,$(patsubst /%,%,$(INSTALL_PREFIX)))
-CORE_TOOLS_CC ?= /usr/bin/clang-14
-CORE_TOOLS_CXX ?= /usr/bin/clang++-14
+CORE_TOOLS_CC ?= /usr/bin/clang-18
+CORE_TOOLS_CXX ?= /usr/bin/clang++-18
 CORE_TOOLS_PACKAGE_NAME := altivec-toolchain-core-tools-armv7-ios$(DEPLOYMENT_TARGET)-$(INSTALL_PREFIX_TAG)
 CORE_TOOLS_PACKAGE_ARCHIVE := $(CORE_TOOLS_WORK_DIR)/artifacts/$(CORE_TOOLS_PACKAGE_NAME).tar.gz
 
@@ -135,6 +136,7 @@ define run_core_tools_target
 	--archives-dir "$(ARCHIVES_DIR)" \
 	--sources-dir "$(CORE_TOOLS_SOURCES_DIR)" \
 	--sdk "$(SDK)" \
+	--macos-compat-sdk "$(MACOS_COMPAT_SDK)" \
 	--cctools-bin "$(CCTOOLS_BIN)" \
 	--deployment-target "$(DEPLOYMENT_TARGET)" \
 	--jobs "$(JOBS)" \
@@ -234,6 +236,7 @@ check: $(HELPERS_DIR)/check.sh
 core-tools-check: $(HELPERS_DIR)/core-tools-check.sh
 	@"$(HELPERS_DIR)/$@.sh" \
 		--sdk "$(SDK)" \
+		--macos-compat-sdk "$(MACOS_COMPAT_SDK)" \
 		--cctools-bin "$(CCTOOLS_BIN)" \
 		--cc "$(CORE_TOOLS_CC)" \
 		--cxx "$(CORE_TOOLS_CXX)" \

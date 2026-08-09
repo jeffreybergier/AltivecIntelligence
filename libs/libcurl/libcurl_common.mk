@@ -2,43 +2,18 @@
 # Included by Makefile-phone and Makefile-mac
 
 # --- Toolchain Paths ---
-OSXCROSS_ROOT=/osxcross/target
-BIN_DIR=$(OSXCROSS_ROOT)/bin
-SDK_DIR=$(OSXCROSS_ROOT)/SDK
-
-# --- Compilers ---
-COMPILER_PPC=oppc32-gcc
-COMPILER_X86=o32-gcc
-COMPILER_X64=/usr/bin/clang
-COMPILER_ARM64=/usr/bin/clang
-COMPILER_IOS=/usr/bin/clang
-
-# --- SDK Paths ---
-SDK_PPC_PATH=$(SDK_DIR)/MacOSX10.5.sdk
-SDK_X86_PATH=$(SDK_DIR)/MacOSX10.5.sdk
-SDK_X64_PATH=$(SDK_DIR)/MacOSX11.3.sdk
-SDK_ARM64_PATH=$(SDK_DIR)/MacOSX11.3.sdk
-SDK_IOS_PATH=$(SDK_DIR)/iPhoneOS8.4.sdk
-
-# --- Cross Tools ---
-# Use darwin9 tools for legacy slices (PPC, X86)
-AR_LEGACY=$(BIN_DIR)/i386-apple-darwin9-ar
-RANLIB_LEGACY=$(BIN_DIR)/i386-apple-darwin9-ranlib
-
-# Use modern LLVM 14 tools for modern slices (X64, ARM64, iOS)
-AR_MODERN=/usr/bin/llvm-ar-14
-RANLIB_MODERN=/usr/bin/llvm-ranlib-14
-LIPO_MODERN=/usr/bin/llvm-lipo-14
-LIBTOOL_MODERN=/usr/bin/llvm-libtool-darwin-14
-NM=/usr/bin/llvm-nm-14
-
-LIPO=$(BIN_DIR)/i386-apple-darwin9-lipo
-LIBTOOL=$(BIN_DIR)/i386-apple-darwin9-libtool
-LD64_LLD=$(BIN_DIR)/ld64.lld
+include $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../altivec_toolchains.mk)
+BIN_DIR=$(MODERN_BIN)
 
 # --- Standard Flags ---
 OPT_FLAGS=-O3
 COMMON_WARN_FLAGS=-Wall -Wimplicit-function-declaration
+# zlib 1.2.13 defines fdopen as a function-like NULL macro whenever Apple's
+# TARGET_OS_MAC macro exists. Clang 18 then expands that macro inside the iOS
+# SDK's stdio declaration. A self-referential object macro marks fdopen as
+# available without rewriting either the SDK or the vendored source.
+ZLIB_MODERN_CFLAGS=$(OPT_FLAGS) -Dfdopen=fdopen \
+                    -Wno-deprecated-non-prototype -Wno-macro-redefined
 
 # --- Deployment Targets ---
 MAC_MIN_PPC=10.4

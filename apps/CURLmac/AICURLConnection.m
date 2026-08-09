@@ -301,6 +301,7 @@ static size_t AIHeaderCallback(void *contents,
 
 - (void)__workerThread:(id)unused;
 {
+  (void)unused;
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
   NSLog(@"[AICURLConnection __workerThread:] Starting transfer for: %@",

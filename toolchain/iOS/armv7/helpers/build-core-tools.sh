@@ -100,12 +100,13 @@ work_dir="${repo_root}/build-release/Intermediates/core-tools-armv7"
 archives_dir_input=""
 sources_dir_input=""
 sdk_dir="/osxcross/target/SDK/iPhoneOS8.4.sdk"
+macos_compat_sdk="/osxcross/legacy/target/SDK/MacOSX10.5.sdk"
 cctools_bin="/osxcross/target/bin"
 deployment_target="6.0"
 jobs="2"
 install_prefix="/var/altivec"
-cc="/usr/bin/clang-14"
-cxx="/usr/bin/clang++-14"
+cc="/usr/bin/clang-18"
+cxx="/usr/bin/clang++-18"
 ldid_signer="ldid"
 
 usage() {
@@ -144,6 +145,7 @@ usage() {
     "  --archives-dir <path>      Downloaded source archives." \
     "  --sources-dir <path>       Extracted source trees." \
     "  --sdk <path>               iPhoneOS SDK." \
+    "  --macos-compat-sdk <path>  Legacy macOS SDK used for missing headers." \
     "  --cctools-bin <path>       Host Mach-O tools and Apple linker." \
     "  --deployment-target <ver>  Minimum iOS version (default: 6.0)." \
     "  --jobs <count>             Parallel build jobs (default: 2)." \
@@ -179,6 +181,11 @@ while (($# > 0)); do
     --sdk)
       (($# >= 2)) || die "--sdk requires a value"
       sdk_dir="$2"
+      shift 2
+      ;;
+    --macos-compat-sdk)
+      (($# >= 2)) || die "--macos-compat-sdk requires a value"
+      macos_compat_sdk="$2"
       shift 2
       ;;
     --cctools-bin)
@@ -253,6 +260,7 @@ else
   sources_dir="${work_dir}/sources"
 fi
 sdk_dir="$(realpath -m "$sdk_dir")"
+macos_compat_sdk="$(realpath -m "$macos_compat_sdk")"
 cctools_bin="$(realpath -m "$cctools_bin")"
 
 case "${work_dir}/" in
@@ -284,6 +292,8 @@ done
 [[ "$archives_dir" != "$sources_dir" ]] ||
   die "archive and extracted-source directories must differ"
 [[ -d "$sdk_dir" ]] || die "iPhoneOS SDK not found: ${sdk_dir}"
+[[ -d "$macos_compat_sdk" ]] ||
+  die "legacy macOS compatibility SDK not found: ${macos_compat_sdk}"
 
 resolve_tool() {
   local requested="$1"
@@ -313,11 +323,11 @@ pkg_config="$(resolve_tool pkg-config)" ||
   die "pkg-config not found"
 readonly pkg_config
 
-readonly macho_ar="${cctools_bin}/x86_64-apple-darwin9-ar"
-readonly macho_ranlib="${cctools_bin}/x86_64-apple-darwin9-ranlib"
-readonly macho_nm="${cctools_bin}/x86_64-apple-darwin9-nm"
-readonly macho_strip="${cctools_bin}/x86_64-apple-darwin9-strip"
-readonly macho_otool="${cctools_bin}/x86_64-apple-darwin9-otool"
+readonly macho_ar="${cctools_bin}/ar"
+readonly macho_ranlib="${cctools_bin}/ranlib"
+readonly macho_nm="${cctools_bin}/nm"
+readonly macho_strip="${cctools_bin}/strip"
+readonly macho_otool="${cctools_bin}/otool"
 
 for required_tool in \
   bash bison cmake curl unzip tar patch make perl sha256sum realpath file \
@@ -584,6 +594,7 @@ run_extra_tools() {
     --archives-dir "$archives_dir" \
     --sources-dir "${sources_dir}/extra-tools" \
     --sdk "$sdk_dir" \
+    --macos-compat-sdk "$macos_compat_sdk" \
     --cctools-bin "$cctools_bin" \
     --deployment-target "$deployment_target" \
     --jobs "$jobs" \

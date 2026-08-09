@@ -75,11 +75,12 @@ work_dir="${repo_root}/build-release/Intermediates/core-tools-armv7"
 archives_dir=""
 sources_dir=""
 sdk_dir="/osxcross/target/SDK/iPhoneOS8.4.sdk"
+macos_compat_sdk="/osxcross/legacy/target/SDK/MacOSX10.5.sdk"
 cctools_bin="/osxcross/target/bin"
 deployment_target="6.0"
 jobs="2"
 install_prefix="/var/altivec"
-cc="/usr/bin/clang-14"
+cc="/usr/bin/clang-18"
 zlib_static=""
 ps_patch="${script_dir}/adv-cmds-ps-ios-workqueue.patch"
 mandoc_config_template="${script_dir}/mandoc-ios-configure.local.in"
@@ -97,6 +98,7 @@ usage() {
     "  --archives-dir <path>      Shared archive cache." \
     "  --sources-dir <path>       Extra-tools source directory." \
     "  --sdk <path>               iPhoneOS SDK." \
+    "  --macos-compat-sdk <path>  Legacy macOS SDK used for missing headers." \
     "  --cctools-bin <path>       Mach-O archive and linker tools." \
     "  --deployment-target <ver>  Minimum iOS version." \
     "  --jobs <count>             Parallel build jobs." \
@@ -132,6 +134,11 @@ while (($# > 0)); do
     --sdk)
       (($# >= 2)) || die "--sdk requires a value"
       sdk_dir="$2"
+      shift 2
+      ;;
+    --macos-compat-sdk)
+      (($# >= 2)) || die "--macos-compat-sdk requires a value"
+      macos_compat_sdk="$2"
       shift 2
       ;;
     --cctools-bin)
@@ -210,12 +217,13 @@ work_dir="$(realpath "$work_dir")"
 archives_dir="$(realpath "$archives_dir")"
 sources_dir="$(realpath "$sources_dir")"
 sdk_dir="$(realpath "$sdk_dir")"
+macos_compat_sdk="$(realpath "$macos_compat_sdk")"
 cctools_bin="$(realpath "$cctools_bin")"
 cc="$(realpath "$cc")"
 ps_patch="$(realpath "$ps_patch")"
 mandoc_config_template="$(realpath "$mandoc_config_template")"
 
-readonly work_dir archives_dir sources_dir sdk_dir cctools_bin cc
+readonly work_dir archives_dir sources_dir sdk_dir macos_compat_sdk cctools_bin cc
 readonly ps_patch mandoc_config_template
 readonly target_triple="armv7-apple-ios${deployment_target}"
 readonly autoconf_host="armv7-apple-darwin11"
@@ -228,12 +236,10 @@ readonly host_man_indexer="${host_tools_dir}/makewhatis"
 readonly completed_marker="${component_root}/.completed"
 readonly stamp="${component_root}/.altivec-toolchain-config"
 readonly build_root_stamp="${component_root}/.altivec-toolchain-build-root"
-macos_compat_sdk="$(dirname "$sdk_dir")/MacOSX10.5.sdk"
-readonly macos_compat_sdk
-readonly macho_ar="${cctools_bin}/x86_64-apple-darwin9-ar"
-readonly macho_ranlib="${cctools_bin}/x86_64-apple-darwin9-ranlib"
-readonly macho_strip="${cctools_bin}/x86_64-apple-darwin9-strip"
-readonly macho_otool="${cctools_bin}/x86_64-apple-darwin9-otool"
+readonly macho_ar="${cctools_bin}/ar"
+readonly macho_ranlib="${cctools_bin}/ranlib"
+readonly macho_strip="${cctools_bin}/strip"
+readonly macho_otool="${cctools_bin}/otool"
 readonly repo_prefix_map_flags="-ffile-prefix-map=${repo_root}=. -fdebug-prefix-map=${repo_root}=. -fmacro-prefix-map=${repo_root}=."
 readonly cc_command="${cc} --target=${target_triple} -isysroot ${sdk_dir} -B${cctools_bin} ${repo_prefix_map_flags}"
 readonly common_cppflags="-idirafter ${macos_compat_sdk}/usr/include"

@@ -9,8 +9,10 @@
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
   #define XPApplicationDelegate NSApplicationDelegate
+  #define XPWindowDelegate NSWindowDelegate
 #else
   @protocol XPApplicationDelegate @end
+  @protocol XPWindowDelegate @end
 #endif
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
@@ -36,7 +38,7 @@
 + (void)setupMenu;
 @end
 
-@interface AppDelegate : NSObject <XPApplicationDelegate> {
+@interface AppDelegate : NSObject <XPApplicationDelegate, XPWindowDelegate> {
  @private
   NSWindow *window_;
 }
