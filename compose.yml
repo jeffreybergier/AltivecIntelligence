@@ -23,6 +23,8 @@ services:
     tty: true
     environment:
       - IS_SANDBOX=1
+      - TERM=xterm-256color
+      - COLORTERM=${COLORTERM:-}
     working_dir: /repo/altivec
     volumes:
       - cache:/cache
