@@ -80,7 +80,7 @@ readonly CCTOOLS_PROGRAM_PREFIX="arm-apple-darwin11-"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "${script_dir}/.." && pwd -P)"
 readonly cctools_patch="${script_dir}/cctools-ld64-armv7-atomic-alignment.patch"
-readonly cctools_ios43_patch="${script_dir}/cctools-ld64-ios43-deployment-floor.patch"
+readonly cctools_ios5_patch="${script_dir}/cctools-ld64-ios5-deployment-floor.patch"
 readonly imagemagick_patch="${script_dir}/imagemagick-ios-target-conditionals.patch"
 readonly gnu_make_patch="${script_dir}/make-ios-portable-ar-header.patch"
 readonly jq_patch="${script_dir}/jq-ios6-exp10.patch"
@@ -342,7 +342,7 @@ for required_tool in \
 done
 
 for required_file in \
-  "$cctools_patch" "$cctools_ios43_patch" \
+  "$cctools_patch" "$cctools_ios5_patch" \
   "$imagemagick_patch" "$gnu_make_patch" "$jq_patch" \
   "$imagemagick_policy" "$imagemagick_delegates" \
   "$extra_tools_builder" "$extra_ps_patch" "$mandoc_config_template"; do
@@ -624,8 +624,8 @@ prepare_sources() {
     "ld64 ARMv7 64-bit counter alignment fix"
   apply_source_patch_once \
     "$cctools_source" \
-    "$cctools_ios43_patch" \
-    "ld64 iOS 4.3 deployment floor"
+    "$cctools_ios5_patch" \
+    "ld64 iOS 5.0 deployment floor"
 
   fetch_archive \
     "$ldid_archive" \
@@ -982,11 +982,11 @@ build_cctools() {
   local cc_command=""
   local cxx_command=""
   local patch_sha=""
-  local ios43_patch_sha=""
+  local ios5_patch_sha=""
 
   patch_sha="$(sha256sum "$cctools_patch" | awk '{print $1}')"
-  ios43_patch_sha="$(sha256sum "$cctools_ios43_patch" | awk '{print $1}')"
-  key="cctools=${CCTOOLS_COMMIT};patches=${patch_sha},${ios43_patch_sha};sdk=${sdk_dir};target=${target_triple};cc=${cc}:$(compiler_version "$cc");cxx=${cxx}:$(compiler_version "$cxx");prefix=${install_prefix}"
+  ios5_patch_sha="$(sha256sum "$cctools_ios5_patch" | awk '{print $1}')"
+  key="cctools=${CCTOOLS_COMMIT};patches=${patch_sha},${ios5_patch_sha};sdk=${sdk_dir};target=${target_triple};cc=${cc}:$(compiler_version "$cc");cxx=${cxx}:$(compiler_version "$cxx");prefix=${install_prefix}"
   prepare_component "$cctools_root" "$key"
   mkdir -p "$cctools_build" "$cctools_stage"
 

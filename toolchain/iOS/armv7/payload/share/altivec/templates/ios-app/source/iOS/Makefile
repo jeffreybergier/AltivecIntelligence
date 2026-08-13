@@ -32,7 +32,7 @@ RESOURCES := \
 APP_PROJECT_ROOT := ../..
 BUNDLE_LOCALIZATION_DIRS := ../shared/Resources
 
-IPHONEOS_DEPLOYMENT_TARGET := 4.3
+IPHONEOS_DEPLOYMENT_TARGET := 5.0
 APP_CFLAGS := -std=c99 -Wall -Wextra -Wpedantic -Werror
 APP_OBJCFLAGS := -Wobjc-method-access -Wundeclared-selector
 APP_USE_ARC := 1

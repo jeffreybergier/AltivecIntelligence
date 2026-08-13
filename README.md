@@ -5,8 +5,8 @@
 **Altivec Intelligence** is a containerized cross-compile environment that 
 is built for retro tech-enthusiasts that want to build software for their retro
 Mac and iOS device. It builds Mac apps that run on all Macs with 10.4 Tiger and 
-up including PowerPC, Intel, and Apple Silicon Macs. The iPhone toolchain can 
-build apps that run on iPhone 3GS with iOS 4.3 and later.
+up including PowerPC, Intel, and Apple Silicon Macs. The iPhone toolchain can
+build apps that run on iPhone 3GS with iOS 5.0 and later.
 
 Why include AI? Building apps that target these old platforms requires using
 old Objective-C that does not have the syntactic sugar provided by Objective-C
@@ -35,10 +35,11 @@ simply pulling a newer image.
 ### Set Up Your Project
 
 See [templates/compose.yml](templates/compose.yml) for the full template and
-notes on first-time AI assistant setup. The GHCR image ships the entire
-`/altivec/` runtime (cross-compilers, SDKs, prebuilt AltivecCore/AltivecCocoa
-libs, sample app sources, and AI CLIs), so your repo only needs the
-`compose.yml` plus your source.
+notes on first-time AI assistant setup. The GHCR image ships the `/altivec/`
+runtime (cross-compilers, prebuilt AltivecCore/AltivecCocoa libs, sample app
+sources, and AI CLIs), but deliberately contains no Apple SDKs or ARCLite.
+SDK archives stay in your ignored `.altivec-sdk/` directory and are installed
+into named Docker volumes on the first build.
 
 ```bash
 # 0. If you do not already have a repository for your app idea,
@@ -52,19 +53,35 @@ curl -fsSL https://raw.githubusercontent.com/jeffreybergier/AltivecIntelligence/
 # 2. Pull the prebuilt image (one time, multi-GB — saves 5+ hours of osxcross build):
 docker compose pull
 
-# 3. Build your app (Makefile at the root of your project):
+# 3. Fetch the checksum-pinned SDK archives outside the image and ignore them:
+mkdir -p .altivec-sdk
+grep -qxF '.altivec-sdk/' .gitignore 2>/dev/null || printf '%s\n' '.altivec-sdk/' >> .gitignore
+docker run --rm --entrypoint altivec-sdk \
+  -e ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
+  -v "$PWD/.altivec-sdk:/altivec-sdk" \
+  ghcr.io/jeffreybergier/altivec-intelligence:latest fetch
+
+# 4. Build your app (Makefile at the root of your project):
 docker compose run --rm altivec "make"
 
-# 4. Use with AI assistant (interactive chooser picks
+# 5. Use with AI assistant (interactive chooser picks
 #    Claude / Codex / Antigravity / Pi / OpenCode / Kimi):
 docker compose run --rm altivec-intelligence
 ```
 
-The template mounts a named Docker volume at `/cache`. The image points common
-runtime caches there for npm, Yarn, pnpm, Go, Bundler, Ruby gem metadata, and
-XDG-compatible tools, so disposable build/tool caches do not accumulate under
-`~/.altivec`. Remove them with `docker compose down -v` when you want a clean
-cache.
+The template mounts named Docker volumes for `/cache` and the two installed SDK
+roots. `altivec-sdk ensure` verifies each archive and installs it on the first
+build; later builds in the same volumes skip extraction. `docker compose down
+-v` removes the installed copies and caches, while the original archives remain
+in `.altivec-sdk/` on the host.
+
+Published images and release packages contain no Apple SDK, SDK archive, or
+ARCLite binary. `altivec-sdk audit-image IMAGE` verifies every image layer, and
+`altivec-sdk audit-repository` verifies both the current Git tree and its full
+reachable history. The image does contain ordinary static archives required by
+Ubuntu, GCC, LLVM, AltivecCore, and AltivecCocoa. It also contains the
+open-source Apple GCC/cctools lineage used by OSXCross; those components are
+not proprietary SDK content and remain subject to their upstream licenses.
 
 The image also configures Git to trust bind-mounted project directories and
 points generic native build variables (`CC`, `CXX`, `LD`, `AR`) at Ubuntu's
@@ -208,7 +225,7 @@ package is currently built.
 - [`templates/github-release.yml`](./templates/github-release.yml): Optional GitHub Actions workflow that builds and uploads configured release assets.
 - [`toolchain`](./toolchain/): Optional toolchain package sources. The current release-extras workflow builds only `iOS/armv7`; shared iOS helpers live in `iOS/common`.
 - [`compose.yml`](./compose.yml): The **engine-development** compose — clone-and-build the image locally and mount your live checkout at `/repo/altivec`. Only needed if you are customizing the engine itself.
-- [`bin`](./bin/): Runtime scripts on `PATH` inside the image — `altivec-deploy` (push/run apps on hardware), `altivec-release` (version/tag helper), `altivec-chooser` (AI CLI picker)
+- [`bin`](./bin/): Runtime scripts on `PATH` inside the image, including `altivec-sdk` for verified SDK archive management.
 - `AGENTS.md`: AI mandates and technical constraints (also surfaced as CLAUDE.md / GEMINI.md via symlink).
 
 ## 🧩 Makefile Templates
@@ -223,7 +240,7 @@ Optional AltivecCore knobs:
 - `ALTIVECCORE_DIR=/path/to/altivec/libs/core/build-mac|build-phone`: override autodetect.
 
 For iPhone apps, AltivecCore is static-only because embedded frameworks require
-iOS 8+ at runtime and break the iOS 4.3-7 compatibility target.
+iOS 8+ at runtime and break the iOS 5-7 compatibility target.
 
 Optional AltivecCocoa knobs:
 - `ALTIVECCOCOA_REQUIRED=1`: enforce required Cocoa artifacts at validate time.
@@ -372,6 +389,7 @@ cheaper for you to automatically build and release your apps because it allows
 building in Linux containers instead of on expensive Mac runners.
 
 This project is licensed under the **MIT License**. This is a permissive license
-that allows for free use, modification, and distribution. Note that it downloads
-various open-source and closed-source components (like OSXCross and Apple's
-SDKs) which carry their own licenses.
+that allows for free use, modification, and distribution. The SDK-free image
+and repository still use separately downloaded open-source and closed-source
+build inputs. Those inputs, including Apple SDKs, carry their own licenses and
+remain the user's responsibility.

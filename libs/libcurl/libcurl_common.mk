@@ -20,7 +20,7 @@ MAC_MIN_PPC=10.4
 MAC_MIN_X86=10.4
 MAC_MIN_X64=10.9
 MAC_MIN_ARM64=11.0
-IOS_MIN_VER=4.3
+IOS_MIN_VER=5.0
 
 # PPC specific flags from altivec_common_mac.mk
 # -fPIC: required so static .o files can be re-linked into AltivecCore.dylib.

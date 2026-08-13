@@ -1,7 +1,10 @@
 # AltivecIntelligence SQLite Master Makefile
 # Builds SQLite as a static library for Mac (quad-fat) and Phone (universal)
 
+include ../../altivec_toolchains.mk
+
 all: phone mac
+all phone mac: | altivec-sdk-ensure
 
 phone:
 	@echo "==========================================================="

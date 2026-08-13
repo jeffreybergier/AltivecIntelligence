@@ -49,8 +49,8 @@ done
 
 printf 'int main(void) { return 0; }\n' > main.c
 printf 'void altivec_system_stub(void) {}\n' > system-stub.c
-clang --target=armv7-apple-ios4.3 -c main.c -o main.o
-clang --target=armv7-apple-ios4.3 -c system-stub.c -o system-stub.o
+clang --target=armv7-apple-ios5.0 -c main.c -o main.o
+clang --target=armv7-apple-ios5.0 -c system-stub.c -o system-stub.o
 
 # MH_OBJECT files cannot carry an embedded signature. NO_LDID disables only
 # cctools-port's post-link signing hook; the linker still parses every object.
@@ -58,15 +58,15 @@ NO_LDID=1 ld -r -arch armv7 -o combined.o main.o
 
 # iOS keeps libSystem in the dyld shared cache rather than as a linkable file.
 # A minimal test dylib lets the smoke executable satisfy ld64's libSystem rule.
-ld -arch armv7 -dylib -iphoneos_version_min 4.3 \
+ld -arch armv7 -dylib -iphoneos_version_min 5.0 \
   -install_name /usr/lib/libSystem.B.dylib \
   -o libSystem.dylib system-stub.o
-ld -arch armv7 -iphoneos_version_min 4.3 -e _main \
+ld -arch armv7 -iphoneos_version_min 5.0 -e _main \
   -L. -lSystem -o smoke-executable main.o
-ld -arch armv7 -dylib -iphoneos_version_min 4.3 \
+ld -arch armv7 -dylib -iphoneos_version_min 5.0 \
   -install_name @rpath/libsmoke.dylib \
   -L. -lSystem -o libsmoke.dylib system-stub.o
-clang --target=armv7-apple-ios4.3 -nostdlib -Wl,-e,_main \
+clang --target=armv7-apple-ios5.0 -nostdlib -Wl,-e,_main \
   main.o -L. -lSystem -o clang-smoke-executable
 
 file main.o combined.o smoke-executable clang-smoke-executable libsmoke.dylib
@@ -77,12 +77,12 @@ if ! awk '
       in_version_command = 1
       next
     }
-    in_version_command && $1 == "version" && $2 == "4.3" {
+    in_version_command && $1 == "version" && $2 == "5.0" {
       found_version = 1
     }
     END { exit(found_version ? 0 : 1) }
   ' <<< "$load_commands"; then
-  printf '%s\n' 'error: linker did not preserve the iOS 4.3 target' >&2
+  printf '%s\n' 'error: linker did not preserve the iOS 5.0 target' >&2
   exit 1
 fi
 [[ "$load_commands" == *LC_UNIXTHREAD* && "$load_commands" != *LC_MAIN* ]] || {

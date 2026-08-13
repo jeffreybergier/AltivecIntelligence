@@ -27,7 +27,6 @@ readonly common_makefile="${altivec_prefix}/share/altivec/make/ios-app.mk"
 readonly project_template="${altivec_prefix}/share/altivec/templates/ios-app"
 readonly project_template_makefile="${project_template}/source/iOS/Makefile"
 readonly app_tool="${altivec_bin}/altivec-app"
-readonly arclite_archive="${altivec_prefix}/lib/arc/libarclite_iphoneos.a"
 readonly temporary_root="/var/root/tmp_altivec"
 readonly smoke_dir="${temporary_root}/ios-app-make-smoke.$$"
 
@@ -54,8 +53,7 @@ trap cleanup EXIT
 for installed_file in \
   "$common_makefile" \
   "$project_template_makefile" \
-  "$app_tool" \
-  "$arclite_archive"; do
+  "$app_tool"; do
   [[ -f "$installed_file" ]] || {
     printf 'error: packaged iOS app build file is missing: %s\n' \
       "$installed_file" >&2
@@ -98,14 +96,6 @@ if ! /usr/bin/dpkg-query -S "$project_template_makefile" |
     "$project_template_makefile" >&2
   exit 1
 fi
-if ! /usr/bin/dpkg-query -S "$arclite_archive" |
-    "${altivec_bin}/grep" -Fq \
-      'com.altivecintelligence.toolchain:'; then
-  printf 'error: ARC compatibility archive is not owned by the toolchain package: %s\n' \
-    "$arclite_archive" >&2
-  exit 1
-fi
-
 /bin/mkdir -p "$temporary_root"
 [[ -d "$temporary_root" && ! -L "$temporary_root" ]] || {
   printf 'error: unsafe temporary root: %s\n' "$temporary_root" >&2
@@ -136,7 +126,7 @@ fi
 if "${altivec_bin}/grep" -Fq \
     'too small, changing to 7.0' release-output.txt; then
   printf '%s\n' \
-    'error: linker raised the requested iOS 4.3 deployment target' >&2
+    'error: linker raised the requested iOS 5.0 deployment target' >&2
   exit 1
 fi
 
@@ -164,30 +154,23 @@ if ! printf '%s\n' "$load_commands" | "${altivec_bin}/awk" '
       in_version_command = 1
       next
     }
-    in_version_command && $1 == "version" && $2 == "4.3" {
+    in_version_command && $1 == "version" && $2 == "5.0" {
       found_version = 1
     }
     END { exit(found_version ? 0 : 1) }
   '; then
   printf '%s\n' \
-    'error: app executable does not declare iOS 4.3' >&2
+    'error: app executable does not declare iOS 5.0' >&2
   exit 1
 fi
 [[ "$load_commands" == *LC_UNIXTHREAD* ]] || {
   printf '%s\n' \
-    'error: iOS 4.3 app executable has no LC_UNIXTHREAD entry point' >&2
+    'error: iOS 5.0 app executable has no LC_UNIXTHREAD entry point' >&2
   exit 1
 }
 [[ "$load_commands" != *LC_MAIN* ]] || {
   printf '%s\n' \
-    'error: iOS 4.3 app executable incorrectly uses LC_MAIN' >&2
-  exit 1
-}
-"${altivec_bin}/nm" "$executable_path" > app-symbols.txt
-"${altivec_bin}/grep" -Fq "_OBJC_METACLASS_\$___ARCLite__" \
-  app-symbols.txt || {
-  printf '%s\n' \
-    'error: Apple ARCLite was not force-loaded into the iOS 4.3 app' >&2
+    'error: iOS 5.0 app executable incorrectly uses LC_MAIN' >&2
   exit 1
 }
 "${altivec_bin}/ldid" -e "$executable_path" > extracted-entitlements.plist
@@ -271,12 +254,12 @@ printf '%s\n' \
   '}' \
   > ArcRuntimeSmoke.m
 
-printf '%s\n' 'Building and executing the iOS 4.3 ARC runtime smoke test...'
+printf '%s\n' 'Building and executing the iOS 5.0 ARC runtime smoke test...'
 resolved_sdk="$(cd "${altivec_prefix}/SDKs/Current.sdk" && /bin/pwd -P)"
 "${altivec_bin}/clang" \
-  --target=armv7-apple-ios4.3 \
+  --target=armv7-apple-ios5.0 \
   -arch armv7 \
-  -miphoneos-version-min=4.3 \
+  -miphoneos-version-min=5.0 \
   -isysroot "$resolved_sdk" \
   -B"${altivec_bin}" \
   -fobjc-arc \
@@ -288,14 +271,6 @@ resolved_sdk="$(cd "${altivec_prefix}/SDKs/Current.sdk" && /bin/pwd -P)"
   -framework Foundation \
   -o ArcRuntimeSmoke
 "${altivec_bin}/ldid" -S ArcRuntimeSmoke
-"${altivec_bin}/nm" ArcRuntimeSmoke > arc-runtime-symbols.txt
-"${altivec_bin}/grep" -Fq \
-  "_OBJC_METACLASS_\$___ARCLite__" \
-  arc-runtime-symbols.txt || {
-  printf '%s\n' \
-    'error: ARC runtime smoke did not link Apple ARCLite' >&2
-  exit 1
-}
 ./ArcRuntimeSmoke
 
 if "${altivec_bin}/make" --no-print-directory -n debug \

@@ -30,7 +30,6 @@ LLVM_PACKAGE_SCRIPT := $(HELPERS_DIR)/llvm-package.sh
 LLVM_PATCHES := \
 	$(HELPERS_DIR)/llvm15-ios-clonefile.patch \
 	$(HELPERS_DIR)/llvm15-host-clang21.patch
-LLVM_ARCLITE_ARCHIVE := payload/lib/arc/libarclite_iphoneos.a
 LLVM_PACKAGE_NAME := clang-$(LLVM_VERSION)-armv7-apple-ios$(DEPLOYMENT_TARGET)
 LLVM_PACKAGE_ARCHIVE := $(LLVM_WORK_DIR)/artifacts/$(LLVM_PACKAGE_NAME).tar.gz
 
@@ -39,7 +38,7 @@ CORE_TOOLS_BUILD_ENGINE := $(HELPERS_DIR)/build-core-tools.sh
 CORE_TOOLS_EXTRA_BUILD_ENGINE := $(HELPERS_DIR)/build-extra-tools.sh
 CORE_TOOLS_PACKAGE_SCRIPT := $(HELPERS_DIR)/core-tools-package.sh
 CORE_TOOLS_CCTOOLS_PATCH := $(HELPERS_DIR)/cctools-ld64-armv7-atomic-alignment.patch
-CORE_TOOLS_CCTOOLS_IOS43_PATCH := $(HELPERS_DIR)/cctools-ld64-ios43-deployment-floor.patch
+CORE_TOOLS_CCTOOLS_IOS5_PATCH := $(HELPERS_DIR)/cctools-ld64-ios5-deployment-floor.patch
 CORE_TOOLS_IMAGEMAGICK_PATCH := $(HELPERS_DIR)/imagemagick-ios-target-conditionals.patch
 CORE_TOOLS_MAKE_PATCH := $(HELPERS_DIR)/make-ios-portable-ar-header.patch
 CORE_TOOLS_PS_PATCH := $(HELPERS_DIR)/adv-cmds-ps-ios-workqueue.patch
@@ -74,7 +73,7 @@ DEB_STAGE := $(abspath $(INTERMEDIATES_DIR)/deb-root)
 DEB_EXTRACT_DIR := $(abspath $(INTERMEDIATES_DIR)/deb-payload)
 DEB_PACKAGE_SCRIPT := $(HELPERS_DIR)/deb.sh
 SDK_MANAGER_SCRIPT := $(COMMON_HELPERS_DIR)/altivec-sdk.sh
-SDK_CATALOG := $(COMMON_HELPERS_DIR)/iphoneos-sdk-catalog.json
+SDK_CATALOG := ../../../share/altivec-sdk/catalog.json
 SDK_MANAGER_CHECK := $(COMMON_HELPERS_DIR)/sdk-manager-check.sh
 LIB_MANAGER_SCRIPT := $(HELPERS_DIR)/altivec-lib.sh
 LIB_MANAGER_CHECK := $(HELPERS_DIR)/lib-manager-check.sh
@@ -275,8 +274,7 @@ device-tools-smoke-test: $(DEVICE_TOOLS_SMOKE_TEST)
 device-ios-app-smoke-test: $(DEVICE_IOS_APP_SMOKE_TEST)
 	@"$(DEVICE_IOS_APP_SMOKE_TEST)" "$(DEVICE)"
 
-$(LLVM_PACKAGE_ARCHIVE): $(LLVM_BUILD_ENGINE) $(LLVM_PATCHES) \
-		$(LLVM_ARCLITE_ARCHIVE) | check $(LLVM_PACKAGE_SCRIPT)
+$(LLVM_PACKAGE_ARCHIVE): $(LLVM_BUILD_ENGINE) $(LLVM_PATCHES) | check $(LLVM_PACKAGE_SCRIPT)
 	@mkdir -p "$(INTERMEDIATES_DIR)"
 	$(call run_llvm_target,llvm-package)
 	@test -f "$@" || { echo "error: LLVM package was not created: $@" >&2; exit 1; }
@@ -284,7 +282,7 @@ $(LLVM_PACKAGE_ARCHIVE): $(LLVM_BUILD_ENGINE) $(LLVM_PATCHES) \
 $(CORE_TOOLS_PACKAGE_ARCHIVE): $(CORE_TOOLS_BUILD_ENGINE) \
 		$(CORE_TOOLS_EXTRA_BUILD_ENGINE) \
 		$(CORE_TOOLS_CCTOOLS_PATCH) \
-		$(CORE_TOOLS_CCTOOLS_IOS43_PATCH) \
+		$(CORE_TOOLS_CCTOOLS_IOS5_PATCH) \
 		$(CORE_TOOLS_IMAGEMAGICK_PATCH) \
 		$(CORE_TOOLS_MAKE_PATCH) \
 		$(CORE_TOOLS_PS_PATCH) \

@@ -16,7 +16,7 @@ MAC_MIN_PPC=10.4
 MAC_MIN_X86=10.4
 MAC_MIN_X64=10.9
 MAC_MIN_ARM64=11.0
-IOS_MIN_VER=4.3
+IOS_MIN_VER=5.0
 IOS_ARM64_MIN_VER=7.0
 
 plist_version = $(shell python3 -c 'import plistlib; print(plistlib.load(open("$(1)", "rb"))["CFBundleVersion"])')

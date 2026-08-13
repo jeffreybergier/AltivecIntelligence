@@ -1,6 +1,6 @@
 # Cocoa application conventions
 
-- The iOS deployment target is 4.3 and must match `MinimumOSVersion` in
+- The iOS deployment target is 5.0 and must match `MinimumOSVersion` in
   `source/iOS/Info.plist`.
 - Put portable C and cross-platform resources under `source/shared`.
 - Put UIKit code and iPhone-only artwork under `source/iOS`.

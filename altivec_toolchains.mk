@@ -20,6 +20,12 @@ SDK_X64_PATH ?= $(MODERN_SDK_DIR)/MacOSX11.3.sdk
 SDK_ARM64_PATH ?= $(MODERN_SDK_DIR)/MacOSX11.3.sdk
 SDK_IOS_PATH ?= $(MODERN_SDK_DIR)/iPhoneOS8.4.sdk
 
+ALTIVEC_SDK ?= altivec-sdk
+ALTIVEC_SDK_ARCHIVE_DIR ?=
+ALTIVEC_SDK_MACOS_105_PATH ?= $(LEGACY_SDK_DIR)/MacOSX10.5.sdk
+ALTIVEC_SDK_MACOS_113_PATH ?= $(MODERN_SDK_DIR)/MacOSX11.3.sdk
+ALTIVEC_SDK_IPHONEOS_84_PATH ?= $(MODERN_SDK_DIR)/iPhoneOS8.4.sdk
+
 AR_LEGACY ?= $(LEGACY_BIN)/i386-apple-darwin9-ar
 RANLIB_LEGACY ?= $(LEGACY_BIN)/i386-apple-darwin9-ranlib
 LIBTOOL_LEGACY ?= $(LEGACY_BIN)/i386-apple-darwin9-libtool
@@ -40,3 +46,14 @@ LD64_LLD ?= /usr/bin/ld64.lld
 LIPO ?= $(LEGACY_BIN)/i386-apple-darwin9-lipo
 LIBTOOL ?= $(LEGACY_BIN)/i386-apple-darwin9-libtool
 DSYMUTIL ?= /usr/bin/dsymutil
+
+.PHONY: altivec-sdk-ensure
+altivec-sdk-ensure:
+	@if [ -n "$(ALTIVEC_SDK_ARCHIVE_DIR)" ]; then \
+		ALTIVEC_SDK_ARCHIVE_DIR="$(ALTIVEC_SDK_ARCHIVE_DIR)" "$(ALTIVEC_SDK)" ensure; \
+	else \
+		"$(ALTIVEC_SDK)" ensure; \
+	fi
+
+# This include supplies helpers, not the caller's default build target.
+.DEFAULT_GOAL :=

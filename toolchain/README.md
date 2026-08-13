@@ -13,9 +13,6 @@ toolchain/<platform>/<runtime-architecture>/
 ```
 
 Only the iOS armv7 package exists today. No arm64, aarch64, or macOS toolchain
-package is implemented by this layout.
-
-One armv7 payload file is also an input to the primary image:
-`iOS/armv7/payload/lib/arc/libarclite_iphoneos.a`. Clang needs that archive to
-link the image's existing iOS 4.3 ARC applications; the rest of this tree is
-used only by the release-extras workflow.
+package is implemented by this layout. The package has a minimum deployment
+target of iOS 6 and deliberately contains neither an Apple SDK nor ARCLite;
+its SDK manager installs user-supplied SDK archives after deployment.

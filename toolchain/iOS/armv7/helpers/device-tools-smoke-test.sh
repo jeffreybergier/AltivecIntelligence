@@ -396,13 +396,13 @@ test_clang_15() {
     '  bx lr' > probe.s
   printf 'extern "C" int cpp_probe(void) { return 9; }\n' > probe.cpp
 
-  "$bin_dir/clang-15" --target=armv7-apple-ios4.3 \
+  "$bin_dir/clang-15" --target=armv7-apple-ios5.0 \
     -c main.c -o main.o
-  "$bin_dir/clang-15" --target=armv7-apple-ios4.3 \
+  "$bin_dir/clang-15" --target=armv7-apple-ios5.0 \
     -c system-stub.c -o system-stub.o
-  "$bin_dir/clang-15" --target=armv7-apple-ios4.3 \
+  "$bin_dir/clang-15" --target=armv7-apple-ios5.0 \
     -c probe.cpp -o probe-cpp.o
-  "$bin_dir/clang-15" --target=armv7-apple-ios4.3 \
+  "$bin_dir/clang-15" --target=armv7-apple-ios5.0 \
     -fembed-bitcode -c main.c -o bitcode.o
   [[ -s main.o && -s system-stub.o && -s probe-cpp.o && -s bitcode.o ]]
 }
@@ -412,12 +412,12 @@ test_cctools_ld() {
   local armv7_load_commands=""
 
   NO_LDID=1 "$tool" -r -arch armv7 -o combined.o main.o
-  "$tool" -arch armv7 -dylib -iphoneos_version_min 4.3 \
+  "$tool" -arch armv7 -dylib -iphoneos_version_min 5.0 \
     -install_name /usr/lib/libSystem.B.dylib \
     -o libSystem.dylib system-stub.o
-  "$tool" -arch armv7 -iphoneos_version_min 4.3 -e _main \
+  "$tool" -arch armv7 -iphoneos_version_min 5.0 -e _main \
     -L. -lSystem -o smoke-executable main.o
-  "$tool" -arch armv7 -dylib -iphoneos_version_min 4.3 \
+  "$tool" -arch armv7 -dylib -iphoneos_version_min 5.0 \
     -seg1addr 0x10000 -install_name @rpath/libprobe.dylib \
     -L. -lSystem -o libprobe.dylib system-stub.o
   NO_LDID=1 "$tool" -arch armv7 -preload -seg1addr 0x200 \
@@ -426,12 +426,13 @@ test_cctools_ld() {
     -s libprobe.dylib && -s preload ]]
 
   armv7_load_commands="$("${cctools_prefix}otool" -l smoke-executable)"
+  # shellcheck disable=SC2016 # Dollar expressions belong to awk.
   "$bin_dir/awk" '
     $1 == "cmd" && $2 == "LC_VERSION_MIN_IPHONEOS" {
       in_version_command = 1
       next
     }
-    in_version_command && $1 == "version" && $2 == "4.3" {
+    in_version_command && $1 == "version" && $2 == "5.0" {
       found_version = 1
     }
     END { exit(found_version ? 0 : 1) }

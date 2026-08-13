@@ -1,7 +1,8 @@
 ## AltivecIntelligence: Parent Project Setup
 # Use this file to "activate" the Altivec toolchain in your new repository.
 # No submodule needed — the GHCR image ships the full /altivec/ toolchain
-# (cross-compilers, SDKs, AltivecCore libs, AI CLIs, example apps).
+# (cross-compilers, AltivecCore libs, AI CLIs, and example apps). Supply the
+# three verified SDK archives separately in .altivec-sdk/.
 #
 # Project rules and conventions for AI agents are documented at
 # /altivec/AGENTS.md inside the image (symlinked as CLAUDE.md / GEMINI.md
@@ -15,14 +16,22 @@
 # 2. Pull the image (one time, multi-GB — saves you the 5+ hour osxcross build):
 #    docker compose pull
 #
-# 3. Try an example app baked into the image:
+# 3. Fetch the checksum-pinned SDK archives outside the image:
+#    mkdir -p .altivec-sdk
+#    printf '%s\n' '.altivec-sdk/' >> .gitignore
+#    docker run --rm --entrypoint altivec-sdk \
+#      -e ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
+#      -v "$PWD/.altivec-sdk:/altivec-sdk" \
+#      ghcr.io/jeffreybergier/altivec-intelligence:latest fetch
+#
+# 4. Try an example app baked into the image:
 #    docker compose run --rm altivec "cd /altivec/apps/SingleWindow && make"
 #
-# 4. Build your own app (Makefile at the root of your project,
+# 5. Build your own app (Makefile at the root of your project,
 #    starting from /altivec/templates/Makefile.mac or Makefile.phone):
 #    docker compose run --rm altivec "make"
 #
-# 5. Use with AI Assistant:
+# 6. Use with AI Assistant:
 #    docker compose run --rm altivec-intelligence
 #
 #    Preinstalled AI CLI's:
@@ -39,10 +48,15 @@ services:
   altivec:
     image: ghcr.io/jeffreybergier/altivec-intelligence:latest
     working_dir: /repo/user
+    environment:
+      ALTIVEC_SDK_ARCHIVE_DIR: /altivec-sdk
     volumes:
       - cache:/cache
       - ~/.altivec:/root
       - .:/repo/user
+      - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
+      - altivec-sdk-legacy:/osxcross/legacy/target/SDK
+      - altivec-sdk-modern:/osxcross/modern/SDK
       # Uncomment to add more tools into the container
       # ../extras:/repo/extras
 
@@ -54,11 +68,15 @@ services:
       - IS_SANDBOX=1
       - TERM=xterm-256color
       - COLORTERM=${COLORTERM:-}
+      - ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk
     working_dir: /repo/user
     volumes:
       - cache:/cache
       - ~/.altivec:/root
       - .:/repo/user
+      - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
+      - altivec-sdk-legacy:/osxcross/legacy/target/SDK
+      - altivec-sdk-modern:/osxcross/modern/SDK
       # Uncomment to add more tools into the container
       # ../extras:/repo/extras
     entrypoint: /bin/bash
@@ -66,3 +84,5 @@ services:
 
 volumes:
   cache:
+  altivec-sdk-legacy:
+  altivec-sdk-modern:

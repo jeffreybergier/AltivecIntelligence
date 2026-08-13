@@ -125,62 +125,7 @@ ENV ALTIVEC_MODERN_TOOLCHAIN=/osxcross/modern \
 # the container otherwise rejects them as dubious ownership.
 RUN git config --system --add safe.directory "*"
 
-# 3. Build the isolated Apple GCC 4.2 / PowerPC toolchain. This deliberately
-# remains on OSXCross ppc-test and installs under /osxcross/legacy/target.
-# Keeping it before the current OSXCross build means modern-toolchain changes
-# do not invalidate the expensive Apple GCC layers.
-WORKDIR /osxcross/legacy
-COPY --chmod=0755 docker/prebuild.sh docker/postbuild.sh ./docker/
-COPY docker/patches/ ./docker/patches/
-
-# Keep SDK/GCC source tarballs out of committed image layers. They are large,
-# and leaving them in an early layer can make the final image export fail even
-# when a later layer deletes /osxcross/tarballs.
-
-RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarballs,sharing=locked \
-    echo "Prepare: legacy OSXCross" \
-      && ./docker/prebuild.sh
-
-RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarballs,sharing=locked \
-    echo "Build: legacy OSXCross" \
-      && CC=/usr/bin/clang CXX=/usr/bin/g++-14 \
-         SDK_VERSION=10.5 OSX_VERSION_MIN=10.5 UNATTENDED=1 \
-         JOBS="${JOBS:-$(nproc)}" ./build.sh
-
-RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarballs,sharing=locked \
-    echo "Build: Apple GCC 4.2 (PPC)" \
-      && GCC_VERSION=4.2.1 APPLE_GCC=1 JOBS="${JOBS:-$(nproc)}" \
-         POWERPC=1 ./build_gcc_ppc.sh \
-      && rm -rf build
-RUN --mount=type=cache,id=altivec-legacy-tarballs,target=/osxcross/legacy/tarballs,sharing=locked \
-    echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
-      && GCC_VERSION=4.2.1 APPLE_GCC=1 JOBS="${JOBS:-$(nproc)}" \
-         ./build_gcc.sh \
-      && rm -rf build
-
-# 4. Build current OSXCross as the primary macOS foundation. The stable flavor
-# uses current cctools/ld64 while retaining i386-capable Apple tooling.
-WORKDIR /osxcross/modern-source
-COPY --chmod=0755 docker/prebuild-modern.sh docker/postbuild-modern.sh ./docker/
-
-RUN --mount=type=cache,id=altivec-modern-tarballs,target=/osxcross/modern-source/tarballs,sharing=locked \
-    ./docker/prebuild-modern.sh
-
-RUN --mount=type=cache,id=altivec-modern-tarballs,target=/osxcross/modern-source/tarballs,sharing=locked \
-    echo "Build: current OSXCross (stable)" \
-      && TARGET_DIR=/osxcross/modern SDK_VERSION=11.3 OSX_VERSION_MIN=10.9 \
-         ENABLE_ARCHS="x86_64 arm64" BUILD_FLAVOR=stable UNATTENDED=1 \
-         JOBS="${JOBS:-$(nproc)}" ./build.sh
-
-RUN --mount=type=cache,id=altivec-modern-tarballs,target=/osxcross/modern-source/tarballs,sharing=locked \
-    ./docker/postbuild-modern.sh /osxcross/modern-source /osxcross/modern \
-    && ln -s /osxcross/modern /osxcross/target
-
-COPY --chmod=0755 docker/toolchain-smoke.sh /osxcross/legacy/docker/toolchain-smoke.sh
-COPY docker/fixtures/ /osxcross/legacy/docker/fixtures/
-RUN bash /osxcross/legacy/docker/toolchain-smoke.sh
-
-# 5. Keep native Linux tools ahead of OSXCross by default. Ruby/Bundler and
+# 3. Keep native Linux tools ahead of OSXCross by default. Ruby/Bundler and
 # other host-native extension builds may invoke tools like `ld` indirectly
 # through GCC and do not always honor LD=/usr/bin/ld. Altivec makefiles invoke
 # osxcross compilers/linkers explicitly, or prepend /osxcross/target/bin only
@@ -370,11 +315,8 @@ WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-lc"]
 CMD ["/bin/bash"]
 
-# /altivec/bin is already on PATH above so altivec-deploy, altivec-release, and
-# altivec-chooser are callable by bare name (no ./ prefix, no .sh extension).
-# That PATH lives in the base stage so the dev compose (which bind-mounts the
-# repo at /altivec and targets altivec-builder) gets the same PATH as the
-# prebuilt GHCR image — the bind-mount supplies the files at runtime.
+# /altivec/bin is already on PATH above, so runtime commands are callable by
+# bare name without a .sh extension.
 
 # Runtime caches should not default into /root, because many project compose
 # files bind-mount ~/.altivec there. /cache is intended to be backed by a
@@ -397,160 +339,50 @@ ENV ALTIVEC_CACHE=/cache \
 
 RUN mkdir -p /cache
 
-# Runtime helper scripts live in altivec-builder so every downstream image
-# stage inherits host-architecture-correct tools. `altivec-release` is an
-# interpreted Python script, but this placement keeps script validation and
-# future generated helpers in the per-architecture builder stage.
-COPY bin/ /altivec/bin/
-COPY --chmod=0644 altivec_toolchains.mk /altivec/altivec_toolchains.mk
+# Copy only inputs that can affect the SDK-dependent build before its expensive
+# RUN. Documentation and unrelated runtime helpers remain in later layers.
+COPY --chmod=0755 bin/altivec-sdk /altivec/bin/altivec-sdk
+COPY share/                   /altivec/share/
+COPY altivec_toolchains.mk    /altivec/
+COPY altivec_common_app.mk    /altivec/
+COPY altivec_common_mac.mk    /altivec/
+COPY altivec_common_phone.mk  /altivec/
+COPY libs/                    /altivec/libs/
+COPY apps/                    /altivec/apps/
+
+RUN mkdir -p /altivec-sdk && altivec-sdk --help >/dev/null
+
+# This is the only image instruction allowed to see Apple SDK archives. The
+# large, read-only `altivec_sdk` build context is mounted without being copied
+# into a layer. The mega script builds everything and purges installed SDKs
+# before the layer is committed.
+RUN --mount=type=bind,from=altivec_sdk,source=.,target=/altivec-sdk,readonly \
+    --mount=type=bind,source=docker,target=/build-sdk-dependent,readonly \
+    --mount=type=cache,id=altivec-libcurl-tarballs,target=/altivec/libs/libcurl/tarballs,sharing=locked \
+    --mount=type=cache,id=altivec-sqlite-tarballs,target=/altivec/libs/sqlite/tarballs,sharing=locked \
+    ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
+      /build-sdk-dependent/build-sdk-dependent.sh
+
+# The cache mounts above hide the source-tree tarball directories while the
+# mega script runs. Remove their restored image-layer contents and independently
+# verify the SDK-free runtime after the build-context mounts have disappeared.
+RUN rm -rf /altivec/libs/libcurl/tarballs /altivec/libs/sqlite/tarballs \
+ && altivec-sdk audit /osxcross \
+ && altivec-sdk audit /altivec \
+ && altivec-sdk audit /opt \
+ && altivec-sdk audit /usr/local
+
+COPY bin/                     /altivec/bin/
+COPY AGENTS.md README.md LICENSE /altivec/
+COPY docs/                    /altivec/docs/
+COPY templates/               /altivec/templates/
+
 RUN chmod +x /altivec/bin/* \
- && altivec-release --help >/dev/null
+ && altivec-release --help >/dev/null \
+ && altivec-sdk --help >/dev/null \
+ && ln -sf AGENTS.md /altivec/CLAUDE.md \
+ && ln -sf AGENTS.md /altivec/GEMINI.md \
+ && altivec-sdk audit /altivec
 
-# Clang automatically force-loads this path for pre-iOS-5 ARC links. Use the
-# Apple archive shipped by Xcode 6.4: it supports armv7/iOS 4.3 and predates
-# the objc_loadClassref dependency in modern Xcode's replacement archive.
-# Keep this stable input late in the builder stage so changing it does not
-# invalidate the unrelated OSXCross, Node, and native-tool installation layers.
-COPY --chmod=0644 toolchain/iOS/armv7/payload/lib/arc/libarclite_iphoneos.a /opt/altivec/lib/arc/libarclite_iphoneos.a
-RUN set -eux; \
-    echo 'f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8  /opt/altivec/lib/arc/libarclite_iphoneos.a' \
-      | sha256sum -c -; \
-    clang_bin="$(readlink -f "$(command -v clang)")"; \
-    clang_arc_dir="$(dirname "$(dirname "$clang_bin")")/lib/arc"; \
-    mkdir -p "$clang_arc_dir"; \
-    ln -s /opt/altivec/lib/arc/libarclite_iphoneos.a \
-      "$clang_arc_dir/libarclite_iphoneos.a"; \
-    /osxcross/modern/bin/lipo \
-      /opt/altivec/lib/arc/libarclite_iphoneos.a \
-      -verify_arch armv7; \
-    strings /opt/altivec/lib/arc/libarclite_iphoneos.a \
-      | grep -Fq -- '-miphoneos-version-min=4.3'; \
-    /osxcross/modern/bin/nm /opt/altivec/lib/arc/libarclite_iphoneos.a \
-      | grep -Fq '_OBJC_METACLASS_$___ARCLite__'; \
-    if /osxcross/modern/bin/nm \
-        /opt/altivec/lib/arc/libarclite_iphoneos.a \
-        | grep -Eq '[[:space:]]_objc_loadClassref$'; then \
-      echo 'error: ARCLite requires objc_loadClassref from a newer SDK' >&2; \
-      exit 1; \
-    fi
-
-# 11. GHCR image layer — bakes the Altivec runtime repo into /altivec/.
-#     Builds the shared AltivecCore and AltivecCocoa artifacts and ships their
-#     build outputs in the image so GHCR consumers do NOT have to
-#     re-run the slow cross-compile locally. The top-level `make all`
-#     target for each library produces:
-#       - Mac static libs plus dynamic frameworks
-#         (ppc/i386/x86_64/arm64).
-#       - Phone static libs only (armv7/arm64), because embedded iOS
-#         frameworks are not compatible with iOS 4.3-7 devices.
-#     The mk files in altivec_common_*.mk expect these build outputs under
-#     $(ALTIVEC_ROOT)/libs/{core,cocoa}/build-* — those paths resolve to
-#     /altivec/libs/{core,cocoa}/build-* here.
-#     Only built when explicitly targeted (docker compose skips it).
 FROM altivec-builder AS ghcr-action
 WORKDIR /altivec
-
-# Build AltivecCore first so this slow layer is not invalidated by trivial
-# changes elsewhere in the repo. `make all` builds the aggregate static
-# archives, the Mac framework, headers, and cacert.pem into build-* trees.
-# Dependency build trees are pruned afterward, but the component archives in
-# libs/core/build-* are retained so release asset staging can package the same
-# static library contents a direct `make all` build would produce.
-COPY libs/libcurl/ ./libs/libcurl/
-COPY libs/sqlite/  ./libs/sqlite/
-COPY libs/core/    ./libs/core/
-RUN --mount=type=cache,id=altivec-libcurl-tarballs,target=/altivec/libs/libcurl/tarballs,sharing=locked \
-    --mount=type=cache,id=altivec-sqlite-tarballs,target=/altivec/libs/sqlite/tarballs,sharing=locked \
-    set -e; \
-    cd libs/core; \
-    make all; \
-    make prune-intermediates; \
-    cd ../..; \
-    rm -rf libs/libcurl/build-mac libs/libcurl/build-phone \
-           libs/sqlite/build-mac libs/sqlite/build-phone
-RUN rm -rf libs/libcurl/tarballs libs/sqlite/tarballs
-
-# Build AltivecCocoa after Core. The separately run release-extras workflow
-# uses these exact image outputs to build and package the sample applications.
-COPY libs/cocoa/   ./libs/cocoa/
-RUN cd libs/cocoa && make all && make prune-intermediates
-
-# Ship common make fragments and sample source, but do not compile the samples
-# into the image. Each app includes the fragments from /altivec by absolute
-# path. Tagged sample binaries are release assets built from this image.
-COPY altivec_common_app.mk   ./
-COPY altivec_common_mac.mk   ./
-COPY altivec_common_phone.mk ./
-COPY apps/                   ./apps/
-
-# Validate the retained library layout and sample build rules. Compile the
-# smallest phone sample here so the production fat-build path and deployment
-# targets are checked before the image is published; the remaining real sample
-# builds are deferred to release extras.
-RUN set -e; \
-    test -f libs/core/build-mac/lib/libAltivecCore.a; \
-    test -f libs/core/build-phone/lib/libAltivecCore.a; \
-    test -f apps/CURLmac/AICURLConnection.m; \
-    test -f apps/CURLphone/AICURLConnection.m; \
-    test ! -e libs/core/build-mac/lib/libAICURLConnection.a; \
-    test ! -e libs/core/build-phone/lib/libAICURLConnection.a; \
-    test ! -e libs/core/build-mac/include/AICURLConnection.h; \
-    test ! -e libs/core/build-phone/include/AICURLConnection.h; \
-    test ! -e libs/core/build-mac/lib/AltivecCore.framework/Headers/AICURLConnection.h; \
-    test ! -d libs/libcurl/build-mac; \
-    test ! -d libs/libcurl/build-phone; \
-    test ! -d libs/sqlite/build-mac; \
-    test ! -d libs/sqlite/build-phone; \
-    test ! -d libs/sqlite/tarballs; \
-    test -f libs/core/build-phone/lib/cacert.pem; \
-    test ! -d libs/core/build-phone/lib/AltivecCore.framework; \
-    test -f libs/cocoa/build-phone/lib/libAltivecCocoa.a; \
-    test -f libs/cocoa/build-phone/Resources/Fonts/FA7-Solid-900.otf; \
-    test -f libs/cocoa/build-phone/Resources/Fonts/LICENSE-Font-Awesome.txt; \
-    test ! -d libs/cocoa/build-phone/lib/AltivecCocoa.framework; \
-    test -z "$(find apps -type d -name 'build-*' -print -quit)"; \
-    for app in SingleWindow SingleScreen CURLmac CURLphone; do \
-      make -C "apps/$app" -n release ALTIVEC_ROOT=/altivec >/dev/null; \
-    done; \
-    make -C apps/SingleScreen release ALTIVEC_ROOT=/altivec; \
-    phone_bin=apps/SingleScreen/build-release/SingleScreen.app/SingleScreen; \
-    /osxcross/modern/bin/lipo "$phone_bin" -verify_arch armv7 arm64; \
-    for arch_and_version in armv7:4.3 arm64:7.0; do \
-      arch="${arch_and_version%%:*}"; \
-      expected="${arch_and_version##*:}"; \
-      thin="/tmp/singlescreen-$arch"; \
-      /osxcross/modern/bin/lipo "$phone_bin" -thin "$arch" -output "$thin"; \
-      actual="$(/osxcross/modern/bin/otool -l "$thin" | awk \
-        '$1 == "cmd" && ($2 == "LC_VERSION_MIN_IPHONEOS" || \
-                         $2 == "LC_BUILD_VERSION") { found = 1; next } \
-         found && ($1 == "version" || $1 == "minos") { print $2; exit }')"; \
-      test "$actual" = "$expected" || { \
-        echo "error: $arch minimum is $actual; expected $expected" >&2; \
-        exit 1; \
-      }; \
-      rm -f "$thin"; \
-    done; \
-    make -C apps/SingleScreen clean ALTIVEC_ROOT=/altivec; \
-    test -z "$(find apps/SingleScreen -type d -name 'build-*' -print -quit)"; \
-    make -C apps/CURLphone -Bn release ALTIVEC_ROOT=/altivec \
-      PHONE_SOURCE_FLAGS=-fobjc-arc \
-      > /tmp/curlphone-arc-link-plan; \
-    awk '/Linking Phone universal/ { in_link = 1 }; \
-         in_link && /-Xarch_armv7 -fobjc-arc/ { found = 1 }; \
-         END { exit(found ? 0 : 1) }' \
-      /tmp/curlphone-arc-link-plan; \
-    rm -f /tmp/curlphone-arc-link-plan
-
-# Bake the rest of the runtime repo into /altivec/. Build-time-only files
-# (Containerfile, compose.yml, docker/, .github/) are deliberately
-# excluded. Kept after the runtime source so edits to docs/README/templates do
-# not invalidate the library layers.
-COPY AGENTS.md               ./
-COPY README.md               ./
-COPY LICENSE                 ./
-COPY docs/                   ./docs/
-COPY templates/              ./templates/
-
-# Recreate the AGENTS.md aliases that AI agents look for by name.
-RUN ln -sf AGENTS.md CLAUDE.md \
- && ln -sf AGENTS.md GEMINI.md

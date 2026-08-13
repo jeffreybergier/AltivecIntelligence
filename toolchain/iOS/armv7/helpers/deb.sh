@@ -160,13 +160,6 @@ readonly llvm_payload core_payload
 
 [[ -x "$llvm_payload/bin/clang-15" ]] ||
   die "cached LLVM payload is missing clang-15"
-[[ -s "$llvm_payload/lib/arc/libarclite_iphoneos.a" ]] ||
-  die "cached LLVM payload is missing the iOS ARC compatibility archive"
-arclite_sha256="$(sha256sum \
-  "$llvm_payload/lib/arc/libarclite_iphoneos.a" | awk '{print $1}')"
-[[ "$arclite_sha256" == \
-  "f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8" ]] ||
-  die "cached LLVM payload does not contain Apple Xcode 6.4 ARCLite"
 for driver in clang clang++ clang++-15 clang-cpp cc c++; do
   [[ -L "$llvm_payload/bin/$driver" && -x "$llvm_payload/bin/$driver" ]] ||
     die "cached LLVM payload has an invalid driver alias: ${driver}"
@@ -220,7 +213,6 @@ for item in \
   include/magic.h \
   include/sqlite3.h \
   include/sqlite3ext.h \
-  lib/arc/libarclite_iphoneos.a \
   lib/libmagic.a \
   lib/libsqlite3.a \
   share/ImageMagick-7/locale.xml \
@@ -244,10 +236,17 @@ done
 [[ ! -e "$stage_dir/$install_rel/Libraries" ]] ||
   die "managed libraries must not be embedded in the Debian package"
 if find "$stage_dir" \
-    \( -type d -name '*.sdk' -o -type f -name '*.sdk.tar.*' \) \
+    \( -type d -name '*.sdk' -o -type f -name '*.sdk.tar.*' \
+       -o -type f -iname '*arclite*' \) \
     -print -quit | grep -q .; then
-  die "an SDK directory or archive leaked into the Debian package"
+  die "an SDK or ARCLite file leaked into the Debian package"
 fi
+while IFS= read -r -d '' staged_file; do
+  if [[ "$(sha256sum "$staged_file" | awk '{print $1}')" == \
+      f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8 ]]; then
+    die "Apple Xcode ARCLite leaked into the Debian package: ${staged_file}"
+  fi
+done < <(find "$stage_dir" -type f -size 284128c -print0)
 [[ -d "$stage_dir/$install_rel" && ! -L "$stage_dir/$install_rel" ]] ||
   die "package install prefix must be a real directory, not a compatibility symlink"
 [[ -d "$stage_dir/var" && ! -L "$stage_dir/var" ]] ||

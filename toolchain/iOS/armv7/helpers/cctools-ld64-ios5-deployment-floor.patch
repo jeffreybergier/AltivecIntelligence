@@ -7,7 +7,7 @@ index 44fd0b1..1945de3 100644
  	}
  
 +	// arm64 first shipped with iOS 7.  Keep that architecture-specific floor
-+	// while allowing 32-bit ARM outputs to use the platform's iOS 4.3 floor.
++	// while allowing 32-bit ARM outputs to use Altivec's iOS 5.0 floor.
 +	if ( (fArchitecture == CPU_TYPE_ARM64) &&
 +		 platforms().contains(ld::Platform::iOS) ) {
 +		if ( !platforms().minOS(ld::iOS_7_0) )
@@ -46,5 +46,5 @@ index e9b8f02..28742be 100644
 @@ -54,3 +54,3 @@ static const PlatformInfo sAllSupportedPlatforms[] = {
      { Platform::macOS,             Platform::macOS,        "macOS",             "-macos_version_min",             "MACOSX_DEPLOYMENT_TARGET",   0x000A0E00, 0x000A0400, LC_VERSION_MIN_MACOSX,   false, true,  PlatEnforce::warning, PlatEnforce::warning },
 -    { Platform::iOS,               Platform::iOS,          "iOS",               "-ios_version_min",               "IPHONEOS_DEPLOYMENT_TARGET", 0x000C0000, 0x00070000, LC_VERSION_MIN_IPHONEOS, true,  true,  PlatEnforce::warning, PlatEnforce::warning },
-+    { Platform::iOS,               Platform::iOS,          "iOS",               "-ios_version_min",               "IPHONEOS_DEPLOYMENT_TARGET", 0x000C0000, 0x00040300, LC_VERSION_MIN_IPHONEOS, true,  true,  PlatEnforce::warning, PlatEnforce::warning },
++    { Platform::iOS,               Platform::iOS,          "iOS",               "-ios_version_min",               "IPHONEOS_DEPLOYMENT_TARGET", 0x000C0000, 0x00050000, LC_VERSION_MIN_IPHONEOS, true,  true,  PlatEnforce::warning, PlatEnforce::warning },
      { Platform::tvOS,              Platform::tvOS,         "tvOS",              "-tvos_version_min",              "TVOS_DEPLOYMENT_TARGET",     0x000C0000, 0x00070000, LC_VERSION_MIN_TVOS,     true,  true,  PlatEnforce::warning, PlatEnforce::warning },

@@ -61,7 +61,7 @@ static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
 
 dynamic:
 	@echo " [!] ERROR: iOS AltivecCore.framework is no longer supported."
-	@echo "     Use static linkage for iOS 4.3-7 compatibility."
+	@echo "     Use static linkage for legacy iOS compatibility."
 	@exit 1
 
 curl-ready:

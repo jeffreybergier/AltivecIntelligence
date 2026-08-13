@@ -71,6 +71,12 @@ jobs:
       - name: Pull exact build image
         run: docker pull "$BUILD_IMAGE"
 
+      - name: Fetch verified SDK build inputs
+        env:
+          ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
+          ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
+        run: bin/altivec-sdk fetch
+
       - name: Check configured versions
         id: version
         run: |
@@ -94,10 +100,14 @@ jobs:
         run: |
           docker run --rm \
             --entrypoint /bin/bash \
+            -e ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
+            -v "${RUNNER_TEMP}/.altivec-sdk:/altivec-sdk:ro" \
+            --mount type=volume,target=/osxcross/legacy/target/SDK \
+            --mount type=volume,target=/osxcross/modern/SDK \
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user/toolchain/iOS/armv7 \
             "$BUILD_IMAGE" \
-            -lc 'make --no-print-directory check core-tools-check sdk-manager-check lib-manager-check ios-app-make-check'
+            -lc 'altivec-sdk ensure && make --no-print-directory check core-tools-check sdk-manager-check lib-manager-check ios-app-make-check'
 
   standard_assets:
     name: Package libraries and build samples
@@ -126,16 +136,26 @@ jobs:
       - name: Pull exact build image
         run: docker pull "$BUILD_IMAGE"
 
+      - name: Fetch verified SDK build inputs
+        env:
+          ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
+          ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
+        run: bin/altivec-sdk fetch
+
       - name: Build standard extras
         run: |
           docker run --rm \
             --entrypoint /bin/bash \
             -e ALTIVEC_RELEASE_PREBUILT_ROOT=/altivec \
+            -e ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
             -e RELEASE_VERSION \
+            -v "${RUNNER_TEMP}/.altivec-sdk:/altivec-sdk:ro" \
+            --mount type=volume,target=/osxcross/legacy/target/SDK \
+            --mount type=volume,target=/osxcross/modern/SDK \
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user \
             "$BUILD_IMAGE" \
-            -lc 'scripts/ci/build-standard-extras.sh'
+            -lc 'altivec-sdk ensure && scripts/ci/build-standard-extras.sh'
 
       - name: Upload standard release assets
         uses: actions/upload-artifact@v4
@@ -198,6 +218,13 @@ jobs:
         if: steps.payload_cache.outputs.cache-hit != 'true'
         run: docker pull "$BUILD_IMAGE"
 
+      - name: Fetch verified SDK build inputs
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        env:
+          ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
+          ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
+        run: bin/altivec-sdk fetch
+
       - name: Report available disk
         if: steps.payload_cache.outputs.cache-hit != 'true'
         run: df -h / "${GITHUB_WORKSPACE}"
@@ -207,10 +234,14 @@ jobs:
         run: |
           docker run --rm \
             --entrypoint /bin/bash \
+            -e ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
+            -v "${RUNNER_TEMP}/.altivec-sdk:/altivec-sdk:ro" \
+            --mount type=volume,target=/osxcross/legacy/target/SDK \
+            --mount type=volume,target=/osxcross/modern/SDK \
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user/toolchain/iOS/armv7 \
             "$BUILD_IMAGE" \
-            -lc 'make --no-print-directory core-tools-package'
+            -lc 'altivec-sdk ensure && make --no-print-directory core-tools-package'
 
       - name: Validate core-tools handoff
         id: payload
@@ -294,6 +325,13 @@ jobs:
         if: steps.payload_cache.outputs.cache-hit != 'true'
         run: docker pull "$BUILD_IMAGE"
 
+      - name: Fetch verified SDK build inputs
+        if: steps.payload_cache.outputs.cache-hit != 'true'
+        env:
+          ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
+          ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
+        run: bin/altivec-sdk fetch
+
       - name: Report available disk
         if: steps.payload_cache.outputs.cache-hit != 'true'
         run: df -h / "${GITHUB_WORKSPACE}"
@@ -303,10 +341,14 @@ jobs:
         run: |
           docker run --rm \
             --entrypoint /bin/bash \
+            -e ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
+            -v "${RUNNER_TEMP}/.altivec-sdk:/altivec-sdk:ro" \
+            --mount type=volume,target=/osxcross/legacy/target/SDK \
+            --mount type=volume,target=/osxcross/modern/SDK \
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user/toolchain/iOS/armv7 \
             "$BUILD_IMAGE" \
-            -lc 'make --no-print-directory llvm-package'
+            -lc 'altivec-sdk ensure && make --no-print-directory llvm-package'
 
       - name: Validate LLVM handoff
         id: payload

@@ -13,7 +13,7 @@ if (($# != 2)); then
   exit 2
 fi
 
-for tool in dpkg-deb grep sha256sum stat; do
+for tool in awk dpkg-deb find grep mktemp rm sha256sum stat; do
   command -v "$tool" >/dev/null 2>&1 ||
     die "required package validation tool not found: ${tool}"
 done
@@ -43,13 +43,29 @@ field() {
   die 'Debian package is implausibly small'
 
 contents="$(dpkg-deb --contents "$package_path")"
+if grep -Eiq '(^|/)[^/]*[.]sdk(/|$)|[.]sdk[.]tar[.](gz|xz)([[:space:]]|$)|arclite' \
+    <<< "$contents"; then
+  die 'Debian package contains Apple SDK or ARCLite content'
+fi
+audit_dir="$(mktemp -d "${TMPDIR:-/tmp}/altivec-deb-audit.XXXXXX")"
+readonly audit_dir
+cleanup() {
+  rm -rf -- "$audit_dir"
+}
+trap cleanup EXIT
+dpkg-deb --extract "$package_path" "$audit_dir"
+while IFS= read -r -d '' packaged_file; do
+  if [[ "$(sha256sum "$packaged_file" | awk '{print $1}')" == \
+      f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8 ]]; then
+    die "Debian package contains Apple Xcode ARCLite: ${packaged_file}"
+  fi
+done < <(find "$audit_dir" -type f -size 284128c -print0)
 for expected_path in \
   './etc/profile.d/altivec.sh' \
   './var/altivec/bin/altivec-app' \
   './var/altivec/bin/altivec-lib' \
   './var/altivec/bin/altivec-sdk' \
   './var/altivec/bin/clang-15' \
-  './var/altivec/lib/arc/libarclite_iphoneos.a' \
   './var/altivec/share/altivec/make/ios-app.mk' \
   './var/altivec/share/altivec/templates/ios-app/Makefile'; do
   grep -Fq "$expected_path" <<< "$contents" ||

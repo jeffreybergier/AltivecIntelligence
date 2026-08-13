@@ -1,15 +1,25 @@
+# Before building this development image, fetch the verified SDK inputs with:
+#   ALTIVEC_SDK_CATALOG="$PWD/share/altivec-sdk/catalog.json" \
+#   ALTIVEC_SDK_ARCHIVE_DIR="$PWD/.altivec-sdk" bin/altivec-sdk fetch
 services:
   altivec:
     build:
       context: .
       dockerfile: Containerfile
       target: ghcr-action
+      additional_contexts:
+        altivec_sdk: ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}
     image: altivec-image
     working_dir: /repo/altivec
+    environment:
+      ALTIVEC_SDK_ARCHIVE_DIR: /altivec-sdk
     volumes:
       - cache:/cache
       - ~/.altivec:/root
       - .:/repo/altivec
+      - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
+      - altivec-sdk-legacy:/osxcross/legacy/target/SDK
+      - altivec-sdk-modern:/osxcross/modern/SDK
       # Uncomment to add more tools into the container
       # ../extras:/repo/extras
       
@@ -18,6 +28,8 @@ services:
       context: .
       dockerfile: Containerfile
       target: ghcr-action
+      additional_contexts:
+        altivec_sdk: ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}
     image: altivec-intelligence-image
     stdin_open: true
     tty: true
@@ -25,11 +37,15 @@ services:
       - IS_SANDBOX=1
       - TERM=xterm-256color
       - COLORTERM=${COLORTERM:-}
+      - ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk
     working_dir: /repo/altivec
     volumes:
       - cache:/cache
       - ~/.altivec:/root
       - .:/repo/altivec
+      - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
+      - altivec-sdk-legacy:/osxcross/legacy/target/SDK
+      - altivec-sdk-modern:/osxcross/modern/SDK
       # Uncomment to add more tools into the container
       # ../extras:/repo/extras
     entrypoint: /bin/bash
@@ -37,3 +53,5 @@ services:
 
 volumes:
   cache:
+  altivec-sdk-legacy:
+  altivec-sdk-modern:

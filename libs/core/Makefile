@@ -1,7 +1,10 @@
 # AltivecIntelligence AltivecCore Master Makefile
 # Builds phone static archives and Mac static/framework artifacts.
 
+include ../../altivec_toolchains.mk
+
 all: phone-all mac-all
+all phone-static mac-static mac-dynamic mac-all phone-all phone mac: | altivec-sdk-ensure
 
 # --- Static Targets ---
 phone-static:

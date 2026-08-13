@@ -47,7 +47,7 @@ ALTIVEC_MANAGED_BUNDLE_DIR ?=
 ALTIVEC_MANAGED_RESOURCE_FILES ?=
 
 SDKROOT ?= $(ALTIVEC_PREFIX)/SDKs/Current.sdk
-IPHONEOS_DEPLOYMENT_TARGET ?= 4.3
+IPHONEOS_DEPLOYMENT_TARGET ?= 5.0
 ALTIVEC_ARCH ?= armv7
 
 # Clang recognizes an SDK's platform from a name such as iPhoneOS8.4.sdk.
@@ -148,10 +148,6 @@ _altivec_framework_flags := \
 		-framework $(framework))
 _altivec_arc_flag := \
 	$(if $(filter 1 YES yes true TRUE,$(APP_USE_ARC)),-fobjc-arc)
-_altivec_target_needs_arclite := \
-	$(filter 4.%,$(IPHONEOS_DEPLOYMENT_TARGET))
-_altivec_arclite_archive := \
-	$(ALTIVEC_PREFIX)/lib/arc/libarclite_iphoneos.a
 _altivec_makefiles := $(abspath $(MAKEFILE_LIST))
 _altivec_resource_inputs := \
 	$(foreach resource,$(RESOURCES),$(RESOURCE_ROOT)/$(resource))
@@ -237,13 +233,12 @@ __altivec_ios_validate:
 			"$(SDKROOT)" >&2; \
 			exit 1; \
 	}; \
-	if [[ -n "$(_altivec_arc_flag)" && \
-	      -n "$(_altivec_target_needs_arclite)" && \
-	      ! -s "$(_altivec_arclite_archive)" ]]; then \
-		printf 'error: ARC back-deployment archive is missing: %s\n' \
-			"$(_altivec_arclite_archive)" >&2; \
+	awk -v target="$(IPHONEOS_DEPLOYMENT_TARGET)" \
+		'BEGIN { exit((target + 0) >= 5.0 ? 0 : 1) }' || { \
+		printf 'error: iOS deployment target must be 5.0 or newer: %s\n' \
+			"$(IPHONEOS_DEPLOYMENT_TARGET)" >&2; \
 		exit 1; \
-	fi; \
+	}; \
 	[[ -f "$(INFO_PLIST)" ]] || { \
 		printf 'error: Info.plist not found: %s\n' "$(INFO_PLIST)" >&2; \
 		exit 1; \

@@ -27,13 +27,13 @@ RES_DIR = Resources
 # Optional override if AltivecCore is required for this app:
 # ALTIVECCORE_REQUIRED = 1
 # ALTIVECCORE_LINKAGE = static
-# static is the only iPhone linkage mode and is required for iOS 4.3-7 devices.
+# static is the only iPhone linkage mode and is required for legacy iOS devices.
 # ALTIVECCORE_DIR = /altivec/libs/core/build-phone
 
 # Optional override if AltivecCocoa is required for this app:
 # ALTIVECCOCOA_REQUIRED = 1
 # ALTIVECCOCOA_LINKAGE = static
-# static is the only iPhone linkage mode and is required for iOS 4.3-7 devices.
+# static is the only iPhone linkage mode and is required for legacy iOS devices.
 # ALTIVECCOCOA_DIR = /altivec/libs/cocoa/build-phone
 
 include /altivec/altivec_common_phone.mk

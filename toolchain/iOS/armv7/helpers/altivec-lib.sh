@@ -647,9 +647,9 @@ run_library_smoke_test() {
 
   printf 'Compiling and linking Altivec libraries %s for armv7...\n' "$version"
   "$clang_tool" \
-    --target=armv7-apple-ios4.3 \
+    --target=armv7-apple-ios5.0 \
     -arch armv7 \
-    -miphoneos-version-min=4.3 \
+    -miphoneos-version-min=5.0 \
     -isysroot "$resolved_sdk" \
     "-B${bin_dir}" \
     "-I${version_root}/AltivecCore/include" \

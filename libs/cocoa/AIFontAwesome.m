@@ -602,7 +602,7 @@ static int ai_fa_have_coretext(void)
   /* Bake the device scale into the UIImage so it draws at `canvasSize` points
    * (the CGImage carries canvasSize*scale pixels, with the glyph rasterised at
    * iconSize and centered). -imageWithCGImage:scale:orientation: is 4.0+, safe
-   * on the 4.3 floor. */
+   * on the 5.0 floor. */
   UIImage *img = [UIImage imageWithCGImage:cg
                                      scale:scale
                                orientation:UIImageOrientationUp];

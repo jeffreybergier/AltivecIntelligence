@@ -1,5 +1,5 @@
 # Altivec Intelligence Common Makefile for Phone
-# Targets: iOS 4.3+ (armv7, arm64)
+# Targets: iOS 5+ (armv7) and iOS 7+ (arm64)
 
 # --- Tools and Paths ---
 _altivec_common_phone_dir := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -20,7 +20,7 @@ INT_DIR = $(BUILD_DIR)/Intermediates
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 PHONE_IPA = $(BUILD_DIR)/$(APP_NAME).ipa
 OPT_FLAGS ?= -O3
-IOS_MIN_ARMV7 ?= 4.3
+IOS_MIN_ARMV7 ?= 5.0
 IOS_MIN_ARM64 ?= 7.0
 
 # --- Bundle Resources ---
@@ -58,7 +58,7 @@ OBJS = $(APP_OBJS)
 # iOS 8+ at runtime, so dynamic linkage is intentionally unsupported here.
 ALTIVECCORE_LINKAGE ?= static
 ifneq ($(strip $(ALTIVECCORE_LINKAGE)),static)
-  $(error ALTIVECCORE_LINKAGE=$(ALTIVECCORE_LINKAGE) is not supported for iOS; use static linkage for iOS 4.3-7 compatibility)
+  $(error ALTIVECCORE_LINKAGE=$(ALTIVECCORE_LINKAGE) is not supported for iOS; use static linkage for legacy iOS compatibility)
 endif
 ALTIVECCORE_REQUIRED ?= 0
 ALTIVECCORE_DIR ?=
@@ -91,7 +91,7 @@ ALTIVECCORE_BUILD_DIR = build-phone
 # app bundle. Embedded iOS frameworks are intentionally unsupported here.
 ALTIVECCOCOA_LINKAGE ?= static
 ifneq ($(strip $(ALTIVECCOCOA_LINKAGE)),static)
-  $(error ALTIVECCOCOA_LINKAGE=$(ALTIVECCOCOA_LINKAGE) is not supported for iOS; use static linkage for iOS 4.3-7 compatibility)
+  $(error ALTIVECCOCOA_LINKAGE=$(ALTIVECCOCOA_LINKAGE) is not supported for iOS; use static linkage for legacy iOS compatibility)
 endif
 ALTIVECCOCOA_REQUIRED ?= 0
 ALTIVECCOCOA_DIR ?=
@@ -141,11 +141,6 @@ PHONE_EXTRA_SOURCE_FLAGS ?=
 PHONE_ANALYZE_SOURCE_FLAGS ?= $(PHONE_SOURCE_FLAGS)
 PHONE_ANALYZE_EXTRA_SOURCE_FLAGS ?= $(PHONE_EXTRA_SOURCE_FLAGS)
 PHONE_LINK_FLAGS ?=
-PHONE_ARCLITE_ARCHIVE ?= /opt/altivec/lib/arc/libarclite_iphoneos.a
-# Clang force-loads ARCLite for deployment targets below iOS 5 whenever ARC
-# is present at link time. Restrict the flag to armv7: arm64 only runs on iOS
-# 7 and newer, where the system Objective-C runtime already provides ARC.
-PHONE_ARC_LINK_FLAGS ?= $(if $(filter -fobjc-arc,$(PHONE_SOURCE_FLAGS) $(PHONE_EXTRA_SOURCE_FLAGS)),-Xarch_armv7 -fobjc-arc)
 $(APP_SOURCE_OBJS): IOS_FLAGS += $(PHONE_SOURCE_FLAGS)
 $(APP_EXTRA_OBJS): IOS_FLAGS += $(PHONE_EXTRA_SOURCE_FLAGS)
 
@@ -199,17 +194,18 @@ analyze: validate
 	fi
 	$(call analyze_report)
 
-validate: validate-sdk validate-paths validate-arclite libs-ready cocoa-ready
+validate: altivec-sdk-ensure validate-sdk validate-paths libs-ready cocoa-ready
 
 validate-sdk:
 	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi
-
-validate-arclite:
-	@if [ -n "$(strip $(PHONE_ARC_LINK_FLAGS))" ] && [ ! -r "$(PHONE_ARCLITE_ARCHIVE)" ]; then \
-		echo " [!] ERROR: iOS 4.3 ARC compatibility archive missing at $(PHONE_ARCLITE_ARCHIVE)"; \
-		echo "     Rebuild the Altivec Intelligence container to install it."; \
+	@awk -v target="$(IOS_MIN_ARMV7)" 'BEGIN { exit((target + 0) >= 5.0 ? 0 : 1) }' || { \
+		echo " [!] ERROR: armv7 deployment target must be iOS 5.0 or newer: $(IOS_MIN_ARMV7)"; \
 		exit 1; \
-	fi
+	}
+	@awk -v target="$(IOS_MIN_ARM64)" 'BEGIN { exit((target + 0) >= 7.0 ? 0 : 1) }' || { \
+		echo " [!] ERROR: arm64 deployment target must be iOS 7.0 or newer: $(IOS_MIN_ARM64)"; \
+		exit 1; \
+	}
 
 # --- Internal File Targets ---
 
@@ -253,11 +249,11 @@ $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin $(PHONE_BUNDLE_DEPS)
 	$(PHONE_EXTRA_BUNDLE_STEPS)
 
 # Compile and Link in two steps to preserve .o files for dsymutil
-$(INT_DIR)/$(APP_NAME)-bin: $(OBJS) | validate-arclite
+$(INT_DIR)/$(APP_NAME)-bin: $(OBJS)
 	@echo " [2/4] Linking Phone universal binary (armv7, arm64)..."
 	@export PATH=$(BIN_DIR):$(PATH); \
 	$(CLANG) $(IOS_ARCH_FLAGS) \
-	           $(IOS_FLAGS) $(PHONE_ARC_LINK_FLAGS) $(PHONE_LINK_FLAGS) \
+	           $(IOS_FLAGS) $(PHONE_LINK_FLAGS) \
 	           $(IOS_FRAMEWORKS) $(LIBS_IPHONE) $^ -o $@
 
 $(INT_DIR)/%.o: %.m
@@ -278,5 +274,5 @@ $(INT_DIR)/%.o: %.c
 	@$(CLANG) $(IOS_ARCH_FLAGS) \
 	           $(IOS_FLAGS) -c $< -o $@
 
-.PHONY: release debug clean analyze validate validate-sdk validate-arclite altiveccore-bootstrap libs-ready \
+.PHONY: release debug clean analyze validate validate-sdk altiveccore-bootstrap libs-ready \
         altiveccocoa-bootstrap cocoa-ready
