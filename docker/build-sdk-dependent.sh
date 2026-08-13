@@ -192,13 +192,24 @@ assert_min_version() {
 smoke_toolchains() {
   section 'Testing toolchains and deployment floors'
   local output modern_x64 modern_arm64 slice expected arch
+  local -a modern_x64_candidates modern_arm64_candidates
   output="$(mktemp -d /tmp/altivec-toolchain-smoke.XXXXXX)"
-  modern_x64="$(find "$modern_target/bin" -maxdepth 1 \
-    -name 'x86_64-apple-darwin*-clang' -print -quit)"
-  modern_arm64="$(find "$modern_target/bin" -maxdepth 1 \
-    -name 'arm64-apple-darwin*-clang' -print -quit)"
-  [[ -n "$modern_x64" && -n "$modern_arm64" ]] ||
-    die 'modern compiler wrappers are missing'
+  mapfile -t modern_x64_candidates < <(
+    find "$modern_target/bin" -maxdepth 1 \
+      -name 'x86_64-apple-darwin*-clang' \
+      ! -name '*-cmake-*' -print | sort
+  )
+  mapfile -t modern_arm64_candidates < <(
+    find "$modern_target/bin" -maxdepth 1 \
+      -name 'arm64-apple-darwin*-clang' \
+      ! -name '*-cmake-*' -print | sort
+  )
+  [[ "${#modern_x64_candidates[@]}" -eq 1 ]] ||
+    die "expected exactly one modern x86_64 Clang wrapper; found ${#modern_x64_candidates[@]}"
+  [[ "${#modern_arm64_candidates[@]}" -eq 1 ]] ||
+    die "expected exactly one modern arm64 Clang wrapper; found ${#modern_arm64_candidates[@]}"
+  modern_x64="${modern_x64_candidates[0]}"
+  modern_arm64="${modern_arm64_candidates[0]}"
 
   "$legacy_target/bin/oppc32-gcc" -arch ppc -mmacosx-version-min=10.4 \
     -isysroot "$legacy_target/SDK/MacOSX10.5.sdk" "$fixture" \
