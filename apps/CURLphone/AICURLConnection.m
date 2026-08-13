@@ -277,7 +277,7 @@ static size_t AIHeaderCallback(void *contents,
       NSDictionary *userInfo = [NSDictionary dictionaryWithObject:errorMsg 
                                                            forKey:NSLocalizedDescriptionKey];
       *error = [NSError errorWithDomain:@"AICURLConnectionErrorDomain" 
-                                   code:res 
+                                   code:(NSInteger)res
                                userInfo:userInfo];
     }
     curl_easy_cleanup(curl);
@@ -348,7 +348,7 @@ static size_t AIHeaderCallback(void *contents,
       NSDictionary *userInfo = [NSDictionary dictionaryWithObject:errorMsg 
                                                            forKey:NSLocalizedDescriptionKey];
       NSError *error = [NSError errorWithDomain:@"AICURLConnectionErrorDomain" 
-                                           code:res 
+                                           code:(NSInteger)res
                                        userInfo:userInfo];
       [self performSelectorOnMainThread:@selector(__didFailWithError:) 
                              withObject:error 

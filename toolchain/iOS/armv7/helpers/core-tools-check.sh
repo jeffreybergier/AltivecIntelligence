@@ -3,9 +3,10 @@
 set -euo pipefail
 
 sdk_dir="/osxcross/target/SDK/iPhoneOS8.4.sdk"
+macos_compat_sdk="/osxcross/legacy/target/SDK/MacOSX10.5.sdk"
 cctools_bin="/osxcross/target/bin"
-cc="/usr/bin/clang-14"
-cxx="/usr/bin/clang++-14"
+cc="/usr/bin/clang"
+cxx="/usr/bin/clang++"
 ldid_signer="ldid"
 fakeroot_tool="fakeroot"
 dpkg_deb_tool="dpkg-deb"
@@ -16,6 +17,7 @@ usage() {
     "" \
     "Options:" \
     "  --sdk <path>          iPhoneOS SDK directory." \
+    "  --macos-compat-sdk <path> Legacy macOS compatibility SDK." \
     "  --cctools-bin <path>  Directory containing the Mach-O tools." \
     "  --cc <path>           Host C compiler." \
     "  --cxx <path>          Host C++ compiler." \
@@ -39,6 +41,11 @@ while (($# > 0)); do
     --sdk)
       require_value "$@"
       sdk_dir="$2"
+      shift 2
+      ;;
+    --macos-compat-sdk)
+      require_value "$@"
+      macos_compat_sdk="$2"
       shift 2
       ;;
     --cctools-bin)
@@ -90,9 +97,11 @@ done
 [[ -x "$cc" ]] || die "C compiler not found: ${cc}"
 [[ -x "$cxx" ]] || die "C++ compiler not found: ${cxx}"
 [[ -d "$sdk_dir" ]] || die "iPhoneOS SDK not found: ${sdk_dir}"
+[[ -d "$macos_compat_sdk" ]] ||
+  die "legacy macOS compatibility SDK not found: ${macos_compat_sdk}"
 
 for tool in ar ranlib nm strip otool; do
-  macho_tool="${cctools_bin}/x86_64-apple-darwin9-${tool}"
+  macho_tool="${cctools_bin}/${tool}"
   [[ -x "$macho_tool" ]] || die "Mach-O tool not found: ${macho_tool}"
 done
 

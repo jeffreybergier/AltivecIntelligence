@@ -2,7 +2,7 @@
 
 This plan tracks reusable work discovered in `/repo/ENIL-cocoa` that should be
 folded back into `/repo/altivec`. Work through these one at a time, keeping
-changes surgical and preserving Tiger/Leopard and iOS 4.3 compatibility.
+changes surgical and preserving Tiger/Leopard and iOS 5 compatibility.
 
 ## Ground Rules
 

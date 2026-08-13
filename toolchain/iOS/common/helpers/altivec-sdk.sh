@@ -109,10 +109,10 @@ done
 
 catalog_valid="$(
   "$jq_tool" -r '
-    .schema == 1 and
-    .source.repository == "okanon/iPhoneOS.sdk" and
-    .source.release_tag == "v0.0.1" and
-    (.sdks | type == "array" and length > 0)
+    .schema == 2 and
+    .device_source.repository == "okanon/iPhoneOS.sdk" and
+    .device_source.release_tag == "v0.0.1" and
+    (.device_sdks | type == "array" and length > 0)
   ' "$catalog_path"
 )"
 [[ "$catalog_valid" == "true" ]] ||
@@ -210,7 +210,7 @@ catalog_entry() {
   entry="$(
     # shellcheck disable=SC2016
     "$jq_tool" -cer --arg version "$version" \
-      '.sdks[] | select(.version == $version)' "$catalog_path"
+      '.device_sdks[] | select(.version == $version)' "$catalog_path"
   )" || die "SDK ${version} is not in the bundled catalog"
   printf '%s\n' "$entry"
 }
@@ -661,7 +661,7 @@ command_list() {
     fi
   done < <(
     "$jq_tool" -r '
-      .sdks[] |
+      .device_sdks[] |
       [
         .version,
         .directory,

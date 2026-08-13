@@ -83,8 +83,8 @@ See the table below to understand the compilers and SDKs used:
 | Target | Compiler | SDK | Architectures | Compatibility |
 | :--- | :--- | :--- | :--- | :--- |
 | **Mac (Legacy)** | Apple GCC 4.2.1 | 10.5 | ppc, x86 | 10.4 Tiger+ |
-| **Mac (Modern)** | Clang 14 | 11.3 | x64, arm64 | 10.9 Mavericks+ |
-| **iPhone** | Clang 14 | 8.4 | armv7, arm64 | iPhone 3GS+ iOS 4.3+ |
+| **Mac (Modern)** | OSXCross Clang 21 wrappers | 11.3 | x64, arm64 | 10.9 Mavericks+ |
+| **iPhone** | Ubuntu Clang 21 + current cctools | 8.4 | armv7, arm64 | iPhone 3GS+ iOS 5.0+ |
 
 Even though the Mac version uses 2 compilers and 2 SDKs, it combines them into
 one Universal Binary with the lipo command.
@@ -94,7 +94,7 @@ For modern targets (X64, ARM64, and iPhone), you can use the Clang Static Analyz
 ```bash
 make analyze
 ```
-This will check for common issues like memory leaks, null pointer dereferences, and other logic errors using the modern Clang 14 toolchain.
+This will check for common issues like memory leaks, null pointer dereferences, and other logic errors using the modern Clang 21 toolchain.
 
 ## Project Origins
 
@@ -111,4 +111,3 @@ To avoid this, I wanted a portable cross-compile environment that uses the most
 compatible SDKs so that I only need to build it once and run it everywhere. This
 project provides that fast, containerized environment, allowing you to build for
 everything from Tiger PPC to modern Apple Silicon in one place.
-

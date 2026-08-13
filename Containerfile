@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM ubuntu:22.04 AS altivec-builder
+FROM ubuntu:26.04 AS altivec-builder
 
 # 1. Install Dependencies
 ENV DEBIAN_FRONTEND=noninteractive
@@ -16,10 +16,14 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     make \
     patch \
+    autotools-dev \
     clang \
     llvm-dev \
     lld \
     lldb \
+    # GCC 14's C++ library preserves the unchecked behavior expected by the
+    # legacy ld64 sources; Ubuntu 26's default GCC 15 enables bounds assertions.
+    g++-14 \
     # --- Compiler & math libs (GCC toolchain deps) ---
     libgmp-dev \
     libmpfr-dev \
@@ -29,13 +33,17 @@ RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
     libxml2-dev \
     libssl-dev \
-    libz-dev \
+    zlib1g-dev \
+    liblzma-dev \
+    libbz2-dev \
     uuid-dev \
+    # --- Headless browser runtime ---
+    libnspr4 \
+    libnss3 \
     # --- Build systems / scripting ---
     bc \
     cmake \
     python3 \
-    python3-distutils \
     python3-yaml \
     m4 \
     texinfo \
@@ -88,8 +96,10 @@ RUN apt-get update && apt-get install -y \
     mitmproxy \
     strace \
     ltrace \
+    radare2 \
     # --- Ruby / Jekyll static-site toolchain ---
     ruby-full \
+    bundler \
     libffi-dev \
     # --- Document conversion ---
     pandoc \
@@ -99,111 +109,65 @@ RUN apt-get update && apt-get install -y \
 
 ENV CURL_RETRY_FLAGS="--fail --silent --show-error --location --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 30"
 
-# 1b. Bundler — install the current release from RubyGems. apt's
-#      `bundler` is pinned to an older version that newer Gemfile.lock
-#      files (via their `BUNDLED WITH` line) frequently refuse to accept.
-RUN gem install bundler --no-document
-
 # 2a. Settings for the User
 
 # Use every CPU visible to the build container by default. Builds can be capped
 # with `--build-arg JOBS=<count>` when memory or host responsiveness requires it.
 ARG JOBS
 
-# Comment this out to make clang fully bootstrap itself
-# This makes the build take significantly longer
-ENV DISABLE_BOOTSTRAP=1
-
 # 2b. Set up environment
 
-ENV GCC_VERSION=4.2.1
-ENV APPLE_GCC=1
-ENV SDK_VERSION=10.5
-ENV OSX_VERSION_MIN=10.5
-ENV UNATTENDED=1
-ENV OSXCROSS_NO_DSYMUTIL=1
-ENV INSTALLPREFIX=/osxcross/target
-ENV LD_LIBRARY_PATH="/usr/lib/llvm-14/lib"
+ENV ALTIVEC_MODERN_TOOLCHAIN=/osxcross/modern \
+    ALTIVEC_LEGACY_TOOLCHAIN=/osxcross/legacy/target \
+    OSXCROSS_NO_DSYMUTIL=1
 
 # Host bind mounts often carry the macOS UID/GID, so Git running as root inside
 # the container otherwise rejects them as dubious ownership.
 RUN git config --system --add safe.directory "*"
 
-# 3. Install Radare to help with decompilation 
-#    and reverse engineering (optional)
-
-# NOTE: use the acr copy-install, NOT sys/install.sh — the latter is a
-# developer install that symlinks /usr/local/bin/* back into the build
-# tree, which the `rm -rf` below then deletes (→ dangling symlinks).
-RUN curl $CURL_RETRY_FLAGS -o /tmp/radare2.tar.xz \
-      https://github.com/radareorg/radare2/releases/download/6.1.4/radare2-6.1.4.tar.xz \
-    && tar xJf /tmp/radare2.tar.xz \
-    && cd radare2-6.1.4 \
-    && ./configure --prefix=/usr \
-    && make -j"${JOBS:-$(nproc)}" \
-    && make install \
-    && cd / && rm -rf radare2-6.1.4 /tmp/radare2.tar.xz \
-    && ldconfig \
-    && radare2 -v
-
-# 4. Copy OSXCross and build base toolchain
-WORKDIR /osxcross
-COPY docker/ ./docker/
-
-# 5. Build OSXCross and Compilers
-# Keep SDK/GCC source tarballs out of committed image layers. They are large,
-# and leaving them in an early layer can make the final image export fail even
-# when a later layer deletes /osxcross/tarballs.
-
-RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
-    echo "Pre-Build: Altivec Intelligence" \
-      && ./docker/prebuild.sh
-
-RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
-    echo "Build: osxcross" \
-      && JOBS="${JOBS:-$(nproc)}" ./build.sh
-
-RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
-    echo "Build: Apple GCC 4.2 (PPC)" \
-      && JOBS="${JOBS:-$(nproc)}" POWERPC=1 ./build_gcc_ppc.sh \
-      && rm -rf build
-RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
-    echo "Build: Apple GCC 4.2 (i386 + x86_64)" \
-      && JOBS="${JOBS:-$(nproc)}" ./build_gcc.sh \
-      && rm -rf build
-
-RUN --mount=type=cache,id=altivec-osxcross-tarballs,target=/osxcross/tarballs,sharing=locked \
-    echo "Post-Build: Altivec Intelligence" \
-      && ./postbuild.sh
-
-# 6. Keep native Linux tools ahead of osxcross by default. Ruby/Bundler and
+# 3. Keep native Linux tools ahead of OSXCross by default. Ruby/Bundler and
 # other host-native extension builds may invoke tools like `ld` indirectly
 # through GCC and do not always honor LD=/usr/bin/ld. Altivec makefiles invoke
 # osxcross compilers/linkers explicitly, or prepend /osxcross/target/bin only
 # for the commands that need it.
-ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/altivec/bin:/osxcross/target/bin" \
+ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/altivec/bin:/osxcross/modern/bin:/osxcross/legacy/target/bin" \
     CC=/usr/bin/gcc \
     CXX=/usr/bin/g++ \
     LD=/usr/bin/ld \
     AR=/usr/bin/ar
 
-# 7. Node.js 22 LTS (matches wrangler's supported runtime)
-RUN curl $CURL_RETRY_FLAGS -o /tmp/nodesource-setup.sh \
-      https://deb.nodesource.com/setup_22.x \
-    && bash /tmp/nodesource-setup.sh \
-    && rm -f /tmp/nodesource-setup.sh \
-    && apt-get install -y --no-install-recommends nodejs \
+# 7. Node.js 24 LTS (matches wrangler's supported runtime). Pin and verify the
+# NodeSource package itself: repository metadata signatures occasionally fail
+# under Docker Desktop even though the package and its checksums are valid.
+ARG TARGETARCH
+ARG NODE_VERSION=24.19.0
+RUN case "${TARGETARCH}" in \
+      amd64) NODE_SHA256=132518334c7b6a30cb77731ecd2951d59b7714d18f8e3ce6d970323b561a272d ;; \
+      arm64) NODE_SHA256=46bf2bf76991c7e1e9a2b7ceb5b232e516103ced363bcb2e0f16c740873fc2f7 ;; \
+      *) echo "Unsupported Node.js architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl $CURL_RETRY_FLAGS -o /tmp/nodejs.deb \
+      "https://deb.nodesource.com/node_24.x/pool/main/n/nodejs/nodejs_${NODE_VERSION}-1nodesource1_${TARGETARCH}.deb" \
+    && echo "${NODE_SHA256}  /tmp/nodejs.deb" | sha256sum -c - \
+    && apt-get install -y --no-install-recommends /tmp/nodejs.deb \
+    && rm -f /tmp/nodejs.deb \
     && rm -rf /var/lib/apt/lists/*
 
-# 8a. Fix broken npm bundled with nodesource, then install globals
+# 8a. Pin npm independently of the NodeSource package, then install globals
 RUN curl $CURL_RETRY_FLAGS -o /tmp/npm.tgz \
-      https://registry.npmjs.org/npm/-/npm-11.14.1.tgz \
+      https://registry.npmjs.org/npm/-/npm-12.0.2.tgz \
     && mkdir -p /tmp/npm-install \
     && tar xzf /tmp/npm.tgz -C /tmp/npm-install \
-    && node /tmp/npm-install/package/bin/npm-cli.js install -g npm@11.14.1 \
+    && node /tmp/npm-install/package/bin/npm-cli.js install -g npm@12.0.2 \
     && rm -rf /tmp/npm.tgz /tmp/npm-install
 
+# This development image intentionally installs the latest CLI releases, so
+# allow their install-time lifecycle scripts and verify the results below.
+
+COPY --chmod=0644 docker/npm-tool-smoke.mjs /usr/local/lib/altivec/npm-tool-smoke.mjs
+
 RUN npm install -g \
+      --dangerously-allow-all-scripts \
       wrangler \
       jsdom \
       qrcode-terminal \
@@ -215,6 +179,8 @@ RUN npm install -g \
       prettier \
       js-beautify \
       webcrack
+
+RUN node /usr/local/lib/altivec/npm-tool-smoke.mjs
 
 # 8b. Headless browser testing and MCP browser control. Keep Playwright in a
 #     separate layer so updating it does not reinstall every global npm tool.
@@ -229,6 +195,7 @@ ENV NODE_PATH=/usr/lib/node_modules \
     PLAYWRIGHT_MCP_OUTPUT_DIR=/cache/playwright-mcp
 
 RUN npm install -g \
+      --dangerously-allow-all-scripts \
       "@playwright/test@${PLAYWRIGHT_VERSION}" \
       "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"
 
@@ -238,7 +205,7 @@ RUN npm install -g \
 # The image runs as root, which requires Chromium's sandbox to be disabled;
 # MCP remains headless and uses an isolated in-memory profile by default.
 RUN set -eux; \
-    playwright install --with-deps --no-progress chromium; \
+    playwright install --no-progress chromium; \
     PLAYWRIGHT_CHROMIUM_PATH="$( \
       NODE_PATH="$(npm root -g)" \
       node -e 'process.stdout.write(require("@playwright/test").chromium.executablePath())' \
@@ -317,7 +284,7 @@ RUN set -eux; \
     rm -rf /tmp/ipsw.tar.gz /tmp/ipsw-install; \
     ipsw version
 
-# 9d. actionlint — Ubuntu 22.04 does not package it, so install the verified
+# 9d. actionlint — Ubuntu 26.04 does not package it, so install the verified
 #     upstream binary for each image architecture. Keep this behind the
 #     heavyweight toolchain layers so version bumps preserve their cache.
 ARG ACTIONLINT_VERSION=1.7.12
@@ -348,11 +315,8 @@ WORKDIR /repo/altivec
 ENTRYPOINT ["/bin/bash", "-lc"]
 CMD ["/bin/bash"]
 
-# /altivec/bin is already on PATH above so altivec-deploy, altivec-release, and
-# altivec-chooser are callable by bare name (no ./ prefix, no .sh extension).
-# That PATH lives in the base stage so the dev compose (which bind-mounts the
-# repo at /altivec and targets altivec-builder) gets the same PATH as the
-# prebuilt GHCR image — the bind-mount supplies the files at runtime.
+# /altivec/bin is already on PATH above, so runtime commands are callable by
+# bare name without a .sh extension.
 
 # Runtime caches should not default into /root, because many project compose
 # files bind-mount ~/.altivec there. /cache is intended to be backed by a
@@ -375,132 +339,50 @@ ENV ALTIVEC_CACHE=/cache \
 
 RUN mkdir -p /cache
 
-# Runtime helper scripts live in altivec-builder so every downstream image
-# stage inherits host-architecture-correct tools. `altivec-release` is an
-# interpreted Python script, but this placement keeps script validation and
-# future generated helpers in the per-architecture builder stage.
-COPY bin/ /altivec/bin/
+# Copy only inputs that can affect the SDK-dependent build before its expensive
+# RUN. Documentation and unrelated runtime helpers remain in later layers.
+COPY --chmod=0755 bin/altivec-sdk /altivec/bin/altivec-sdk
+COPY share/                   /altivec/share/
+COPY altivec_toolchains.mk    /altivec/
+COPY altivec_common_app.mk    /altivec/
+COPY altivec_common_mac.mk    /altivec/
+COPY altivec_common_phone.mk  /altivec/
+COPY libs/                    /altivec/libs/
+COPY apps/                    /altivec/apps/
+
+RUN mkdir -p /altivec-sdk && altivec-sdk --help >/dev/null
+
+# This is the only image instruction allowed to see Apple SDK archives. The
+# large, read-only `altivec_sdk` build context is mounted without being copied
+# into a layer. The mega script builds everything and purges installed SDKs
+# before the layer is committed.
+RUN --mount=type=bind,from=altivec_sdk,source=.,target=/altivec-sdk,readonly \
+    --mount=type=bind,source=docker,target=/build-sdk-dependent,readonly \
+    --mount=type=cache,id=altivec-libcurl-tarballs,target=/altivec/libs/libcurl/tarballs,sharing=locked \
+    --mount=type=cache,id=altivec-sqlite-tarballs,target=/altivec/libs/sqlite/tarballs,sharing=locked \
+    ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
+      /build-sdk-dependent/build-sdk-dependent.sh
+
+# The cache mounts above hide the source-tree tarball directories while the
+# mega script runs. Remove their restored image-layer contents and independently
+# verify the SDK-free runtime after the build-context mounts have disappeared.
+RUN rm -rf /altivec/libs/libcurl/tarballs /altivec/libs/sqlite/tarballs \
+ && altivec-sdk audit /osxcross \
+ && altivec-sdk audit /altivec \
+ && altivec-sdk audit /opt \
+ && altivec-sdk audit /usr/local
+
+COPY bin/                     /altivec/bin/
+COPY AGENTS.md README.md LICENSE /altivec/
+COPY docs/                    /altivec/docs/
+COPY templates/               /altivec/templates/
+
 RUN chmod +x /altivec/bin/* \
- && altivec-release --help >/dev/null
+ && altivec-release --help >/dev/null \
+ && altivec-sdk --help >/dev/null \
+ && ln -sf AGENTS.md /altivec/CLAUDE.md \
+ && ln -sf AGENTS.md /altivec/GEMINI.md \
+ && altivec-sdk audit /altivec
 
-# Clang automatically force-loads this path for pre-iOS-5 ARC links. Use the
-# Apple archive shipped by Xcode 6.4: it supports armv7/iOS 4.3 and predates
-# the objc_loadClassref dependency in modern Xcode's replacement archive.
-# Keep this stable input late in the builder stage so changing it does not
-# invalidate the unrelated OSXCross, Node, and native-tool installation layers.
-COPY --chmod=0644 toolchain/iOS/armv7/payload/lib/arc/libarclite_iphoneos.a /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a
-RUN set -eux; \
-    echo 'f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8  /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a' \
-      | sha256sum -c -; \
-    /osxcross/target/bin/lipo \
-      /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
-      -verify_arch armv7; \
-    strings /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
-      | grep -Fq -- '-miphoneos-version-min=4.3'; \
-    /usr/bin/llvm-nm-14 /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
-      | grep -Fq '_OBJC_METACLASS_$___ARCLite__'; \
-    if /usr/bin/llvm-nm-14 \
-        /usr/lib/llvm-14/lib/arc/libarclite_iphoneos.a \
-        | grep -Eq '[[:space:]]_objc_loadClassref$'; then \
-      echo 'error: ARCLite requires objc_loadClassref from a newer SDK' >&2; \
-      exit 1; \
-    fi
-
-# 11. GHCR image layer — bakes the Altivec runtime repo into /altivec/.
-#     Builds the shared AltivecCore and AltivecCocoa artifacts and ships their
-#     build outputs in the image so GHCR consumers do NOT have to
-#     re-run the slow cross-compile locally. The top-level `make all`
-#     target for each library produces:
-#       - Mac static libs plus dynamic frameworks
-#         (ppc/i386/x86_64/arm64).
-#       - Phone static libs only (armv7/arm64), because embedded iOS
-#         frameworks are not compatible with iOS 4.3-7 devices.
-#     The mk files in altivec_common_*.mk expect these build outputs under
-#     $(ALTIVEC_ROOT)/libs/{core,cocoa}/build-* — those paths resolve to
-#     /altivec/libs/{core,cocoa}/build-* here.
-#     Only built when explicitly targeted (docker compose skips it).
 FROM altivec-builder AS ghcr-action
 WORKDIR /altivec
-
-# Build AltivecCore first so this slow layer is not invalidated by trivial
-# changes elsewhere in the repo. `make all` builds the aggregate static
-# archives, the Mac framework, headers, and cacert.pem into build-* trees.
-# Dependency build trees are pruned afterward, but the component archives in
-# libs/core/build-* are retained so release asset staging can package the same
-# static library contents a direct `make all` build would produce.
-COPY libs/libcurl/ ./libs/libcurl/
-COPY libs/sqlite/  ./libs/sqlite/
-COPY libs/core/    ./libs/core/
-RUN --mount=type=cache,id=altivec-libcurl-tarballs,target=/altivec/libs/libcurl/tarballs,sharing=locked \
-    --mount=type=cache,id=altivec-sqlite-tarballs,target=/altivec/libs/sqlite/tarballs,sharing=locked \
-    set -e; \
-    cd libs/core; \
-    make all; \
-    make prune-intermediates; \
-    cd ../..; \
-    rm -rf libs/libcurl/build-mac libs/libcurl/build-phone \
-           libs/sqlite/build-mac libs/sqlite/build-phone
-RUN rm -rf libs/libcurl/tarballs libs/sqlite/tarballs
-
-# Build AltivecCocoa after Core. The separately run release-extras workflow
-# uses these exact image outputs to build and package the sample applications.
-COPY libs/cocoa/   ./libs/cocoa/
-RUN cd libs/cocoa && make all && make prune-intermediates
-
-# Ship common make fragments and sample source, but do not compile the samples
-# into the image. Each app includes the fragments from /altivec by absolute
-# path. Tagged sample binaries are release assets built from this image.
-COPY altivec_common_app.mk   ./
-COPY altivec_common_mac.mk   ./
-COPY altivec_common_phone.mk ./
-COPY apps/                   ./apps/
-
-# Validate the retained library layout and dry-run the sample build rules.
-# The real sample compilation is deliberately deferred to release extras.
-RUN set -e; \
-    test -f libs/core/build-mac/lib/libAltivecCore.a; \
-    test -f libs/core/build-phone/lib/libAltivecCore.a; \
-    test -f apps/CURLmac/AICURLConnection.m; \
-    test -f apps/CURLphone/AICURLConnection.m; \
-    test ! -e libs/core/build-mac/lib/libAICURLConnection.a; \
-    test ! -e libs/core/build-phone/lib/libAICURLConnection.a; \
-    test ! -e libs/core/build-mac/include/AICURLConnection.h; \
-    test ! -e libs/core/build-phone/include/AICURLConnection.h; \
-    test ! -e libs/core/build-mac/lib/AltivecCore.framework/Headers/AICURLConnection.h; \
-    test ! -d libs/libcurl/build-mac; \
-    test ! -d libs/libcurl/build-phone; \
-    test ! -d libs/sqlite/build-mac; \
-    test ! -d libs/sqlite/build-phone; \
-    test ! -d libs/sqlite/tarballs; \
-    test -f libs/core/build-phone/lib/cacert.pem; \
-    test ! -d libs/core/build-phone/lib/AltivecCore.framework; \
-    test -f libs/cocoa/build-phone/lib/libAltivecCocoa.a; \
-    test -f libs/cocoa/build-phone/Resources/Fonts/FA7-Solid-900.otf; \
-    test -f libs/cocoa/build-phone/Resources/Fonts/LICENSE-Font-Awesome.txt; \
-    test ! -d libs/cocoa/build-phone/lib/AltivecCocoa.framework; \
-    test -z "$(find apps -type d -name 'build-*' -print -quit)"; \
-    for app in SingleWindow SingleScreen CURLmac CURLphone; do \
-      make -C "apps/$app" -n release ALTIVEC_ROOT=/altivec >/dev/null; \
-    done; \
-    make -C apps/CURLphone -Bn release ALTIVEC_ROOT=/altivec \
-      PHONE_SOURCE_FLAGS=-fobjc-arc \
-      > /tmp/curlphone-arc-link-plan; \
-    awk '/Linking Phone universal/ { in_link = 1 }; \
-         in_link && /-Xarch_armv7 -fobjc-arc/ { found = 1 }; \
-         END { exit(found ? 0 : 1) }' \
-      /tmp/curlphone-arc-link-plan; \
-    rm -f /tmp/curlphone-arc-link-plan
-
-# Bake the rest of the runtime repo into /altivec/. Build-time-only files
-# (Containerfile, compose.yml, docker/, .github/) are deliberately
-# excluded. Kept after the runtime source so edits to docs/README/templates do
-# not invalidate the library layers.
-COPY AGENTS.md               ./
-COPY README.md               ./
-COPY LICENSE                 ./
-COPY docs/                   ./docs/
-COPY templates/              ./templates/
-
-# Recreate the AGENTS.md aliases that AI agents look for by name.
-RUN ln -sf AGENTS.md CLAUDE.md \
- && ln -sf AGENTS.md GEMINI.md

@@ -1,4 +1,5 @@
 .DS_Store
+.altivec-sdk/
 libs/*/build-*
 libs/*/tarballs
 !libs/sqlite/tarballs/

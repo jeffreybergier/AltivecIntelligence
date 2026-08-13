@@ -31,7 +31,7 @@ future architectures, but this build does not produce or promise an arm64
 package.
 
 The repository's MIT license covers the Altivec-authored build scripts and
-templates. The resulting package also contains independently licensed upstream
-software and an Apple ARCLite archive. Review those redistribution obligations
-before publishing the package publicly; the build's staged payload includes
-the upstream notices it currently collects.
+templates. The resulting iOS 6+ package contains independently licensed
+upstream software, but deliberately contains neither an Apple SDK nor ARCLite.
+Its SDK manager installs a checksum-verified, user-supplied SDK after deployment.
+Review the upstream redistribution obligations before publishing the package.

@@ -6,8 +6,13 @@ services:
     stdin_open: true
     tty: true
     working_dir: ${ALTIVEC_CONTAINER_REPO:-/workspace/AltivecIntelligence}/toolchain/iOS/armv7
+    environment:
+      ALTIVEC_SDK_ARCHIVE_DIR: /altivec-sdk
     volumes:
       - ~/.altivec:/root
+      - ${ALTIVEC_SDK_HOST_DIR:-../../../.altivec-sdk}:/altivec-sdk:ro
+      - altivec-sdk-legacy:/osxcross/legacy/target/SDK
+      - altivec-sdk-modern:/osxcross/modern/SDK
       - type: bind
         source: ../../..
         target: ${ALTIVEC_CONTAINER_REPO:-/workspace/AltivecIntelligence}
@@ -20,10 +25,19 @@ services:
   altivec:
     image: ghcr.io/jeffreybergier/altivec-intelligence:latest
     working_dir: ${ALTIVEC_CONTAINER_REPO:-/workspace/AltivecIntelligence}/toolchain/iOS/armv7
+    environment:
+      ALTIVEC_SDK_ARCHIVE_DIR: /altivec-sdk
     volumes:
       - ~/.altivec:/root
+      - ${ALTIVEC_SDK_HOST_DIR:-../../../.altivec-sdk}:/altivec-sdk:ro
+      - altivec-sdk-legacy:/osxcross/legacy/target/SDK
+      - altivec-sdk-modern:/osxcross/modern/SDK
       - type: bind
         source: ../../..
         target: ${ALTIVEC_CONTAINER_REPO:-/workspace/AltivecIntelligence}
     entrypoint: ["make"]
     command: ["help"]
+
+volumes:
+  altivec-sdk-legacy:
+  altivec-sdk-modern:

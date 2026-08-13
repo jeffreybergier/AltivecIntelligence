@@ -13,6 +13,10 @@
 + (void)buildWindowMenu:(NSMenu *)mainMenu;
 @end
 
+@interface AppDelegate (Private)
+- (void)showWindow;
+@end
+
 @implementation MainMenu
 
 + (void)setupMenu;
@@ -117,8 +121,35 @@
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification;
 {
   (void)aNotification;
+  [self showWindow];
+}
+
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)sender
+                     hasVisibleWindows:(BOOL)flag;
+{
+  (void)sender;
+  (void)flag;
+  [self showWindow];
+  return YES;
+}
+
+- (void)windowWillClose:(NSNotification *)aNotification;
+{
+  if ([aNotification object] == window_) {
+    window_ = nil;
+  }
+}
+
+- (void)showWindow;
+{
+  if (window_ != nil) {
+    [window_ makeKeyAndOrderFront:self];
+    return;
+  }
+
   NSRect frame = NSMakeRect(0, 0, 400, 400);
   XPWindowStyleMask styleMask = XPWindowStyleMaskTitled 
+                              | XPWindowStyleMaskClosable
                               | XPWindowStyleMaskMiniaturizable 
                               | XPWindowStyleMaskResizable;
   
@@ -126,17 +157,15 @@
                                          styleMask:styleMask
                                            backing:NSBackingStoreBuffered
                                              defer:NO];
-  
+
+  /* Closing the window balances the allocation. The delegate callback above
+   * clears |window_| before the object is released. */
+  [window_ setReleasedWhenClosed:YES];
+  [window_ setDelegate:self];
   [window_ setTitle:@"SingleWindow (Red)"];
   [window_ setBackgroundColor:[NSColor redColor]];
   [window_ center];
   [window_ makeKeyAndOrderFront:self];
-}
-
-- (void)dealloc;
-{
-  [window_ release];
-  [super dealloc];
 }
 
 @end

@@ -61,7 +61,7 @@ static: $(PUBLIC_LIBS) $(PUBLIC_LIB_DIR)/cacert.pem \
 
 dynamic:
 	@echo " [!] ERROR: iOS AltivecCore.framework is no longer supported."
-	@echo "     Use static linkage for iOS 4.3-7 compatibility."
+	@echo "     Use static linkage for legacy iOS compatibility."
 	@exit 1
 
 curl-ready:
@@ -125,12 +125,12 @@ $(INTERMEDIATE)/thin/arm64/libAltivecCoreWrapper.a: AltivecCore.m \
 $(PREFIX)/armv7/lib/libAltivecCore.a: $(CORE_INPUTS_ARMV7)
 	@echo "--- Aggregating AltivecCore static archive (armv7) ---"
 	mkdir -p $(PREFIX)/armv7/lib
-	$(LIBTOOL_MODERN) -static --no_warning_for_no_symbols -o $@ $^
+	$(LIBTOOL_MODERN) -static -no_warning_for_no_symbols -o $@ $^
 
 $(PREFIX)/arm64/lib/libAltivecCore.a: $(CORE_INPUTS_ARM64)
 	@echo "--- Aggregating AltivecCore static archive (arm64) ---"
 	mkdir -p $(PREFIX)/arm64/lib
-	$(LIBTOOL_MODERN) -static --no_warning_for_no_symbols -o $@ $^
+	$(LIBTOOL_MODERN) -static -no_warning_for_no_symbols -o $@ $^
 
 $(PREFIX)/lib/libAltivecCore.a: $(PREFIX)/armv7/lib/libAltivecCore.a \
                                 $(PREFIX)/arm64/lib/libAltivecCore.a
@@ -228,13 +228,13 @@ verify-phone: $(PUBLIC_LIBS)
 			}; \
 		done; \
 	done; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=armv7 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (armv7)"; missing=1; }; \
-	if $(NM) --defined-only --extern-only --arch=arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q 'AICURLConnection'; then echo " [!] ERROR: aggregate still exports AICURLConnection (arm64)"; missing=1; fi; \
+	$(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _curl_easy_init' || { echo " [!] ERROR: aggregate missing _curl_easy_init (arm64)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _sqlite3_open' || { echo " [!] ERROR: aggregate missing _sqlite3_open (arm64)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _cJSON_Parse' || { echo " [!] ERROR: aggregate missing _cJSON_Parse (arm64)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (arm64)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q '_OBJC_CLASS_$$_AltivecCore' || { echo " [!] ERROR: aggregate missing AltivecCore class (arm64)"; missing=1; }; \
+	$(NM) -gU -arch armv7 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q ' T _AltivecCoreCertPath' || { echo " [!] ERROR: aggregate missing _AltivecCoreCertPath (armv7)"; missing=1; }; \
+	if $(NM) -gU -arch arm64 $(PUBLIC_LIB_DIR)/libAltivecCore.a 2>/dev/null | grep -q 'AICURLConnection'; then echo " [!] ERROR: aggregate still exports AICURLConnection (arm64)"; missing=1; fi; \
 	test ! -e $(PUBLIC_INCLUDE_DIR)/AICURLConnection.h || { echo " [!] ERROR: AICURLConnection.h is still public"; missing=1; }; \
 	test ! -e $(PUBLIC_INCLUDE_DIR)/AltivecCore/AICURLConnection.h || { echo " [!] ERROR: nested AICURLConnection.h is still public"; missing=1; }; \
 	exit $$missing

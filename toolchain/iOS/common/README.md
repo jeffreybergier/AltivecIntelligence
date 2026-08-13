@@ -6,7 +6,8 @@ These helpers are shared iOS package inputs:
 - `altivec-profile.sh` configures the installed `/var/altivec` environment.
 - `altivec-sdk.sh` manages SDKs and selects an architecture supported by both
   the installed compiler and SDK.
-- `iphoneos-sdk-catalog.json` pins the supported SDK downloads and checksums.
+- `../../../share/altivec-sdk/catalog.json` pins the supported SDK downloads,
+  checksums, architectures, and deployment targets.
 - `sdk-manager-check.sh` validates the SDK manager and catalog together.
 
 The armv7 package references these files from `../common/helpers`; it installs

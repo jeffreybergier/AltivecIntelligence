@@ -1,7 +1,10 @@
 # AltivecIntelligence libcurl Master Makefile
 # This Makefile orchestrates the build for Phone and Mac
 
+include ../../altivec_toolchains.mk
+
 all: phone-static mac-static
+all phone-static mac-static phone mac: | altivec-sdk-ensure
 
 # --- Static Targets ---
 phone-static:

@@ -4,13 +4,13 @@ Hi, you are an AI programming assistant helping the user develop and deploy apps
 
 ## 🎯 Core Targets
 - **Mac:** Tiger (10.4) through modern macOS (Apple Silicon).
-- **iPhone:** iOS 4.3 through modern iOS (arm64).
+- **iPhone:** iOS 5.0 through modern iOS (arm64).
 - **Legacy Compatibility:** Mac apps targeting 10.4/10.5 must use manual memory management (MRC) and avoid modern Objective-C features like Properties or Blocks (unless using Plausible Blocks).
 
 ## 📜 Development Rules
 - **MRC Mandatory:** For Mac apps targeting 10.4/10.5, always use `retain`, `release`, and `autorelease`. Use manual getters and setters.
 - **Legacy APIs:** Always verify API compatibility against the 10.5 headers. Warn the user if they attempt to use symbols that break Tiger/Leopard compatibility.
-- **Modern Features:** iPhone apps (iOS 4.3+) can use properties and modern features, but be cautious with code shared between Mac and iPhone targets.
+- **Modern Features:** iPhone apps (iOS 5.0+) can use properties and modern features, but be cautious with code shared between Mac and iPhone targets.
 - **Warnings** Make sure you always tell the user when there are warnings as
 this likely indicates the app will crash on older systems. The exception is 
 deprecation warnings as those will be common when dealing with these old API's.
@@ -30,18 +30,24 @@ deprecation warnings as those will be common when dealing with these old API's.
 # AltivecIntelligence: Environment Summary
 
 ## 🛠 Toolchain Overview
-- **Primary Toolchain:** OSXCross 0.13 (ppc-test branch)
-- **Host Architecture:** Ubuntu 22 (aarch64/x86_64)
-- **Toolchain Path:** `/osxcross/target/bin` (on `PATH`)
+- **Modern Toolchain:** Current pinned OSXCross stable build at `/osxcross/modern` (Clang 21 plus current cctools/ld64).
+- **Legacy Toolchain:** Pinned OSXCross `ppc-test` build at `/osxcross/legacy/target` (Apple GCC 4.2.1 plus PowerPC-capable cctools/ld64).
+- **Legacy Host Build:** Ubuntu Clang 21 compiles the C portions of legacy cctools, while packaged G++ 14 compiles its antique ld64 C++ sources; generated Darwin code still uses Apple GCC 4.2.1.
+- **Host Architecture:** Ubuntu 26.04 (aarch64/x86_64)
+- **Compatibility Path:** `/osxcross/target` is a symlink to `/osxcross/modern`; build files should use `altivec_toolchains.mk` rather than assuming this alias.
 - **Altivec Root:** `/altivec` (runtime repo baked into the image — `altivec_common_*.mk`, example app sources, prebuilt `libs/{core,cocoa}/build-{mac,phone}` outputs, `templates/`, and `bin/`). Sample binaries and the optional jailbroken-device toolchain are release assets, not image contents.
 - **User Root:** `/repo/user` (the user's app project, mounted from the host)
 - **Altivec Scripts on PATH:** `/altivec/bin` provides `altivec-deploy` (push/run an app on real hardware) and `altivec-chooser` (interactive AI CLI launcher)
 
-## 📦 Installed SDKs
-Located in /osxcross/target/SDK/:
-1. MacOSX10.5.sdk: Legacy SDK used for PowerPC and 32-bit Intel slices (Tiger/Leopard compatibility).
-2. MacOSX11.3.sdk: Modern SDK used for both 64-bit Intel (x86_64) and Apple Silicon (arm64) slices.
-3. iPhoneOS8.4.sdk: Comprehensive SDK for legacy and modern iPhone devices.
+## 📦 Provisioned SDKs
+
+The image contains no Apple SDKs. `altivec-sdk ensure` verifies archives from
+`/altivec-sdk` (or `ALTIVEC_SDK_ARCHIVE_DIR`) and installs them into the Compose
+SDK volumes at these paths:
+
+1. `/osxcross/legacy/target/SDK/MacOSX10.5.sdk`: PowerPC and 32-bit Intel slices.
+2. `/osxcross/modern/SDK/MacOSX11.3.sdk`: 64-bit Intel and Apple Silicon slices.
+3. `/osxcross/modern/SDK/iPhoneOS8.4.sdk`: armv7 and arm64 iPhone slices.
 
 
 ## ⚔️ Build Matrix
@@ -49,13 +55,13 @@ Located in /osxcross/target/SDK/:
 | Target | Compiler | SDK | Architectures | Optimization |
 | :--- | :--- | :--- | :--- | :--- |
 | **Mac (Legacy)** | `oppc32-gcc` / `o32-gcc` | 10.5 | ppc, i386 (32-bit) | -O3 / -O0 |
-| **Mac (Modern)**| `clang-14` | 11.3 | x86_64, arm64 (64-bit) | -O3 / -O0 |
-| **iPhone** | `clang-14` | 8.4 | armv7, arm64 | -O3 / -O0 |
+| **Mac (Modern)**| OSXCross Clang 21 wrappers | 11.3 | x86_64, arm64 (64-bit) | -O3 / -O0 |
+| **iPhone** | Ubuntu Clang 21 + current cctools | 8.4 | armv7, arm64 | -O3 / -O0 |
 
 ## 🔗 Library Build System (AltivecCore)
 Libraries (libcurl, OpenSSL, zlib, SQLite, cJSON) are built as static binaries (`.a`). Mac builds also bundle them into `AltivecCore.framework`.
 - **Orchestration:** `/altivec/libs/core/Makefile` manages separate `Makefile-mac` and `Makefile-phone` builds. Prebuilt outputs ship in the GHCR image at `/altivec/libs/core/build-{mac,phone}` — user apps opt in with `ALTIVECCORE_REQUIRED=1`.
-- **iPhone Linkage:** iPhone apps use static AltivecCore linkage only. Embedded iOS frameworks require iOS 8+ and are not supported for the iOS 4.3-7 compatibility target.
+- **iPhone Linkage:** iPhone apps use static AltivecCore linkage only. Embedded iOS frameworks require iOS 8+ and are not supported for the iOS 5-7 compatibility target.
 - **CURL Sample Wrapper**: `AICURLConnection` is private source in the CURLmac
   and CURLphone sample apps. It is not built or exported by AltivecCore.
   AI-authored app code should use `libcurl` directly.
@@ -115,7 +121,7 @@ Logs must use a 1-space indentation increment and the `>` symbol for details:
 ```
 
 ### 3. Debug Symbols (dSYMs)
-- Status: Fully operational for X64 and ARM64 slices using system dsymutil-14. Legacy PPC and i386 symbols are primarily embedded in the binary.
+- Status: Fully operational for X64 and ARM64 slices using the system LLVM 21 `dsymutil`. Legacy PPC and i386 symbols are primarily embedded in the binary.
 
 - **Location:** Produced in the root of the build folder (e.g., `SingleWindow.X64.dSYM`).
 

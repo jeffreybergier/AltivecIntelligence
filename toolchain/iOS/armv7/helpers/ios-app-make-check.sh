@@ -41,8 +41,8 @@ for template_file in \
     die "iOS app project template is missing: ${template_file}"
 done
 
-grep -Fqx 'IPHONEOS_DEPLOYMENT_TARGET ?= 4.3' "$common_makefile" ||
-  die 'common Makefile does not default app builds to iOS 4.3'
+grep -Fqx 'IPHONEOS_DEPLOYMENT_TARGET ?= 5.0' "$common_makefile" ||
+  die 'common Makefile does not default app builds to iOS 5.0'
 grep -Fqx 'APP_USE_ARC ?= 1' "$common_makefile" ||
   die 'common Makefile does not default app builds to ARC'
 grep -Fqx 'BUNDLE_LOCALIZATION_DIRS ?=' "$common_makefile" ||
@@ -134,7 +134,6 @@ mkdir -p \
   "$check_root/fake-prefix/Libraries/1.0.9/AltivecCocoa/include" \
   "$check_root/fake-prefix/Libraries/1.0.9/AltivecCocoa/lib" \
   "$check_root/fake-prefix/Libraries/1.0.9/Bundle/Fonts" \
-  "$check_root/fake-prefix/lib/arc" \
   "$check_root/fake-prefix/share/altivec-lib" \
   "$check_root/fake-prefix/share/altivec/make" \
   "$check_root/fake-prefix/SDKs/Current.sdk/System/Library/Frameworks/UIKit.framework/Headers"
@@ -156,9 +155,6 @@ printf '%s\n' '/* fake cocoa header */' \
   > "$managed_root/AltivecCocoa/include/AltivecCocoa.h"
 printf '%s\n' 'managed CA bundle' > "$managed_root/Bundle/cacert.pem"
 printf '%s\n' 'managed font' > "$managed_root/Bundle/Fonts/font.ttf"
-printf '%s\n' 'fake ARC compatibility archive' \
-  > "$check_root/fake-prefix/lib/arc/libarclite_iphoneos.a"
-
 {
   printf '%s\n' 'ALTIVEC_MANAGED_VERSION := 1.0.9'
   printf 'ALTIVEC_MANAGED_ROOT := %s\n' "$managed_root"
@@ -269,7 +265,7 @@ make -C "$check_root/project" --no-print-directory -n release \
   > "$check_root/ios6-override-dry-run.txt"
 make -C "$check_root/project" --no-print-directory -n release \
   ALTIVEC_PREFIX="$fake_prefix" APP_USE_ARC=0 \
-  > "$check_root/ios43-mrc-dry-run.txt"
+  > "$check_root/ios5-mrc-dry-run.txt"
 
 grep -Fq 'ValidationApp.app' "$check_root/release-dry-run.txt" ||
   die 'release dry run does not assemble an .app'
@@ -279,16 +275,16 @@ grep -Fq -- '--analyze' "$check_root/analyze-dry-run.txt" ||
   die 'analyze dry run does not invoke the Clang analyzer'
 grep -Fq 'ValidationApp.ipa' "$check_root/default-dry-run.txt" ||
   die 'release is not the default repository target'
-grep -Fq -- '--target=armv7-apple-ios4.3' \
+grep -Fq -- '--target=armv7-apple-ios5.0' \
   "$check_root/release-dry-run.txt" ||
-  die 'release does not use the default iOS 4.3 target triple'
-grep -Fq -- '-miphoneos-version-min=4.3' \
+  die 'release does not use the default iOS 5.0 target triple'
+grep -Fq -- '-miphoneos-version-min=5.0' \
   "$check_root/release-dry-run.txt" ||
-  die 'release does not pass the iOS 4.3 deployment target'
+  die 'release does not pass the iOS 5.0 deployment target'
 grep -Fq -- '-fobjc-arc' "$check_root/release-dry-run.txt" ||
-  die 'default iOS 4.3 release does not enable ARC'
-if grep -Fq -- '-fobjc-arc' "$check_root/ios43-mrc-dry-run.txt"; then
-  die 'APP_USE_ARC=0 did not disable ARC for iOS 4.3'
+  die 'default iOS 5.0 release does not enable ARC'
+if grep -Fq -- '-fobjc-arc' "$check_root/ios5-mrc-dry-run.txt"; then
+  die 'APP_USE_ARC=0 did not disable ARC for iOS 5.0'
 fi
 grep -Fq -- '--target=armv7-apple-ios6.0' \
   "$check_root/ios6-override-dry-run.txt" ||

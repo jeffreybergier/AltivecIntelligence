@@ -80,7 +80,7 @@ readonly CCTOOLS_PROGRAM_PREFIX="arm-apple-darwin11-"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "${script_dir}/.." && pwd -P)"
 readonly cctools_patch="${script_dir}/cctools-ld64-armv7-atomic-alignment.patch"
-readonly cctools_ios43_patch="${script_dir}/cctools-ld64-ios43-deployment-floor.patch"
+readonly cctools_ios5_patch="${script_dir}/cctools-ld64-ios5-deployment-floor.patch"
 readonly imagemagick_patch="${script_dir}/imagemagick-ios-target-conditionals.patch"
 readonly gnu_make_patch="${script_dir}/make-ios-portable-ar-header.patch"
 readonly jq_patch="${script_dir}/jq-ios6-exp10.patch"
@@ -100,12 +100,13 @@ work_dir="${repo_root}/build-release/Intermediates/core-tools-armv7"
 archives_dir_input=""
 sources_dir_input=""
 sdk_dir="/osxcross/target/SDK/iPhoneOS8.4.sdk"
+macos_compat_sdk="/osxcross/legacy/target/SDK/MacOSX10.5.sdk"
 cctools_bin="/osxcross/target/bin"
 deployment_target="6.0"
 jobs="2"
 install_prefix="/var/altivec"
-cc="/usr/bin/clang-14"
-cxx="/usr/bin/clang++-14"
+cc="/usr/bin/clang"
+cxx="/usr/bin/clang++"
 ldid_signer="ldid"
 
 usage() {
@@ -144,6 +145,7 @@ usage() {
     "  --archives-dir <path>      Downloaded source archives." \
     "  --sources-dir <path>       Extracted source trees." \
     "  --sdk <path>               iPhoneOS SDK." \
+    "  --macos-compat-sdk <path>  Legacy macOS SDK used for missing headers." \
     "  --cctools-bin <path>       Host Mach-O tools and Apple linker." \
     "  --deployment-target <ver>  Minimum iOS version (default: 6.0)." \
     "  --jobs <count>             Parallel build jobs (default: 2)." \
@@ -179,6 +181,11 @@ while (($# > 0)); do
     --sdk)
       (($# >= 2)) || die "--sdk requires a value"
       sdk_dir="$2"
+      shift 2
+      ;;
+    --macos-compat-sdk)
+      (($# >= 2)) || die "--macos-compat-sdk requires a value"
+      macos_compat_sdk="$2"
       shift 2
       ;;
     --cctools-bin)
@@ -253,6 +260,7 @@ else
   sources_dir="${work_dir}/sources"
 fi
 sdk_dir="$(realpath -m "$sdk_dir")"
+macos_compat_sdk="$(realpath -m "$macos_compat_sdk")"
 cctools_bin="$(realpath -m "$cctools_bin")"
 
 case "${work_dir}/" in
@@ -284,6 +292,8 @@ done
 [[ "$archives_dir" != "$sources_dir" ]] ||
   die "archive and extracted-source directories must differ"
 [[ -d "$sdk_dir" ]] || die "iPhoneOS SDK not found: ${sdk_dir}"
+[[ -d "$macos_compat_sdk" ]] ||
+  die "legacy macOS compatibility SDK not found: ${macos_compat_sdk}"
 
 resolve_tool() {
   local requested="$1"
@@ -313,11 +323,11 @@ pkg_config="$(resolve_tool pkg-config)" ||
   die "pkg-config not found"
 readonly pkg_config
 
-readonly macho_ar="${cctools_bin}/x86_64-apple-darwin9-ar"
-readonly macho_ranlib="${cctools_bin}/x86_64-apple-darwin9-ranlib"
-readonly macho_nm="${cctools_bin}/x86_64-apple-darwin9-nm"
-readonly macho_strip="${cctools_bin}/x86_64-apple-darwin9-strip"
-readonly macho_otool="${cctools_bin}/x86_64-apple-darwin9-otool"
+readonly macho_ar="${cctools_bin}/ar"
+readonly macho_ranlib="${cctools_bin}/ranlib"
+readonly macho_nm="${cctools_bin}/nm"
+readonly macho_strip="${cctools_bin}/strip"
+readonly macho_otool="${cctools_bin}/otool"
 
 for required_tool in \
   bash bison cmake curl unzip tar patch make perl sha256sum realpath file \
@@ -332,7 +342,7 @@ for required_tool in \
 done
 
 for required_file in \
-  "$cctools_patch" "$cctools_ios43_patch" \
+  "$cctools_patch" "$cctools_ios5_patch" \
   "$imagemagick_patch" "$gnu_make_patch" "$jq_patch" \
   "$imagemagick_policy" "$imagemagick_delegates" \
   "$extra_tools_builder" "$extra_ps_patch" "$mandoc_config_template"; do
@@ -584,6 +594,7 @@ run_extra_tools() {
     --archives-dir "$archives_dir" \
     --sources-dir "${sources_dir}/extra-tools" \
     --sdk "$sdk_dir" \
+    --macos-compat-sdk "$macos_compat_sdk" \
     --cctools-bin "$cctools_bin" \
     --deployment-target "$deployment_target" \
     --jobs "$jobs" \
@@ -613,8 +624,8 @@ prepare_sources() {
     "ld64 ARMv7 64-bit counter alignment fix"
   apply_source_patch_once \
     "$cctools_source" \
-    "$cctools_ios43_patch" \
-    "ld64 iOS 4.3 deployment floor"
+    "$cctools_ios5_patch" \
+    "ld64 iOS 5.0 deployment floor"
 
   fetch_archive \
     "$ldid_archive" \
@@ -971,11 +982,11 @@ build_cctools() {
   local cc_command=""
   local cxx_command=""
   local patch_sha=""
-  local ios43_patch_sha=""
+  local ios5_patch_sha=""
 
   patch_sha="$(sha256sum "$cctools_patch" | awk '{print $1}')"
-  ios43_patch_sha="$(sha256sum "$cctools_ios43_patch" | awk '{print $1}')"
-  key="cctools=${CCTOOLS_COMMIT};patches=${patch_sha},${ios43_patch_sha};sdk=${sdk_dir};target=${target_triple};cc=${cc}:$(compiler_version "$cc");cxx=${cxx}:$(compiler_version "$cxx");prefix=${install_prefix}"
+  ios5_patch_sha="$(sha256sum "$cctools_ios5_patch" | awk '{print $1}')"
+  key="cctools=${CCTOOLS_COMMIT};patches=${patch_sha},${ios5_patch_sha};sdk=${sdk_dir};target=${target_triple};cc=${cc}:$(compiler_version "$cc");cxx=${cxx}:$(compiler_version "$cxx");prefix=${install_prefix}"
   prepare_component "$cctools_root" "$key"
   mkdir -p "$cctools_build" "$cctools_stage"
 

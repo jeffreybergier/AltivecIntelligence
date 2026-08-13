@@ -1,7 +1,10 @@
 # AltivecIntelligence AltivecCocoa Master Makefile
 # Builds AltivecCocoa as a phone static library and Mac static/framework artifacts.
 
+include ../../altivec_toolchains.mk
+
 all: mac-all phone-all
+all mac-static mac-dynamic mac-all mac phone-static phone-all phone: | altivec-sdk-ensure
 
 mac-static:
 	@echo "==========================================================="

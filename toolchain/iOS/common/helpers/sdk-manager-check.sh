@@ -32,13 +32,13 @@ readonly manager_script catalog_path
 bash -n "$manager_script"
 
 jq -e '
-  .schema == 1 and
-  .source.repository == "okanon/iPhoneOS.sdk" and
-  .source.release_tag == "v0.0.1" and
-  .source.release_url ==
+  .schema == 2 and
+  .device_source.repository == "okanon/iPhoneOS.sdk" and
+  .device_source.release_tag == "v0.0.1" and
+  .device_source.release_url ==
     "https://github.com/okanon/iPhoneOS.sdk/releases/tag/v0.0.1" and
-  (.sdks | type == "array" and length == 6) and
-  (all(.sdks[];
+  (.device_sdks | type == "array" and length == 6) and
+  (all(.device_sdks[];
     (.version | type == "string" and
       test("^[0-9]+[.][0-9]+$")) and
     (.directory | type == "string") and
@@ -58,19 +58,19 @@ jq -e '
           type == "string" and test("^[0-9]+[.][0-9]+$")))) and
     (. as $sdk |
       if ($sdk.architectures | index("armv7")) != null then
-        $sdk.deployment_targets.armv7 == "4.3"
+        $sdk.deployment_targets.armv7 == "5.0"
       else
         true
       end) and
     (.linker_input == "dylib" or .linker_input == "tapi")
   )) and
-  ([.sdks[].version] | unique | length) == (.sdks | length) and
-  ([.sdks[].directory] | unique | length) == (.sdks | length) and
-  ([.sdks[].archive] | unique | length) == (.sdks | length) and
-  ([.sdks[].url] | unique | length) == (.sdks | length) and
-  ([.sdks[].sha256] | unique | length) == (.sdks | length) and
-  ([.sdks[].version] == ["8.4", "9.3", "10.3", "11.4", "12.4", "13.2"]) and
-  (.sdks[0].sha256 ==
+  ([.device_sdks[].version] | unique | length) == (.device_sdks | length) and
+  ([.device_sdks[].directory] | unique | length) == (.device_sdks | length) and
+  ([.device_sdks[].archive] | unique | length) == (.device_sdks | length) and
+  ([.device_sdks[].url] | unique | length) == (.device_sdks | length) and
+  ([.device_sdks[].sha256] | unique | length) == (.device_sdks | length) and
+  ([.device_sdks[].version] == ["8.4", "9.3", "10.3", "11.4", "12.4", "13.2"]) and
+  (.device_sdks[0].sha256 ==
     "677be5a92577c5e29cbab6067a9a624a3369af1cc00578941565886ea6a0a7da")
 ' "$catalog_path" >/dev/null ||
   die 'SDK catalog schema or pinned metadata is invalid'
@@ -85,12 +85,12 @@ while IFS=$'\t' read -r version directory archive url; do
   [[ "$url" == "${download_prefix}/${archive}" ]] ||
     die "catalog URL is outside the pinned release: ${url}"
 done < <(
-  jq -r '.sdks[] | [.version, .directory, .archive, .url] | @tsv' \
+  jq -r '.device_sdks[] | [.version, .directory, .archive, .url] | @tsv' \
     "$catalog_path"
 )
 
 printf 'SDK manager inputs are valid: %s catalog entries.\n' \
-  "$(jq -r '.sdks | length' "$catalog_path")"
+  "$(jq -r '.device_sdks | length' "$catalog_path")"
 
 check_root="$(mktemp -d "${TMPDIR:-/tmp}/altivec-sdk-check.XXXXXX")"
 readonly check_root

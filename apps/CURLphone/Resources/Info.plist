@@ -23,7 +23,7 @@
 	<key>CFBundleVersion</key>
 	<string>1.0.12</string>
 	<key>MinimumOSVersion</key>
-	<string>4.3</string>
+	<string>5.0</string>
 	<key>NSPrincipalClass</key>
 	<string>UIApplication</string>
 </dict>

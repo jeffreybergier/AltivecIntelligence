@@ -27,7 +27,7 @@ CACERT_URLS=https://curl.se/ca/cacert.pem
 IOS_ARM64_MIN_VER=7.0
 IOS_V7_FLAGS=-target armv7-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch armv7 -B$(BIN_DIR)
 IOS_64_FLAGS=-target arm64-apple-ios$(IOS_ARM64_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch arm64 -B$(BIN_DIR)
-OPENSSL_CFLAGS=-Wno-overriding-t-option
+OPENSSL_CFLAGS=-Wno-overriding-option
 
 ZLIB_TARBALL=$(TARBALL_DIR)/zlib-$(ZLIB_VER).tar.gz
 OPENSSL_TARBALL=$(TARBALL_DIR)/openssl-$(OPENSSL_VER).tar.gz
@@ -108,7 +108,7 @@ $(STAMP_DIR)/zlib-armv7: $(STAMP_DIR)/zlib-armv7-source
 	cd $(ZLIB_ARMV7_SRC) && \
 	./configure --static --prefix=$(PREFIX)/armv7 && \
 	sed -i 's|^CC=.*|CC=$(COMPILER_IOS) $(IOS_V7_FLAGS)|g' Makefile && \
-	sed -i 's|^CFLAGS=.*|CFLAGS=$(OPT_FLAGS)|g' Makefile && \
+	sed -i 's|^CFLAGS=.*|CFLAGS=$(ZLIB_MODERN_CFLAGS)|g' Makefile && \
 	sed -i 's|^AR=.*|AR=$(AR_MODERN)|g' Makefile && \
 	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MODERN)|g' Makefile && \
 	make -j$(JOBS) ARFLAGS="rc" install
@@ -119,7 +119,7 @@ $(STAMP_DIR)/zlib-arm64: $(STAMP_DIR)/zlib-arm64-source
 	cd $(ZLIB_ARM64_SRC) && \
 	./configure --static --prefix=$(PREFIX)/arm64 && \
 	sed -i 's|^CC=.*|CC=$(COMPILER_IOS) $(IOS_64_FLAGS)|g' Makefile && \
-	sed -i 's|^CFLAGS=.*|CFLAGS=$(OPT_FLAGS)|g' Makefile && \
+	sed -i 's|^CFLAGS=.*|CFLAGS=$(ZLIB_MODERN_CFLAGS)|g' Makefile && \
 	sed -i 's|^AR=.*|AR=$(AR_MODERN)|g' Makefile && \
 	sed -i 's|^RANLIB=.*|RANLIB=$(RANLIB_MODERN)|g' Makefile && \
 	make -j$(JOBS) ARFLAGS="rc" install

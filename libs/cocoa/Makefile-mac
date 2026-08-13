@@ -25,8 +25,8 @@ COCOA_FONT_NOTICE=Resources/Fonts/LICENSE-Font-Awesome.txt
 
 PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(LEGACY_GCC_FLAGS)
 X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH) $(LEGACY_GCC_FLAGS)
-X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_X64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
-ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -Wl,-platform_version,macos,$(MAC_MIN_ARM64),11.3 -fuse-ld=$(LD64_LLD) -B$(BIN_DIR)
+X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -B$(BIN_DIR)
+ARM64_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -B$(BIN_DIR)
 X64_COMPILE_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -B$(BIN_DIR)
 ARM64_COMPILE_FLAGS=-target arm64-apple-macos$(MAC_MIN_ARM64) -isysroot $(SDK_ARM64_PATH) -B$(BIN_DIR)
 
@@ -260,10 +260,10 @@ verify-dynamic: $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME)
 	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Fonts/FA7-Regular-400.otf || { echo " [!] ERROR: FA7-Regular-400.otf missing"; missing=1; }; \
 	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Fonts/FA7-Brands-400.otf || { echo " [!] ERROR: FA7-Brands-400.otf missing"; missing=1; }; \
 	test -f $(FRAMEWORK_VERSION_DIR)/Resources/Fonts/LICENSE-Font-Awesome.txt || { echo " [!] ERROR: Font Awesome license notice missing"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIViewController' || { echo " [!] ERROR: AIViewController class not exported (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIFontAwesome' || { echo " [!] ERROR: AIFontAwesome class not exported (arm64)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIViewController' || { echo " [!] ERROR: AIViewController class not exported (ppc)"; missing=1; }; \
-	$(NM) --defined-only --extern-only --arch=ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIFontAwesome' || { echo " [!] ERROR: AIFontAwesome class not exported (ppc)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIViewController' || { echo " [!] ERROR: AIViewController class not exported (arm64)"; missing=1; }; \
+	$(NM) -gU -arch arm64 $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '_OBJC_CLASS_$$_AIFontAwesome' || { echo " [!] ERROR: AIFontAwesome class not exported (arm64)"; missing=1; }; \
+	$(NM) -gU -arch ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIViewController' || { echo " [!] ERROR: AIViewController class not exported (ppc)"; missing=1; }; \
+	$(NM) -gU -arch ppc $(FRAMEWORK_BUNDLE)/$(FRAMEWORK_NAME) 2>/dev/null | grep -q '.objc_class_name_AIFontAwesome' || { echo " [!] ERROR: AIFontAwesome class not exported (ppc)"; missing=1; }; \
 	exit $$missing
 
 prune-build-files:

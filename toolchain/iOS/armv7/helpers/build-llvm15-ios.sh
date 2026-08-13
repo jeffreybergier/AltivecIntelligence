@@ -23,11 +23,10 @@ source_archive="llvm-project-${source_commit}.zip"
 source_url="https://github.com/llvm/llvm-project/archive/${source_commit}.zip"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-patch_file="${script_dir}/llvm15-ios-clonefile.patch"
-arclite_archive_source="${script_dir}/../payload/lib/arc/libarclite_iphoneos.a"
-arclite_archive_sha256="f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8"
-arclite_deployment_target="4.3"
-
+patch_files=(
+    "${script_dir}/llvm15-ios-clonefile.patch"
+    "${script_dir}/llvm15-host-clang21.patch"
+)
 action=""
 work_dir_input=""
 archives_dir_input=""
@@ -376,11 +375,15 @@ prepare_build_cache() {
 
 prepare_source() {
     local download_path="${archive_path}.part"
+    local patch_file=""
+    local patch_name=""
 
     command -v curl >/dev/null 2>&1 || die "curl is required"
     command -v unzip >/dev/null 2>&1 || die "unzip is required"
     command -v patch >/dev/null 2>&1 || die "patch is required"
-    [[ -f "$patch_file" ]] || die "missing source patch: ${patch_file}"
+    for patch_file in "${patch_files[@]}"; do
+        [[ -f "$patch_file" ]] || die "missing source patch: ${patch_file}"
+    done
 
     if [[ ! -f "$archive_path" ]]; then
         printf 'Downloading LLVM %s source to %s\n' "$llvm_version" "$archive_path"
@@ -399,16 +402,19 @@ prepare_source() {
         unzip -q "$archive_path" -d "$sources_dir"
     fi
 
-    if patch -d "$source_dir" -p1 -s -f -N -F 0 --dry-run \
-        < "$patch_file" >/dev/null 2>&1; then
-        printf 'Applying old-iOS clonefile guard\n'
-        patch -d "$source_dir" -p1 -s -f -N -F 0 < "$patch_file"
-    elif patch -d "$source_dir" -p1 -s -f -R -F 0 --dry-run \
-        < "$patch_file" >/dev/null 2>&1; then
-        printf 'Old-iOS clonefile guard is already applied\n'
-    else
-        die "LLVM source does not match the recorded clonefile patch"
-    fi
+    for patch_file in "${patch_files[@]}"; do
+        patch_name="$(basename "$patch_file")"
+        if patch -d "$source_dir" -p1 -s -f -N -F 0 --dry-run \
+            < "$patch_file" >/dev/null 2>&1; then
+            printf 'Applying LLVM source patch: %s\n' "$patch_name"
+            patch -d "$source_dir" -p1 -s -f -N -F 0 < "$patch_file"
+        elif patch -d "$source_dir" -p1 -s -f -R -F 0 --dry-run \
+            < "$patch_file" >/dev/null 2>&1; then
+            printf 'LLVM source patch is already applied: %s\n' "$patch_name"
+        else
+            die "LLVM source does not match the recorded patch: ${patch_name}"
+        fi
+    done
 }
 
 ensure_native_tools() {
@@ -563,11 +569,6 @@ package_armv7() {
         c++
     )
     local driver_name=""
-    local arclite_actual_sha256=""
-    local arclite_metadata=""
-    local arclite_symbols=""
-    local lipo_tool=""
-    local llvm_nm=""
     local llvm_strip=""
     local ldid_tool=""
     local package_name="clang-${llvm_version}-armv7-apple-ios${deployment_target}"
@@ -577,34 +578,9 @@ package_armv7() {
     local artifact_path="${artifact_dir}/${package_name}.tar.gz"
     local packaged_clang="${stage_dir}/bin/clang-15"
     local resource_source="${target_build_dir}/lib/clang/${llvm_version}/include"
-    local arclite_archive="${stage_dir}/lib/arc/libarclite_iphoneos.a"
 
-    lipo_tool="$(resolve_tool "${cctools_bin}/lipo" lipo)" ||
-        die "lipo is required to verify Apple's ARCLite archive"
-    llvm_nm="$(resolve_requested_tool "$llvm_nm_input" /usr/bin/llvm-nm-14 llvm-nm llvm-nm-14)" ||
-        die "llvm-nm is required to verify ARCLite"
     llvm_strip="$(resolve_requested_tool "$llvm_strip_input" /usr/bin/llvm-strip-14 llvm-strip llvm-strip-14)" ||
         die "an LLVM strip implementation with Mach-O support is required"
-    command -v sha256sum >/dev/null 2>&1 ||
-        die "sha256sum is required to verify Apple's ARCLite archive"
-    command -v strings >/dev/null 2>&1 ||
-        die "strings is required to verify Apple's ARCLite archive"
-    [[ -f "$arclite_archive_source" ]] ||
-        die "Apple ARCLite archive is missing: ${arclite_archive_source}"
-    arclite_actual_sha256="$(sha256sum "$arclite_archive_source" | awk '{print $1}')"
-    [[ "$arclite_actual_sha256" == "$arclite_archive_sha256" ]] ||
-        die "unexpected Apple ARCLite archive SHA-256: ${arclite_actual_sha256}"
-    "$lipo_tool" "$arclite_archive_source" -verify_arch armv7 ||
-        die "Apple ARCLite archive has no armv7 slice"
-    arclite_metadata="$(strings "$arclite_archive_source")"
-    grep -Fq -- '-miphoneos-version-min=4.3' <<< "$arclite_metadata" ||
-        die "Apple ARCLite armv7 metadata does not declare iOS 4.3"
-    arclite_symbols="$("$llvm_nm" "$arclite_archive_source")"
-    grep -Fq "_OBJC_METACLASS_\$___ARCLite__" <<< "$arclite_symbols" ||
-        die "Apple ARCLite archive has no __ARCLite__ implementation"
-    if grep -Eq '[[:space:]]_objc_loadClassref$' <<< "$arclite_symbols"; then
-        die "Apple ARCLite archive requires objc_loadClassref from a newer SDK"
-    fi
     [[ -d "$resource_source" ]] ||
         die "Clang resource headers were not built: ${resource_source}"
 
@@ -621,11 +597,8 @@ package_armv7() {
 
     mkdir -p \
         "${stage_dir}/bin" \
-        "${stage_dir}/lib/arc" \
         "${stage_dir}/lib/clang/${llvm_version}" \
         "${stage_dir}/share/doc/clang-${llvm_version}"
-
-    install -m 0644 "$arclite_archive_source" "$arclite_archive"
 
     install -m 0755 "${target_build_dir}/bin/clang-15" "$packaged_clang"
     "$llvm_strip" --strip-all "$packaged_clang"
@@ -658,12 +631,12 @@ package_armv7() {
         printf 'SDK: %s\n' "${sdk_dir##*/}"
         printf 'LLVM targets: ARM\n'
         printf 'Threads: disabled\n'
-        printf 'Source patch: %s\n' "$(basename "$patch_file")"
-        printf 'ARC back-deployment runtime: Apple Xcode 6.4 %s\n' \
-            "$(basename "$arclite_archive_source")"
-        printf 'ARC back-deployment runtime SHA-256: %s\n' \
-            "$arclite_archive_sha256"
-        printf 'ARC back-deployment minimum iOS: %s\n' "$arclite_deployment_target"
+        printf 'Source patches:'
+        for patch_file in "${patch_files[@]}"; do
+            printf ' %s' "$(basename "$patch_file")"
+        done
+        printf '\n'
+        printf 'Application deployment floor: iOS 5.0\n'
     } > "${stage_dir}/BUILD-INFO.txt"
 
     mkdir -p "$artifact_dir"

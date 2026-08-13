@@ -7,7 +7,7 @@ die() {
   exit 1
 }
 
-for tool in altivec-release awk find make mktemp rm sha256sum unzip; do
+for tool in altivec-release altivec-sdk awk find grep make mktemp rm sha256sum unzip; do
   command -v "$tool" >/dev/null 2>&1 ||
     die "required release tool not found: ${tool}"
 done
@@ -75,18 +75,22 @@ altivec-release build "${target_args[@]}"
 
 arc_plan="$(mktemp "${TMPDIR:-/tmp}/altivec-arc-plan.XXXXXX")"
 readonly arc_plan
+audit_dir="$(mktemp -d "${TMPDIR:-/tmp}/altivec-release-audit.XXXXXX")"
+readonly audit_dir
 cleanup() {
   rm -f -- "$arc_plan"
+  rm -rf -- "$audit_dir"
 }
 trap cleanup EXIT
 
 make -C apps/CURLphone -Bn release \
   ALTIVEC_ROOT="$prebuilt_root" \
   PHONE_SOURCE_FLAGS=-fobjc-arc > "$arc_plan"
-awk '/Linking Phone universal/ { in_link = 1 }
-     in_link && /-Xarch_armv7 -fobjc-arc/ { found = 1 }
-     END { exit(found ? 0 : 1) }' "$arc_plan" ||
-  die 'CURLphone ARC link plan lost its armv7 ARC flag'
+grep -Fq -- '-fobjc-arc' "$arc_plan" ||
+  die 'CURLphone ARC compile plan lost its ARC flag'
+if grep -Fqi arclite "$arc_plan"; then
+  die 'CURLphone ARC build plan unexpectedly references ARCLite'
+fi
 
 case "$dist_dir" in
   "${repository_root}/dist") rm -rf -- "$dist_dir" ;;
@@ -109,6 +113,13 @@ for asset in "${expected_assets[@]}"; do
   [[ -s "${dist_dir}/${asset}" ]] || die "release asset is missing: ${asset}"
   unzip -tq "${dist_dir}/${asset}" >/dev/null ||
     die "release ZIP is corrupt: ${asset}"
+  if unzip -Z1 "${dist_dir}/${asset}" | grep -Eiq \
+      '(^|/)[^/]*[.]sdk(/|$)|[.]sdk[.]tar[.](gz|xz)$|arclite'; then
+    die "release ZIP contains Apple SDK or ARCLite content: ${asset}"
+  fi
+  find "$audit_dir" -mindepth 1 -delete
+  unzip -q "${dist_dir}/${asset}" -d "$audit_dir"
+  altivec-sdk audit "$audit_dir"
 done
 
 actual_count="$(find "$dist_dir" -maxdepth 1 -type f | awk 'END { print NR }')"
