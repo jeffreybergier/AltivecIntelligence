@@ -19,10 +19,7 @@
 # 3. Fetch the checksum-pinned SDK archives outside the image:
 #    mkdir -p .altivec-sdk
 #    printf '%s\n' '.altivec-sdk/' >> .gitignore
-#    docker run --rm --entrypoint altivec-sdk \
-#      -e ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
-#      -v "$PWD/.altivec-sdk:/altivec-sdk" \
-#      ghcr.io/jeffreybergier/altivec-intelligence:latest fetch
+#    docker compose run --rm altivec-sdk fetch
 #
 # 4. Try an example app baked into the image:
 #    docker compose run --rm altivec "cd /altivec/apps/SingleWindow && make"
@@ -51,14 +48,28 @@ services:
     environment:
       ALTIVEC_SDK_ARCHIVE_DIR: /altivec-sdk
     volumes:
-      - cache:/cache
-      - ~/.altivec:/root
+      # Mount the current project as the user workspace
       - .:/repo/user
+      # Persist AI CLI settings, credentials, and shell state
+      - ~/.altivec:/root
+      # Mount Apple SDK archives read-only; defaults to ./.altivec-sdk
       - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
+      # Persist package-manager and tool caches
+      - cache:/cache
+      # Extracted SDKs outside the container image
       - altivec-sdk-legacy:/osxcross/legacy/target/SDK
       - altivec-sdk-modern:/osxcross/modern/SDK
-      # Uncomment to add more tools into the container
-      # ../extras:/repo/extras
+
+  altivec-sdk:
+    profiles:
+      - tools
+    image: ghcr.io/jeffreybergier/altivec-intelligence:latest
+    environment:
+      ALTIVEC_SDK_ARCHIVE_DIR: /altivec-sdk
+    volumes:
+      # Mount Apple SDK archives read-write for fetching
+      - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk
+    entrypoint: altivec-sdk
 
   altivec-intelligence:
     image: ghcr.io/jeffreybergier/altivec-intelligence:latest
@@ -71,17 +82,21 @@ services:
       - ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk
     working_dir: /repo/user
     volumes:
-      - cache:/cache
-      - ~/.altivec:/root
+      # Mount the current project as the user workspace
       - .:/repo/user
+      # Persist AI CLI settings, credentials, and shell state
+      - ~/.altivec:/root
+      # Mount Apple SDK archives read-only; defaults to ./.altivec-sdk
       - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
+      # Persist package-manager and tool caches
+      - cache:/cache
+      # Extracted SDKs outside the container image
       - altivec-sdk-legacy:/osxcross/legacy/target/SDK
       - altivec-sdk-modern:/osxcross/modern/SDK
-      # Uncomment to add more tools into the container
-      # ../extras:/repo/extras
     entrypoint: /bin/bash
     command: -lc "altivec-chooser"
 
+# Runtime caches and extracted SDK installations
 volumes:
   cache:
   altivec-sdk-legacy:
