@@ -96,7 +96,7 @@ esac
 
 if [[ -n "$pkg" ]]; then
   log "main" "Updating $pkg"
-  npm update -g "$pkg"
+  npm update -g --dangerously-allow-all-scripts "$pkg"
   hash -r
 fi
 
