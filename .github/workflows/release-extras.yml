@@ -41,7 +41,7 @@ jobs:
 
     steps:
       - name: Check out exact release commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_sha }}
 
@@ -62,7 +62,7 @@ jobs:
         run: scripts/ci/publish-release-check.sh
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -122,12 +122,12 @@ jobs:
 
     steps:
       - name: Check out exact release commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_sha }}
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -158,7 +158,7 @@ jobs:
             -lc 'altivec-sdk ensure && scripts/ci/build-standard-extras.sh'
 
       - name: Upload standard release assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-standard
           path: dist/*
@@ -178,7 +178,7 @@ jobs:
 
     steps:
       - name: Check out exact release commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_sha }}
 
@@ -197,7 +197,7 @@ jobs:
 
       - name: Restore core-tools payload cache
         id: payload_cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: toolchain/iOS/armv7/build-release/Intermediates/core-tools-armv7/artifacts
           key: ${{ steps.payload_cache_key.outputs.key }}
@@ -208,7 +208,7 @@ jobs:
 
       - name: Log in to GHCR
         if: steps.payload_cache.outputs.cache-hit != 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -259,13 +259,13 @@ jobs:
 
       - name: Save core-tools payload cache
         if: steps.payload_cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: toolchain/iOS/armv7/build-release/Intermediates/core-tools-armv7/artifacts
           key: ${{ steps.payload_cache_key.outputs.key }}
 
       - name: Upload core-tools handoff
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: toolchain-core-payload
           path: ${{ steps.payload.outputs.archive }}
@@ -285,7 +285,7 @@ jobs:
 
     steps:
       - name: Check out exact release commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_sha }}
 
@@ -304,7 +304,7 @@ jobs:
 
       - name: Restore LLVM payload cache
         id: payload_cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: toolchain/iOS/armv7/build-release/Intermediates/llvm15-armv7/artifacts
           key: ${{ steps.payload_cache_key.outputs.key }}
@@ -315,7 +315,7 @@ jobs:
 
       - name: Log in to GHCR
         if: steps.payload_cache.outputs.cache-hit != 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -366,13 +366,13 @@ jobs:
 
       - name: Save LLVM payload cache
         if: steps.payload_cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: toolchain/iOS/armv7/build-release/Intermediates/llvm15-armv7/artifacts
           key: ${{ steps.payload_cache_key.outputs.key }}
 
       - name: Upload LLVM handoff
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: toolchain-llvm-payload
           path: ${{ steps.payload.outputs.archive }}
@@ -397,24 +397,24 @@ jobs:
 
     steps:
       - name: Check out exact release commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_sha }}
 
       - name: Download core-tools handoff
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: toolchain-core-payload
           path: toolchain/iOS/armv7/build-release/Intermediates/core-tools-armv7/artifacts
 
       - name: Download LLVM handoff
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: toolchain-llvm-payload
           path: toolchain/iOS/armv7/build-release/Intermediates/llvm15-armv7/artifacts
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -445,7 +445,7 @@ jobs:
           test -s "dist/AltivecToolchain-${RELEASE_VERSION}-iOS-armv7.deb"
 
       - name: Upload toolchain release asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-toolchain
           path: dist/*
