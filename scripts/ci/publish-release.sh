@@ -108,12 +108,14 @@ if [[ -z "$release_json" ]]; then
   if [[ "$mode" == publish ]]; then
     die "draft release does not exist: ${release_tag}"
   fi
-  gh release create "$release_tag" \
-    --repo "$repository" \
-    --target "$release_sha" \
-    --generate-notes \
-    --draft
-  release_json="$(get_release)"
+  release_json="$(
+    gh api "repos/${repository}/releases" \
+      --method POST \
+      -f tag_name="$release_tag" \
+      -f target_commitish="$release_sha" \
+      -F generate_release_notes=true \
+      -F draft=true
+  )"
 fi
 
 release_id="$(jq -r '.id // empty' <<< "$release_json")"
