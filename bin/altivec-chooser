@@ -1,104 +1,435 @@
-#!/usr/bin/env bash
-set -euo pipefail
-trap 'echo "[altivec_chooser.main] aborted"; exit 130' INT
+#!/usr/bin/env node
+"use strict";
 
-log() {
-  printf '[altivec_chooser.%s] %s\n' "$1" "$2"
+const fs = require("node:fs");
+const path = require("node:path");
+const readline = require("node:readline");
+const { spawn, spawnSync } = require("node:child_process");
+
+const stdin = process.stdin;
+const stdout = process.stdout;
+let alternateScreenActive = false;
+
+const agents = [
+  {
+    label: "Claude",
+    packageName: "@anthropic-ai/claude-code",
+    command: "claude",
+    args: ["--dangerously-skip-permissions"],
+  },
+  {
+    label: "Codex",
+    packageName: "@openai/codex",
+    command: "codex",
+    args: ["--yolo"],
+  },
+  {
+    label: "Antigravity",
+    packageName: "",
+    command: "agy",
+    args: ["--dangerously-skip-permissions"],
+  },
+  {
+    label: "Pi",
+    packageName: "@earendil-works/pi-coding-agent",
+    command: "pi",
+    args: [],
+  },
+  {
+    label: "OpenCode",
+    packageName: "opencode-ai",
+    command: "opencode",
+    args: [],
+  },
+  {
+    label: "Kimi",
+    packageName: "@moonshot-ai/kimi-code",
+    command: "kimi",
+    args: [],
+  },
+];
+
+const escape = {
+  bold: "\x1b[1m",
+  reset: "\x1b[0m",
+  hideCursor: "\x1b[?25l",
+  showCursor: "\x1b[?25h",
+  enterAlternateScreen: "\x1b[?1049h",
+  leaveAlternateScreen: "\x1b[?1049l",
+  redraw: "\x1b[H\x1b[J",
+};
+
+const interactiveTerminal = Boolean(
+  stdin.isTTY && stdout.isTTY && process.env.TERM !== "dumb",
+);
+const animationEnabled =
+  interactiveTerminal && process.env.ALTIVEC_NO_ANIMATION !== "1";
+const colorEnabled =
+  Boolean(stdout.isTTY) &&
+  process.env.TERM !== "dumb" &&
+  !Object.prototype.hasOwnProperty.call(process.env, "NO_COLOR");
+const has256Colors =
+  colorEnabled &&
+  typeof stdout.hasColors === "function" &&
+  stdout.hasColors(256);
+
+const color = colorEnabled
+  ? {
+      reset: escape.reset,
+      bold: escape.bold,
+      pink: has256Colors ? "\x1b[38;5;205m" : "\x1b[95m",
+      purple: has256Colors ? "\x1b[38;5;141m" : "\x1b[35m",
+      blue: has256Colors ? "\x1b[38;5;45m" : "\x1b[96m",
+    }
+  : { reset: "", bold: "", pink: "", purple: "", blue: "" };
+
+function log(scope, message) {
+  stdout.write(`[altivec_chooser.${scope}] ${message}\n`);
 }
 
+function restoreTerminal() {
+  if (stdin.isTTY && stdin.isRaw) stdin.setRawMode(false);
+  stdin.pause();
 
-show_banner() {
-  local pink='\033[38;5;205m'
-  local cyan='\033[38;5;44m'
-  local blue='\033[38;5;117m'
-  local black='\033[38;5;16m'
-  local purple='\033[38;5;141m'
-  local border="+------------------------------------------------------------------------------+"
-
-  printf '%b%s%b\n' "$pink" "$border" '\033[0m'
-  printf '%b|%s|%b\n' "$pink"   "                     <*> * . * . * . <*> * . * . * . * . *                    " '\033[0m'
-  printf '%b|%s|%b\n' "$black"  "              (/\\_/) Ａｌｔｉｖｅｃ　Ｉｎｔｅｌｌｉｇｅｎｃｅ (/\\_/)          " '\033[0m'
-  printf '%b|%s|%b\n' "$cyan"   "              ( o.o )       Retro development made fun       ( o.o )          " '\033[0m'
-  printf '%b|%s|%b\n' "$blue"   "               / >[]        . * . * . * . * . * . * .         []< \\           " '\033[0m'
-  printf '%b|%s|%b\n' "$purple" "                        . * . * . * . * . * . * . * . * .                     " '\033[0m'
-  printf '%b%s%b\n' "$cyan" "$border" '\033[0m'
+  if (alternateScreenActive) {
+    alternateScreenActive = false;
+    stdout.write(`${escape.showCursor}${escape.leaveAlternateScreen}`);
+  }
 }
 
-require_cmd() {
-  local name="$1"
-
-  if command -v "$name" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  log "require_cmd" "Missing dependency: $name"
-  exit 1
+function terminalColumns() {
+  const candidates = [stdout.columns, Number(process.env.COLUMNS), 80];
+  return candidates.find((value) => Number.isInteger(value) && value > 0);
 }
 
-launch_standard() {
-  local cmd="$1"
-  local flag="${2:-}"
-
-  require_cmd "$cmd"
-
-  if [[ -n "$flag" ]]; then
-    exec "$cmd" "$flag"
-  else
-    exec "$cmd"
-  fi
+function paint(style, text) {
+  return `${style}${text}${color.reset}`;
 }
 
-require_cmd npm
-require_cmd node
+function clip(text, width) {
+  return [...text].slice(0, Math.max(0, width)).join("");
+}
 
-echo ""
-show_banner
-echo "Select an AI agent:"
-echo "  1) Claude"
-echo "  2) Codex"
-echo "  3) Antigravity"
-echo "  4) Pi"
-echo "  5) OpenCode"
-echo "  6) Kimi"
-echo ""
-read -rp "Choice [1-6]: " choice
+function centeredLine(width, content, style) {
+  const innerWidth = width - 2;
+  const visibleContent = clip(content, innerWidth);
+  const leftPadding = Math.floor((innerWidth - visibleContent.length) / 2);
+  const rightPadding = innerWidth - visibleContent.length - leftPadding;
 
-case "$choice" in
-  1)
-    pkg="@anthropic-ai/claude-code"
-    launcher="launch_standard claude --dangerously-skip-permissions"
-    ;;
-  2)
-    pkg="@openai/codex"
-    launcher="launch_standard codex --yolo"
-    ;;
-  3)
-    pkg=""
-    launcher="launch_standard agy --dangerously-skip-permissions"
-    ;;
-  4)
-    pkg="@earendil-works/pi-coding-agent"
-    launcher="launch_standard pi"
-    ;;
-  5)
-    pkg="opencode-ai"
-    launcher="launch_standard opencode"
-    ;;
-  6)
-    pkg="@moonshot-ai/kimi-code"
-    launcher="launch_standard kimi"
-    ;;
-  *)
-    log "main" "Invalid choice: $choice"
-    exit 1
-    ;;
-esac
+  return (
+    paint(color.blue, "│") +
+    " ".repeat(leftPadding) +
+    paint(style, visibleContent) +
+    " ".repeat(rightPadding) +
+    paint(color.blue, "│")
+  );
+}
 
-if [[ -n "$pkg" ]]; then
-  log "main" "Updating $pkg"
-  npm update -g --dangerously-allow-all-scripts "$pkg"
-  hash -r
-fi
+function starLine(width, row, frame) {
+  const glyphs = ["·", "*", "✦", "✧"];
+  const palette = [color.purple, color.pink, color.blue];
+  const stars = [];
 
-log "main" "$launcher"
-$launcher
+  for (let column = 0; column < width - 2; column += 1) {
+    const signature = (column * 17 + row * 29) % 47;
+    if (signature < 7) {
+      const glyph = glyphs[(frame + column + row) % glyphs.length];
+      const starColor = palette[(column + row + frame) % palette.length];
+      stars.push(paint(starColor, glyph));
+    } else {
+      stars.push(" ");
+    }
+  }
+
+  return paint(color.purple, "│") + stars.join("") + paint(color.pink, "│");
+}
+
+function bannerLines(columns, frame) {
+  if (columns < 12) {
+    return [paint(color.pink, clip("ALTIVEC", columns))];
+  }
+
+  const width = columns - 1;
+  const innerWidth = width - 2;
+  const title =
+    innerWidth >= 39
+      ? "A L T I V E C   I N T E L L I G E N C E"
+      : innerWidth >= 22
+        ? "ALTIVEC INTELLIGENCE"
+        : "ALTIVEC";
+  const subtitle = innerWidth >= 18 ? "Retro, Mix, Burn" : "";
+  const titleColors = [color.pink, color.purple, color.blue];
+  const titleColor = titleColors[Math.floor(frame / 2) % titleColors.length];
+
+  return [
+    paint(color.purple, `╭${"─".repeat(innerWidth)}╮`),
+    starLine(width, 0, frame),
+    centeredLine(width, title, `${color.bold}${titleColor}`),
+    centeredLine(width, subtitle, color.blue),
+    starLine(width, 1, frame),
+    paint(color.pink, `╰${"─".repeat(innerWidth)}╯`),
+  ];
+}
+
+function menuLine(agent, index, selected, columns) {
+  const number = `${index + 1})`;
+  const marker = selected ? "›" : " ";
+  const availableLabelWidth = Math.max(
+    0,
+    columns - marker.length - number.length - 4,
+  );
+  const label = clip(agent.label, availableLabelWidth);
+
+  if (selected) {
+    return paint(`${color.bold}${color.pink}`, `${marker} ${number} ${label}`);
+  }
+
+  const numberColor = [color.pink, color.blue, color.purple][index % 3];
+  return `${marker} ${paint(numberColor, number)} ${label}`;
+}
+
+function renderScreen(selectedIndex, frame) {
+  const columns = terminalColumns();
+  const heading = columns >= 22 ? "Select an AI agent:" : "Select agent:";
+  const hint =
+    columns >= 52
+      ? "↑/↓ move  •  Enter select  •  1-6 quick select"
+      : columns >= 30
+        ? "↑/↓ move • Enter • 1-6 select"
+        : "Arrows, Enter, or 1-6";
+
+  return [
+    ...bannerLines(columns, frame),
+    "",
+    paint(`${color.bold}${color.purple}`, clip(heading, columns - 1)),
+    ...agents.map((agent, index) =>
+      menuLine(agent, index, index === selectedIndex, columns),
+    ),
+    "",
+    paint(color.blue, clip(hint, columns - 1)),
+  ].join("\n");
+}
+
+function chooseInteractively() {
+  return new Promise((resolve) => {
+    let active = true;
+    let frame = 0;
+    let pendingInput = "";
+    let selectedIndex = 0;
+    let timer;
+
+    const draw = () => {
+      stdout.write(`${escape.redraw}${renderScreen(selectedIndex, frame)}`);
+    };
+
+    const cleanup = () => {
+      if (!active) return;
+      active = false;
+
+      if (timer) clearInterval(timer);
+      stdin.off("data", onData);
+      stdout.off("resize", draw);
+      process.off("SIGINT", abort);
+      process.off("SIGTERM", abort);
+
+      restoreTerminal();
+    };
+
+    const finish = (index) => {
+      cleanup();
+      resolve(String(index + 1));
+    };
+
+    const abort = () => {
+      cleanup();
+      log("main", "aborted");
+      process.exitCode = 130;
+      resolve(null);
+    };
+
+    const move = (offset) => {
+      selectedIndex = (selectedIndex + offset + agents.length) % agents.length;
+      draw();
+    };
+
+    function onData(chunk) {
+      pendingInput += chunk;
+
+      while (pendingInput.length > 0 && active) {
+        if (pendingInput.startsWith("\x1b")) {
+          if (pendingInput.length < 2) return;
+          if (pendingInput[1] !== "[") {
+            pendingInput = pendingInput.slice(1);
+            continue;
+          }
+          if (pendingInput.length < 3) return;
+
+          const sequence = pendingInput.slice(0, 3);
+          pendingInput = pendingInput.slice(3);
+          if (sequence === "\x1b[A") move(-1);
+          if (sequence === "\x1b[B") move(1);
+          continue;
+        }
+
+        const key = pendingInput[0];
+        pendingInput = pendingInput.slice(1);
+
+        if (key === "\x03") {
+          abort();
+          return;
+        }
+        if (key >= "1" && key <= String(agents.length)) {
+          finish(Number(key) - 1);
+          return;
+        }
+        if (key === "\r" || key === "\n") {
+          finish(selectedIndex);
+          return;
+        }
+      }
+    }
+
+    alternateScreenActive = true;
+    stdout.write(`${escape.enterAlternateScreen}${escape.hideCursor}`);
+    stdin.setEncoding("utf8");
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.on("data", onData);
+    stdout.on("resize", draw);
+    process.on("SIGINT", abort);
+    process.on("SIGTERM", abort);
+
+    draw();
+    if (animationEnabled) {
+      timer = setInterval(() => {
+        frame += 1;
+        draw();
+      }, 240);
+    }
+  });
+}
+
+function chooseFromPrompt() {
+  stdout.write(`${renderScreen(0, 0)}\n\nChoice [1-6]: `);
+
+  return new Promise((resolve) => {
+    let answered = false;
+    const prompt = readline.createInterface({ input: stdin, output: stdout });
+
+    prompt.question("", (answer) => {
+      answered = true;
+      prompt.close();
+      if (!stdin.isTTY) stdout.write("\n");
+      resolve(answer.trim());
+    });
+
+    prompt.once("close", () => {
+      if (!answered) resolve(null);
+    });
+  });
+}
+
+function findExecutable(command) {
+  for (const directory of (process.env.PATH || "").split(path.delimiter)) {
+    const candidate = path.join(directory || ".", command);
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch {
+      // Continue searching PATH.
+    }
+  }
+  return null;
+}
+
+function updateAgent(npmPath, packageName) {
+  log("main", `Updating ${packageName}`);
+  const result = spawnSync(
+    npmPath,
+    ["update", "-g", "--dangerously-allow-all-scripts", packageName],
+    { stdio: "inherit" },
+  );
+
+  if (result.error) {
+    process.stderr.write(`${result.error.message}\n`);
+    return 1;
+  }
+  if (result.signal === "SIGINT") return 130;
+  if (result.signal === "SIGTERM") return 143;
+  return result.status ?? 1;
+}
+
+function launchAgent(agent, executable) {
+  log("main", ["launch_standard", agent.command, ...agent.args].join(" "));
+
+  return new Promise((resolve) => {
+    const child = spawn(executable, agent.args, { stdio: "inherit" });
+    let settled = false;
+
+    const finish = (code) => {
+      if (settled) return;
+      settled = true;
+      process.off("SIGINT", forwardInterrupt);
+      process.off("SIGTERM", forwardTermination);
+      resolve(code);
+    };
+    const forwardInterrupt = () => child.kill("SIGINT");
+    const forwardTermination = () => child.kill("SIGTERM");
+
+    process.on("SIGINT", forwardInterrupt);
+    process.on("SIGTERM", forwardTermination);
+    child.once("error", (error) => {
+      process.stderr.write(`${error.message}\n`);
+      finish(1);
+    });
+    child.once("exit", (code, signal) => {
+      if (signal === "SIGINT") finish(130);
+      else if (signal === "SIGTERM") finish(143);
+      else finish(code ?? 1);
+    });
+  });
+}
+
+async function main() {
+  const npmPath = findExecutable("npm");
+  if (!npmPath) {
+    log("require_cmd", "Missing dependency: npm");
+    return 1;
+  }
+
+  const choice = interactiveTerminal
+    ? await chooseInteractively()
+    : await chooseFromPrompt();
+
+  if (choice === null) return process.exitCode || 1;
+
+  const selectedIndex = Number(choice) - 1;
+  if (!Number.isInteger(selectedIndex) || !agents[selectedIndex]) {
+    log("main", `Invalid choice: ${choice}`);
+    return 1;
+  }
+
+  const agent = agents[selectedIndex];
+  if (agent.packageName) {
+    const updateStatus = updateAgent(npmPath, agent.packageName);
+    if (updateStatus !== 0) return updateStatus;
+  }
+
+  const executable = findExecutable(agent.command);
+  if (!executable) {
+    log("require_cmd", `Missing dependency: ${agent.command}`);
+    return 1;
+  }
+
+  return launchAgent(agent, executable);
+}
+
+main()
+  .then((status) => {
+    process.exitCode = status;
+  })
+  .catch((error) => {
+    restoreTerminal();
+    process.stderr.write(`${error.stack || error.message}\n`);
+    process.exitCode = 1;
+  });
