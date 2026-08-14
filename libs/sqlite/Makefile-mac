@@ -1,8 +1,9 @@
 include sqlite_common.mk
 
 SQLITE_ZIP  = sqlite-amalgamation-$(SQLITE_VER).zip
-SQLITE_URL  = https://www.sqlite.org/$(SQLITE_YEAR)/$(SQLITE_ZIP)
-SQLITE_URLS = $(SQLITE_URL) https://sqlite.org/$(SQLITE_YEAR)/$(SQLITE_ZIP)
+SQLITE_URLS = https://sqlite.org/$(SQLITE_YEAR)/$(SQLITE_ZIP) \
+              https://www2.sqlite.org/$(SQLITE_YEAR)/$(SQLITE_ZIP) \
+              https://www3.sqlite.org/$(SQLITE_YEAR)/$(SQLITE_ZIP)
 SQLITE_DIR  = sqlite-amalgamation-$(SQLITE_VER)
 TARBALL_DIR = tarballs
 
@@ -35,8 +36,8 @@ $(BUILD_ROOT)/lib/libsqlite3.a: $(PREFIX)/lib/libsqlite3.a
 $(TARBALL_DIR):
 	mkdir -p $@
 
-$(TARBALL_DIR)/$(SQLITE_ZIP): | $(TARBALL_DIR)
-	$(call download_to_target,$(SQLITE_URLS))
+$(TARBALL_DIR)/$(SQLITE_ZIP): force-download-check | $(TARBALL_DIR)
+	$(call download_to_target,$(SQLITE_URLS),$(SQLITE_SHA256))
 
 $(INTERMEDIATE)/$(SQLITE_DIR): $(TARBALL_DIR)/$(SQLITE_ZIP)
 	mkdir -p $(INTERMEDIATE)

@@ -4,6 +4,7 @@
 # --- Version ---
 SQLITE_VER  = 3430200
 SQLITE_YEAR = 2023
+SQLITE_SHA256 = a17ac8792f57266847d57651c5259001d1e4e4b46be96ec0d985c953925b2a1c
 
 # --- Toolchain Paths ---
 include $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/../../altivec_toolchains.mk)
@@ -34,23 +35,60 @@ LEGACY_SQLITE_CFLAGS = $(SQLITE_CFLAGS) -DHAVE_STDATOMIC_H=0
 
 JOBS = $(shell getconf _NPROCESSORS_ONLN)
 
-# Network downloads are part of dependency bootstrapping. Use retries and a
-# temporary output file so transient CDN errors do not leave corrupt archives.
-CURL_RETRY_FLAGS = --fail --location --retry 5 --retry-delay 2 \
-                   --retry-all-errors --connect-timeout 30
+# Try each checksum-verified source independently before moving to its mirror.
+SOURCE_DOWNLOAD_ATTEMPTS = 3
+CURL_DOWNLOAD_FLAGS = --fail --silent --show-error --location \
+                      --proto '=https' --proto-redir '=https' \
+                      --connect-timeout 30
 
 define download_to_target
 	@set -e; \
-	tmp="$@.tmp"; \
-	rm -f "$$tmp"; \
-	for url in $(1); do \
-	  echo "  > downloading $$url"; \
-	  if curl $(CURL_RETRY_FLAGS) "$$url" -o "$$tmp"; then \
-	    mv "$$tmp" "$@"; \
+	expected_sha256="$(2)"; \
+	tmp=''; \
+	cleanup() { \
+	  if test -n "$$tmp"; then rm -f "$$tmp"; fi; \
+	}; \
+	trap cleanup EXIT; \
+	trap 'exit 1' HUP INT TERM; \
+	verify_download() { \
+	  actual_sha256="$$(sha256sum "$$1" | awk '{print $$1}')"; \
+	  test "$$actual_sha256" = "$$expected_sha256"; \
+	}; \
+	if test -f "$@"; then \
+	  if verify_download "$@"; then \
+	    echo "  > verified cached archive: $@"; \
 	    exit 0; \
 	  fi; \
-	  rm -f "$$tmp"; \
+	  echo " [!] Discarding cached archive with an invalid checksum: $@" >&2; \
+	  rm -f "$@"; \
+	fi; \
+	for url in $(1); do \
+	  attempt=1; \
+	  while test "$$attempt" -le "$(SOURCE_DOWNLOAD_ATTEMPTS)"; do \
+	    tmp="$$(mktemp "$@.tmp.XXXXXX")"; \
+	    echo "  > downloading $$url (attempt $$attempt/$(SOURCE_DOWNLOAD_ATTEMPTS))"; \
+	    if curl $(CURL_DOWNLOAD_FLAGS) "$$url" -o "$$tmp"; then \
+	      if verify_download "$$tmp"; then \
+	        mv "$$tmp" "$@"; \
+	        tmp=''; \
+	        exit 0; \
+	      fi; \
+	      actual_sha256="$$(sha256sum "$$tmp" | awk '{print $$1}')"; \
+	      echo " [!] Checksum mismatch from $$url: $$actual_sha256" >&2; \
+	    fi; \
+	    rm -f "$$tmp"; \
+	    tmp=''; \
+	    if test "$$attempt" -lt "$(SOURCE_DOWNLOAD_ATTEMPTS)"; then \
+	      sleep "$$((attempt * 2))"; \
+	    fi; \
+	    attempt="$$((attempt + 1))"; \
+	  done; \
 	done; \
-	echo " [!] ERROR: failed to download $@"; \
+	echo " [!] ERROR: failed to download and verify $@" >&2; \
 	exit 1
 endef
+
+# Re-run the recipe so a cached archive is checksum-verified before use.
+force-download-check:
+
+.PHONY: force-download-check

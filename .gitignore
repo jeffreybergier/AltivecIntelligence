@@ -2,7 +2,5 @@
 .altivec-sdk/
 libs/*/build-*
 libs/*/tarballs
-!libs/sqlite/tarballs/
-!libs/sqlite/tarballs/sqlite-amalgamation-3430200.zip
 apps/*/build-*
 dist/
