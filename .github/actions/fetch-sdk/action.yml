@@ -1,0 +1,12 @@
+name: Fetch verified SDK build inputs
+description: Fetch the checksum-pinned SDK archives used by release jobs.
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch checksum-pinned SDK archives
+      shell: bash
+      env:
+        ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
+        ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
+      run: '"${GITHUB_WORKSPACE}/bin/altivec-sdk" fetch'

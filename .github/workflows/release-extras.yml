@@ -59,7 +59,7 @@ jobs:
           fi
 
       - name: Validate resumable release publisher
-        run: scripts/ci/publish-release-check.sh
+        run: .github/scripts/publish-release-check.sh
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -72,10 +72,7 @@ jobs:
         run: docker pull "$BUILD_IMAGE"
 
       - name: Fetch verified SDK build inputs
-        env:
-          ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
-          ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
-        run: bin/altivec-sdk fetch
+        uses: ./.github/actions/fetch-sdk
 
       - name: Check configured versions
         id: version
@@ -137,10 +134,7 @@ jobs:
         run: docker pull "$BUILD_IMAGE"
 
       - name: Fetch verified SDK build inputs
-        env:
-          ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
-          ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
-        run: bin/altivec-sdk fetch
+        uses: ./.github/actions/fetch-sdk
 
       - name: Build standard extras
         run: |
@@ -155,7 +149,7 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user \
             "$BUILD_IMAGE" \
-            -lc 'altivec-sdk ensure && scripts/ci/build-standard-extras.sh'
+            -lc 'altivec-sdk ensure && .github/scripts/build-standard-extras.sh'
 
       - name: Upload standard release assets
         uses: actions/upload-artifact@v7
@@ -204,7 +198,7 @@ jobs:
 
       - name: Reclaim runner disk for core-tools
         if: steps.payload_cache.outputs.cache-hit != 'true'
-        run: scripts/ci/reclaim-runner-disk.sh
+        run: .github/scripts/reclaim-runner-disk.sh
 
       - name: Log in to GHCR
         if: steps.payload_cache.outputs.cache-hit != 'true'
@@ -220,10 +214,7 @@ jobs:
 
       - name: Fetch verified SDK build inputs
         if: steps.payload_cache.outputs.cache-hit != 'true'
-        env:
-          ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
-          ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
-        run: bin/altivec-sdk fetch
+        uses: ./.github/actions/fetch-sdk
 
       - name: Report available disk
         if: steps.payload_cache.outputs.cache-hit != 'true'
@@ -311,7 +302,7 @@ jobs:
 
       - name: Reclaim runner disk for LLVM
         if: steps.payload_cache.outputs.cache-hit != 'true'
-        run: scripts/ci/reclaim-runner-disk.sh
+        run: .github/scripts/reclaim-runner-disk.sh
 
       - name: Log in to GHCR
         if: steps.payload_cache.outputs.cache-hit != 'true'
@@ -327,10 +318,7 @@ jobs:
 
       - name: Fetch verified SDK build inputs
         if: steps.payload_cache.outputs.cache-hit != 'true'
-        env:
-          ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
-          ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
-        run: bin/altivec-sdk fetch
+        uses: ./.github/actions/fetch-sdk
 
       - name: Report available disk
         if: steps.payload_cache.outputs.cache-hit != 'true'
@@ -431,7 +419,7 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user/toolchain/iOS/armv7 \
             "$BUILD_IMAGE" \
-            -lc 'make --no-print-directory deb DEB_VERSION="$RELEASE_VERSION" DEB_OUTPUT=build-release/AltivecToolchain-iOS-armv7.deb && /repo/user/scripts/ci/validate-toolchain-deb.sh build-release/AltivecToolchain-iOS-armv7.deb "$RELEASE_VERSION"'
+            -lc 'make --no-print-directory deb DEB_VERSION="$RELEASE_VERSION" DEB_OUTPUT=build-release/AltivecToolchain-iOS-armv7.deb && /repo/user/.github/scripts/validate-toolchain-deb.sh build-release/AltivecToolchain-iOS-armv7.deb "$RELEASE_VERSION"'
 
       - name: Stage toolchain release asset
         run: |

@@ -38,7 +38,7 @@ mkdir -p "$check_root/bin" "$check_root/state/assets" "$check_root/dist"
 
 mock_gh="$check_root/bin/gh"
 readonly mock_gh
-cp "$script_dir/fixtures/mock-gh" "$mock_gh"
+cp "$script_dir/publish-release-mock-gh" "$mock_gh"
 chmod 0755 "$mock_gh"
 
 printf 'asset one\n' > "$check_root/dist/Asset-1.2.3.zip"

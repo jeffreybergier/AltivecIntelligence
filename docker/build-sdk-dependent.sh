@@ -16,7 +16,7 @@ readonly build_input="${ALTIVEC_SDK_BUILD_INPUT:-/build-sdk-dependent}"
 readonly osxcross_legacy_commit=af8300c6b3e099c91970a8d2d0f3bffe703f2421
 readonly osxcross_modern_commit=27d21e4977c9751d01199c7a226a6faf494c3dd9
 readonly jobs="${JOBS:-$(nproc)}"
-readonly fixture="$build_input/fixtures/toolchain-smoke.c"
+readonly fixture="$build_input/toolchain-smoke.c"
 
 die() {
   printf 'error: %s\n' "$*" >&2
@@ -98,12 +98,12 @@ prepare_legacy_source() {
     "$legacy_root/build_gcc.sh"
 
   patch "$legacy_root/build.sh" --quiet \
-    < "$build_input/patches/osxcross-build-host-gcc14.patch"
+    < "$build_input/osxcross-build-host-gcc14.patch"
   cp "$legacy_root/build_gcc.sh" "$legacy_root/build_gcc_ppc.sh"
   patch "$legacy_root/build_gcc.sh" --quiet \
-    < "$build_input/patches/osxcross-build-gcc-intel.patch"
+    < "$build_input/osxcross-build-gcc-intel.patch"
   patch "$legacy_root/build_gcc_ppc.sh" --quiet \
-    < "$build_input/patches/osxcross-build-gcc-ppc.patch"
+    < "$build_input/osxcross-build-gcc-ppc.patch"
   chmod +x "$legacy_root/build_gcc.sh" "$legacy_root/build_gcc_ppc.sh"
   ln -sfn /usr/bin/python3 /usr/local/bin/python
 

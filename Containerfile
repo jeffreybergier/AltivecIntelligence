@@ -350,14 +350,21 @@ COPY altivec_common_phone.mk  /altivec/
 COPY libs/                    /altivec/libs/
 COPY apps/                    /altivec/apps/
 
-RUN mkdir -p /altivec-sdk && altivec-sdk --help >/dev/null
+RUN mkdir -p /altivec-sdk /build-sdk-dependent \
+ && altivec-sdk --help >/dev/null
 
 # This is the only image instruction allowed to see Apple SDK archives. The
 # large, read-only `altivec_sdk` build context is mounted without being copied
-# into a layer. The mega script builds everything and purges installed SDKs
-# before the layer is committed.
+# into a layer. Bind only the five Docker inputs consumed by this step so its
+# dependency boundary stays explicit as more Docker helpers are added. The mega
+# script builds everything and purges installed SDKs before the layer is
+# committed.
 RUN --mount=type=bind,from=altivec_sdk,source=.,target=/altivec-sdk,readonly \
-    --mount=type=bind,source=docker,target=/build-sdk-dependent,readonly \
+    --mount=type=bind,source=docker/build-sdk-dependent.sh,target=/build-sdk-dependent/build-sdk-dependent.sh,readonly \
+    --mount=type=bind,source=docker/toolchain-smoke.c,target=/build-sdk-dependent/toolchain-smoke.c,readonly \
+    --mount=type=bind,source=docker/osxcross-build-gcc-intel.patch,target=/build-sdk-dependent/osxcross-build-gcc-intel.patch,readonly \
+    --mount=type=bind,source=docker/osxcross-build-gcc-ppc.patch,target=/build-sdk-dependent/osxcross-build-gcc-ppc.patch,readonly \
+    --mount=type=bind,source=docker/osxcross-build-host-gcc14.patch,target=/build-sdk-dependent/osxcross-build-host-gcc14.patch,readonly \
     --mount=type=cache,id=altivec-libcurl-tarballs,target=/altivec/libs/libcurl/tarballs,sharing=locked \
     --mount=type=cache,id=altivec-sqlite-tarballs,target=/altivec/libs/sqlite/tarballs,sharing=locked \
     ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \

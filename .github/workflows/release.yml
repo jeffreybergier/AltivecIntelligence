@@ -110,10 +110,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Fetch verified SDK build inputs
-        env:
-          ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
-          ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
-        run: bin/altivec-sdk fetch
+        uses: ./.github/actions/fetch-sdk
 
       - name: Build and push by digest
         id: build
@@ -282,7 +279,7 @@ jobs:
           merge-multiple: true
 
       - name: Verify assets and generate checksums
-        run: scripts/ci/prepare-release-assets.sh dist "$RELEASE_VERSION"
+        run: .github/scripts/prepare-release-assets.sh dist "$RELEASE_VERSION"
 
       - name: Confirm the remote tag is unchanged
         run: |
@@ -301,7 +298,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          scripts/ci/publish-release.sh stage \
+          .github/scripts/publish-release.sh stage \
             "$RELEASE_TAG" "$RELEASE_SHA" dist
 
       - name: Log in to GHCR
@@ -347,5 +344,5 @@ jobs:
             echo "Remote tag moved from ${RELEASE_SHA} to ${remote_sha}." >&2
             exit 1
           fi
-          scripts/ci/publish-release.sh publish \
+          .github/scripts/publish-release.sh publish \
             "$RELEASE_TAG" "$RELEASE_SHA" dist

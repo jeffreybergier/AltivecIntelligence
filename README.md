@@ -226,6 +226,7 @@ package is currently built.
 - [`toolchain`](./toolchain/): Optional toolchain package sources. The current release-extras workflow builds only `iOS/armv7`; shared iOS helpers live in `iOS/common`.
 - [`compose.yml`](./compose.yml): The **engine-development** compose — clone-and-build the image locally and mount your live checkout at `/repo/altivec`. Only needed if you are customizing the engine itself.
 - [`bin`](./bin/): Runtime scripts on `PATH` inside the image, including `altivec-sdk` for verified SDK archive management.
+- [`docs/altivec-deploy.md`](./docs/altivec-deploy.md): Deployment behavior and command-line specification for `altivec-deploy`.
 - `AGENTS.md`: AI mandates and technical constraints (also surfaced as CLAUDE.md / GEMINI.md via symlink).
 
 ## 🧩 Makefile Templates
