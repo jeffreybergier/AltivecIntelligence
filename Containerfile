@@ -367,13 +367,15 @@ RUN --mount=type=bind,from=altivec_sdk,source=.,target=/altivec-sdk,readonly \
     --mount=type=bind,source=docker/osxcross-build-host-gcc14.patch,target=/build-sdk-dependent/osxcross-build-host-gcc14.patch,readonly \
     --mount=type=cache,id=altivec-libcurl-tarballs,target=/altivec/libs/libcurl/tarballs,sharing=locked \
     --mount=type=cache,id=altivec-sqlite-tarballs,target=/altivec/libs/sqlite/tarballs,sharing=locked \
+    --mount=type=cache,id=altivec-fontawesome-files,target=/altivec/libs/cocoa/tarballs,sharing=locked \
     ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
       /build-sdk-dependent/build-sdk-dependent.sh
 
-# The cache mounts above hide the source-tree tarball directories while the
-# mega script runs. Remove their restored image-layer contents and independently
+# The cache mounts above hide the source-tree dependency caches while the mega
+# script runs. Remove their restored image-layer contents and independently
 # verify the SDK-free runtime after the build-context mounts have disappeared.
 RUN rm -rf /altivec/libs/libcurl/tarballs /altivec/libs/sqlite/tarballs \
+           /altivec/libs/cocoa/tarballs \
  && altivec-sdk audit /osxcross \
  && altivec-sdk audit /altivec \
  && altivec-sdk audit /opt \

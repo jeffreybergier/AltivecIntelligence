@@ -255,8 +255,13 @@ AltivecCocoa contains reusable nibless AppKit controller classes such as
 plus the cross-platform `AIFontAwesome` icon helper. Static AltivecCocoa apps
 stage Font Awesome OTFs into the app bundle; macOS dynamic apps use the fonts
 inside `AltivecCocoa.framework`.
-The bundled Font Awesome Free OTFs are licensed under SIL OFL 1.1; their
-notice is copied with the font files.
+The build downloads checksum-pinned Font Awesome Free OTFs from redundant
+sources and verifies cached copies before use. Release outputs bundle those
+fonts under SIL OFL 1.1 and copy their notice alongside them. Static-library
+clients can also use `+[AIFontAwesome fontAwesomeLicenseText]` to present the
+complete license in an About or Licenses screen without loading the notice as
+a resource. Run `make -C libs/cocoa fontawesome-fetch` to prefill the ignored
+cache without compiling the framework.
 
 Bundle resource knobs:
 - `RES_DIR=Resources`: blind-copy ordinary resources into the bundle resource

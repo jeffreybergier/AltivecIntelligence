@@ -1,0 +1,25 @@
+name: Check Font Awesome
+
+on:
+  schedule:
+    - cron: "17 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Check pinned Font Awesome version
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Check for a Font Awesome update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/check-fontawesome-update.sh

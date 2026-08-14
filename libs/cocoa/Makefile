@@ -40,6 +40,12 @@ phone-all:
 
 phone: phone-all
 
+fontawesome-fetch:
+	$(MAKE) -f Makefile-mac fontawesome-fetch
+
+fontawesome-icons:
+	$(MAKE) -f Makefile-mac fontawesome-icons
+
 clean:
 	$(MAKE) -f Makefile-mac clean
 	$(MAKE) -f Makefile-phone clean
@@ -50,4 +56,5 @@ prune-intermediates:
 	       build-phone/intermediate build-phone/stamps build-phone/prefix
 
 .PHONY: all mac-static mac-dynamic mac-all mac phone-static \
-        phone-all phone clean prune-intermediates
+        phone-all phone fontawesome-fetch fontawesome-icons clean \
+        prune-intermediates

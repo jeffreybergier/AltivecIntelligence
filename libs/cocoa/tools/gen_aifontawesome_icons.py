@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Regenerate libs/cocoa/AIFontAwesome.h's AIFontAwesomeIcon enum.
 
-Names and code points are read *directly out of the bundled
-Resources/Fonts/FA7-Solid-900.otf* -- the cmap gives codepoint -> glyph id,
-the CFF charset gives glyph id -> v7 glyph name. Nothing is copied from any
-cheat sheet, so the enum can never drift from the font we actually ship.
+Names and code points are read *directly out of the pinned downloaded font* --
+the cmap gives codepoint -> glyph id, and the CFF charset gives glyph id -> v7
+glyph name. Nothing is copied from any cheat sheet, so the enum can never
+drift from the font we actually ship.
 
-Usage:  python3 libs/cocoa/tools/gen_aifontawesome_icons.py
+Usage:  python3 libs/cocoa/tools/gen_aifontawesome_icons.py [--check] FONT
 (stdlib only; no fonttools dependency, runs on the build host's python3.)
 """
 import os
@@ -14,7 +14,6 @@ import struct
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FONT = os.path.join(ROOT, "Resources/Fonts/FA7-Solid-900.otf")
 HEADER = os.path.join(ROOT, "AIFontAwesome.h")
 
 
@@ -187,9 +186,17 @@ def camel(n):
 
 
 def main():
-    if not os.path.exists(FONT):
-        sys.exit("font not found: %s" % FONT)
-    d = open(FONT, "rb").read()
+    args = sys.argv[1:]
+    check = False
+    if args and args[0] == "--check":
+        check = True
+        args.pop(0)
+    if len(args) != 1:
+        sys.exit("usage: %s [--check] FONT" % sys.argv[0])
+    font = args[0]
+    if not os.path.exists(font):
+        sys.exit("font not found: %s" % font)
+    d = open(font, "rb").read()
     t = tables(d)
     cmap = load_cmap(d, t[b"cmap"])
     g2n = glyph_names(d, t[b"CFF "])
@@ -214,7 +221,13 @@ def main():
     src = open(HEADER).read()
     head = src[:src.index("typedef enum {") + len("typedef enum {")]
     tail = src[src.index("} AIFontAwesomeIcon;"):]
-    open(HEADER, "w").write(head + "\n" + body + "\n" + tail)
+    generated = head + "\n" + body + "\n" + tail
+    if check:
+        if generated != src:
+            sys.exit("%s is stale; run make fontawesome-icons" % HEADER)
+        print("verified %d icons in %s" % (len(rows), HEADER))
+        return
+    open(HEADER, "w").write(generated)
     print("wrote %d icons to %s" % (len(rows), HEADER))
 
 

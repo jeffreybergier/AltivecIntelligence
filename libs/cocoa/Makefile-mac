@@ -1,6 +1,8 @@
-include cocoa_common.mk
+.DEFAULT_GOAL := all
 
 CWD=$(shell pwd)
+include cocoa_common.mk
+
 BUILD_ROOT=$(CWD)/build-mac
 INTERMEDIATE=$(BUILD_ROOT)/intermediate
 PREFIX=$(BUILD_ROOT)/prefix
@@ -18,11 +20,6 @@ COCOA_HEADERS=AltivecCocoa.h \
               AICookieCutterWindowController.h \
               AIWebViewController.h \
               AIFontAwesome.h
-COCOA_FONT_FILES=Resources/Fonts/FA7-Solid-900.otf \
-                 Resources/Fonts/FA7-Regular-400.otf \
-                 Resources/Fonts/FA7-Brands-400.otf
-COCOA_FONT_NOTICE=Resources/Fonts/LICENSE-Font-Awesome.txt
-
 PPC_FLAGS=-arch ppc -mmacosx-version-min=$(MAC_MIN_PPC) -isysroot $(SDK_PPC_PATH) $(LEGACY_GCC_FLAGS)
 X86_FLAGS=-arch i386 -mmacosx-version-min=$(MAC_MIN_X86) -isysroot $(SDK_X86_PATH) $(LEGACY_GCC_FLAGS)
 X64_FLAGS=-target x86_64-apple-macos$(MAC_MIN_X64) -isysroot $(SDK_X64_PATH) -B$(BIN_DIR)
@@ -106,6 +103,14 @@ $(INTERMEDIATE)/arm64/%.o: %.m $(COCOA_HEADERS)
 	@echo "  > arm64: $<"
 	$(COMPILER_ARM64) $(ARM64_COMPILE_FLAGS) $(OPT_FLAGS) \
 	  $(CLANG_WARN_FLAGS) -c $< -o $@
+
+fontawesome-icons: $(FONTAWESOME_SOLID_FILE)
+	python3 tools/gen_aifontawesome_icons.py $(FONTAWESOME_SOLID_FILE)
+
+fontawesome-icons-check: $(FONTAWESOME_SOLID_FILE)
+	python3 tools/gen_aifontawesome_icons.py --check $(FONTAWESOME_SOLID_FILE)
+
+$(PPC_OBJS) $(X86_OBJS) $(X64_OBJS) $(ARM64_OBJS): | fontawesome-icons-check
 
 $(PREFIX)/ppc/lib/libAltivecCocoa.a: $(PPC_OBJS)
 	@echo "--- Archiving AltivecCocoa (ppc) ---"
@@ -273,4 +278,5 @@ prune-build-files:
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: all static dynamic verify-static verify-dynamic prune-build-files clean
+.PHONY: all static dynamic fontawesome-icons fontawesome-icons-check \
+        verify-static verify-dynamic prune-build-files clean

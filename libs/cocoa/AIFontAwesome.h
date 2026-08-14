@@ -24,13 +24,13 @@
 #endif
 
 /* FA7 Free Solid icons. Names and code points are extracted directly from the
- * bundled FA7-Solid-900.otf (cmap + CFF charset) by tools/gen_faicons --
+ * pinned FA7-Solid-900.otf (cmap + CFF charset) by the generator --
  * i.e. they are exactly the glyphs this font ships, not copied from any
  * cheat sheet, so no version-mismatch is possible. The enum value *is* the
  * Unicode code point, so call sites stay readable and no hex literals leak
  * past this header. Brand glyphs live in a separate font and are absent.
  *
- * Generated -- do not hand-edit; rerun tools/gen_aifontawesome_icons.py. */
+ * Generated -- do not hand-edit; run `make fontawesome-icons`. */
 typedef enum {
   AIFAFaucet                     = 0xE005,
   AIFAFaucetDrip                 = 0xE006,
@@ -1430,6 +1430,10 @@ typedef enum {
 } AIFontAwesomeStyle;
 
 @interface AIFontAwesome : NSObject
+
+/* Complete Font Awesome Free 7.2.0 license text. Static-library clients can
+ * present this in an About or Licenses screen without loading a resource. */
++ (NSString *)fontAwesomeLicenseText;
 
 /* Bundled OTF paths. These search [NSBundle bundleForClass:] first, then
  * [NSBundle mainBundle] for static-library clients. Missing resources raise

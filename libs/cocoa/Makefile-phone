@@ -1,6 +1,8 @@
-include cocoa_common.mk
+.DEFAULT_GOAL := all
 
 CWD=$(shell pwd)
+include cocoa_common.mk
+
 BUILD_ROOT=$(CWD)/build-phone
 INTERMEDIATE=$(BUILD_ROOT)/intermediate
 PREFIX=$(BUILD_ROOT)/prefix
@@ -18,11 +20,6 @@ COCOA_HEADERS=AltivecCocoa.h \
               AICookieCutterWindowController.h \
               AIWebViewController.h \
               AIFontAwesome.h
-COCOA_FONT_FILES=Resources/Fonts/FA7-Solid-900.otf \
-                 Resources/Fonts/FA7-Regular-400.otf \
-                 Resources/Fonts/FA7-Brands-400.otf
-COCOA_FONT_NOTICE=Resources/Fonts/LICENSE-Font-Awesome.txt
-
 IOS_V7_FLAGS=-target armv7-apple-ios$(IOS_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch armv7 -B$(BIN_DIR)
 IOS_64_FLAGS=-target arm64-apple-ios$(IOS_ARM64_MIN_VER) -isysroot $(SDK_IOS_PATH) -arch arm64 -B$(BIN_DIR)
 
@@ -69,6 +66,11 @@ $(INTERMEDIATE)/arm64/%.o: %.m $(COCOA_HEADERS)
 	@mkdir -p $(dir $@) $(STAMP_DIR)
 	@echo "  > arm64: $<"
 	$(COMPILER_IOS) $(IOS_64_FLAGS) $(PHONE_CFLAGS) -c $< -o $@
+
+fontawesome-icons-check: $(FONTAWESOME_SOLID_FILE)
+	python3 tools/gen_aifontawesome_icons.py --check $(FONTAWESOME_SOLID_FILE)
+
+$(ARMV7_OBJS) $(ARM64_OBJS): | fontawesome-icons-check
 
 $(PREFIX)/armv7/lib/libAltivecCocoa.a: $(ARMV7_OBJS)
 	@echo "--- Archiving AltivecCocoa (armv7) ---"
@@ -120,4 +122,5 @@ prune-build-files:
 clean:
 	rm -rf $(BUILD_ROOT)
 
-.PHONY: all static dynamic verify-static prune-build-files clean
+.PHONY: all static dynamic fontawesome-icons-check verify-static \
+        prune-build-files clean
