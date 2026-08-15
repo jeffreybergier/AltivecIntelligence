@@ -139,6 +139,23 @@ _altivec_target_flags := \
 	-miphoneos-version-min=$(IPHONEOS_DEPLOYMENT_TARGET) \
 	-isysroot $(_altivec_effective_sdkroot) \
 	-B$(ALTIVEC_BIN)
+# Keep app diagnostics aligned with the repository's iOS build.  They apply
+# only to compile and analyze actions; do not hide unused driver arguments.
+_altivec_warning_flags := \
+	-Wall \
+	-Wextra \
+	-Wconversion \
+	-Wsign-conversion \
+	-Wfloat-conversion \
+	-Wimplicit-function-declaration \
+	-Wobjc-method-access \
+	-Wunguarded-availability \
+	-Wno-semicolon-before-method-body
+_altivec_common_compile_flags := \
+	-g \
+	-pedantic \
+	$(_altivec_warning_flags)
+_altivec_c_language_flags := -std=c99
 _altivec_include_flags := \
 	$(foreach directory,$(INCLUDE_DIRS) $(ALTIVEC_MANAGED_INCLUDE_DIRS),\
 		-I$(directory))
@@ -148,6 +165,9 @@ _altivec_framework_flags := \
 		-framework $(framework))
 _altivec_arc_flag := \
 	$(if $(filter 1 YES yes true TRUE,$(APP_USE_ARC)),-fobjc-arc)
+# iOS 5 has a native ARC runtime.  Keep the ARC flag on compilation only:
+# Clang otherwise force-loads Apple ARCLite at link time to back-deploy
+# Objective-C subscripting, which is not part of this SDK-free toolchain.
 _altivec_makefiles := $(abspath $(MAKEFILE_LIST))
 _altivec_resource_inputs := \
 	$(foreach resource,$(RESOURCES),$(RESOURCE_ROOT)/$(resource))
@@ -166,11 +186,13 @@ _altivec_compiler_for = \
 		$(ALTIVEC_CXX),$(ALTIVEC_CC))
 _altivec_language_flags_for = \
 	$(if $(filter %.m,$(1)),\
-		$(APP_CFLAGS) $(APP_OBJCFLAGS) $(_altivec_arc_flag),\
+		$(_altivec_c_language_flags) $(APP_CFLAGS) \
+			$(APP_OBJCFLAGS) $(_altivec_arc_flag),\
 		$(if $(filter %.mm,$(1)),\
 			$(APP_CXXFLAGS) $(APP_OBJCFLAGS) $(_altivec_arc_flag),\
 			$(if $(filter %.cc %.cpp %.cxx,$(1)),\
-				$(APP_CXXFLAGS),$(APP_CFLAGS))))
+				$(APP_CXXFLAGS),\
+				$(_altivec_c_language_flags) $(APP_CFLAGS))))
 _altivec_link_driver := \
 	$(if $(_altivec_cxx_sources),$(ALTIVEC_CXX),$(ALTIVEC_CC))
 
@@ -346,6 +368,7 @@ $(call _altivec_object_for,$(1)): $(1) $(_altivec_makefiles) | \
 	@"$(call _altivec_compiler_for,$(1))" \
 		$(_altivec_target_flags) \
 		$(_altivec_include_flags) \
+		$(_altivec_common_compile_flags) \
 		$(APP_CPPFLAGS) \
 		$(call _altivec_language_flags_for,$(1)) \
 		-O2 -DNDEBUG -MMD -MP \
@@ -368,7 +391,6 @@ $(_altivec_app_executable): $(_altivec_objects) $(INFO_PLIST) \
 	@/bin/mkdir -p "$(_altivec_app_dir)"
 	@"$(_altivec_link_driver)" \
 		$(_altivec_target_flags) \
-		$(_altivec_arc_flag) \
 		$(APP_LDFLAGS) \
 		-o "$(_altivec_app_executable)" \
 		$(foreach object,$(_altivec_objects),"$(object)") \
@@ -425,6 +447,7 @@ $(call _altivec_analyze_log_for,$(1)): $(1) $(_altivec_makefiles) | \
 		"$(call _altivec_compiler_for,$(1))" \
 			$(_altivec_target_flags) \
 			$(_altivec_include_flags) \
+			$(_altivec_common_compile_flags) \
 			$(APP_CPPFLAGS) \
 			$(call _altivec_language_flags_for,$(1)) \
 			$(APP_ANALYZE_FLAGS) \

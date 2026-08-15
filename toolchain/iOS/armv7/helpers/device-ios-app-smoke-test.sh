@@ -108,6 +108,30 @@ umask 077
   --display-name 'Altivec Make Smoke' \
   --bundle-id com.altivecintelligence.make-smoke \
   --destination "$smoke_dir"
+
+readonly availability_probe=\
+"${smoke_dir}/source/iOS/AvailabilityWarningProbe.m"
+printf '%s\n' \
+  '#import <Foundation/Foundation.h>' \
+  '' \
+  'id AltivecSubscriptAvailabilityProbe(NSArray *values) {' \
+  '  return values[0];' \
+  '}' \
+  > "$availability_probe"
+
+readonly source_makefile="${smoke_dir}/source/iOS/Makefile"
+readonly updated_source_makefile="${source_makefile}.updated"
+"${altivec_bin}/awk" '
+    /^ALTIVEC_PREFIX / && !added {
+      print "SOURCES += AvailabilityWarningProbe.m"
+      print "APP_OBJCFLAGS += -Wno-error=unguarded-availability"
+      added = 1
+    }
+    { print }
+    END { if (!added) exit 1 }
+  ' "$source_makefile" > "$updated_source_makefile"
+/bin/mv "$updated_source_makefile" "$source_makefile"
+
 cd "$smoke_dir"
 
 printf '%s\n' 'Building the sample app and IPA...'
@@ -117,6 +141,35 @@ if ! "${altivec_bin}/make" --no-print-directory release \
   exit 1
 fi
 /bin/cat release-output.txt
+expected_subscript_warning=\
+"'objectAtIndexedSubscript:' is only available on iOS 6.0 or newer"
+expected_subscript_warning+=' [-Wunguarded-availability]'
+readonly expected_subscript_warning
+subscript_warning_count="$(
+  "${altivec_bin}/grep" -F -c -- \
+    "$expected_subscript_warning" release-output.txt || true
+)"
+readonly subscript_warning_count
+[[ "$subscript_warning_count" == 1 ]] || {
+  printf 'error: expected one subscripting warning, found %s\n' \
+    "$subscript_warning_count" >&2
+  exit 1
+}
+"${altivec_bin}/grep" -Fq \
+  '[OBJC] AvailabilityWarningProbe.m' release-output.txt || {
+    printf '%s\n' \
+      'error: app build did not compile the subscripting probe' >&2
+    exit 1
+  }
+if "${altivec_bin}/grep" -E ': (warning|error):' release-output.txt |
+    "${altivec_bin}/grep" -Fv -- '[-Wdeprecated-declarations]' \
+    | "${altivec_bin}/grep" -Fv -- "$expected_subscript_warning" \
+      > unexpected-build-diagnostics.txt; then
+  /bin/cat unexpected-build-diagnostics.txt >&2
+  printf '%s\n' \
+    'error: app build produced non-deprecation diagnostics' >&2
+  exit 1
+fi
 if "${altivec_bin}/grep" -Fq \
     "using sysroot for 'Current'" release-output.txt; then
   printf '%s\n' \
@@ -145,6 +198,13 @@ file_output="$("${altivec_bin}/file" "$executable_path")"
   printf 'error: unexpected app executable: %s\n' "$file_output" >&2
   exit 1
 }
+if ! "${altivec_bin}/nm" "$executable_path" |
+    "${altivec_bin}/grep" -F \
+      '_AltivecSubscriptAvailabilityProbe' >/dev/null; then
+  printf '%s\n' \
+    'error: linked app omitted the subscripting availability probe' >&2
+  exit 1
+fi
 "${altivec_bin}/otool" -hv "$executable_path" >/dev/null
 load_commands="$("${altivec_bin}/otool" -l "$executable_path")"
 # The awk program intentionally uses its own $1/$2 fields.
@@ -256,6 +316,8 @@ printf '%s\n' \
 
 printf '%s\n' 'Building and executing the iOS 5.0 ARC runtime smoke test...'
 resolved_sdk="$(cd "${altivec_prefix}/SDKs/Current.sdk" && /bin/pwd -P)"
+# iOS 5 provides the ARC runtime.  Compile with ARC, then link without the ARC
+# driver flag so Clang does not request ARCLite for Objective-C subscripting.
 "${altivec_bin}/clang" \
   --target=armv7-apple-ios5.0 \
   -arch armv7 \
@@ -266,11 +328,26 @@ resolved_sdk="$(cd "${altivec_prefix}/SDKs/Current.sdk" && /bin/pwd -P)"
   -Os \
   -Wall \
   -Wextra \
+  -Wunguarded-availability \
   -Werror \
   ArcRuntimeSmoke.m \
+  -c \
+  -o ArcRuntimeSmoke.o
+"${altivec_bin}/clang" \
+  --target=armv7-apple-ios5.0 \
+  -arch armv7 \
+  -miphoneos-version-min=5.0 \
+  -isysroot "$resolved_sdk" \
+  -B"${altivec_bin}" \
+  ArcRuntimeSmoke.o \
   -framework Foundation \
   -o ArcRuntimeSmoke
 "${altivec_bin}/ldid" -S ArcRuntimeSmoke
+if "${altivec_bin}/nm" ArcRuntimeSmoke |
+    "${altivec_bin}/grep" -Fq '___ARCLite__'; then
+  printf '%s\n' 'error: ARC runtime smoke unexpectedly linked ARCLite' >&2
+  exit 1
+fi
 ./ArcRuntimeSmoke
 
 if "${altivec_bin}/make" --no-print-directory -n debug \
@@ -287,7 +364,7 @@ readonly analyze_report="${smoke_dir}/source/iOS/build-analyze/analyze.txt"
   exit 1
 }
 for source_name in main.m AppDelegate.m UI/MainViewController.m \
-  ../shared/app_model.c; do
+  ../shared/app_model.c AvailabilityWarningProbe.m; do
   "${altivec_bin}/grep" -Fq "== ${source_name} ==" \
     "$analyze_report" || {
     printf 'error: analyze report omitted source: %s\n' \
@@ -309,6 +386,7 @@ printf '%s\n' 'Cleaning generated app build state...'
   exit 1
 }
 [[ -f source/iOS/main.m && -f source/iOS/AppDelegate.m &&
+  -f source/iOS/AvailabilityWarningProbe.m &&
   -f source/iOS/Resources/Default.png &&
   -f source/shared/Resources/en.lproj/Localizable.strings ]] || {
   printf '%s\n' 'error: clean removed project inputs' >&2
@@ -319,5 +397,5 @@ printf '%s\n' \
   "Common Makefile: ${common_makefile}" \
   "Project template: ${project_template}" \
   "Built executable: ${file_output}" \
-  'IPA layout, launch assets, localization, signing, analyzer, and clean passed.' \
+  'Availability warning, IPA layout, signing, analyzer, and clean passed.' \
   'Altivec iOS app Makefile device smoke test passed.'

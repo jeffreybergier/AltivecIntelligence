@@ -7,6 +7,9 @@
 - Write Cocoa integration in Objective-C and portable logic in C. Do not add
   Swift.
 - Use bracketed Objective-C message syntax rather than dot syntax.
+- Prefix cross-version compatibility aliases, constants, types, dummy
+  protocols, and category methods with `XP`, such as
+  `XPTextAlignmentCenter` or `XP_setProgress:animated:`.
 - Keep localized strings under `source/shared/Resources/<locale>.lproj`.
 - The required static launch-image matrix and matching plist entries are
   already present. Keep them unless the product deliberately changes its

@@ -41,19 +41,34 @@ for template_file in \
     die "iOS app project template is missing: ${template_file}"
 done
 
+main_view_controller=\
+"${project_template_dir}/source/iOS/UI/MainViewController.m"
+readonly main_view_controller
+grep -Fqx '#define XPTextAlignmentCenter ((NSInteger)1)' \
+  "$main_view_controller" ||
+  die 'project template does not define the XP text-alignment shim'
+grep -Fqx \
+  '  [welcomeLabel setTextAlignment:XPTextAlignmentCenter];' \
+  "$main_view_controller" ||
+  die 'project template does not use the XP text-alignment shim'
+if grep -Fq 'kTextAlignmentCenter' "$main_view_controller"; then
+  die 'project template uses a normal constant name for a compatibility shim'
+fi
+
 grep -Fqx 'IPHONEOS_DEPLOYMENT_TARGET ?= 5.0' "$common_makefile" ||
   die 'common Makefile does not default app builds to iOS 5.0'
 grep -Fqx 'APP_USE_ARC ?= 1' "$common_makefile" ||
   die 'common Makefile does not default app builds to ARC'
 grep -Fqx 'BUNDLE_LOCALIZATION_DIRS ?=' "$common_makefile" ||
   die 'common Makefile does not expose shared localization roots'
-awk '
+if awk '
     /@"\$\(_altivec_link_driver\)"/ { in_link = 1 }
     in_link && /\$\(_altivec_arc_flag\)/ { found_arc_link_flag = 1 }
     in_link && /\$\(APP_LDFLAGS\)/ { in_link = 0 }
     END { exit(found_arc_link_flag ? 0 : 1) }
-  ' "$common_makefile" ||
-  die 'common Makefile does not pass the ARC flag to the final link'
+  ' "$common_makefile"; then
+  die 'common Makefile passes ARC to the final link and requires ARCLite'
+fi
 
 # shellcheck disable=SC2016
 grep -Fqx \
@@ -286,6 +301,24 @@ grep -Fq -- '-fobjc-arc' "$check_root/release-dry-run.txt" ||
 if grep -Fq -- '-fobjc-arc' "$check_root/ios5-mrc-dry-run.txt"; then
   die 'APP_USE_ARC=0 did not disable ARC for iOS 5.0'
 fi
+for common_flag in \
+  -g \
+  -std=c99 \
+  -pedantic \
+  -Wall \
+  -Wextra \
+  -Wconversion \
+  -Wsign-conversion \
+  -Wfloat-conversion \
+  -Wimplicit-function-declaration \
+  -Wobjc-method-access \
+  -Wunguarded-availability \
+  -Wno-semicolon-before-method-body; do
+  grep -Fq -- "$common_flag" "$check_root/release-dry-run.txt" ||
+    die "release omits common iOS flag: ${common_flag}"
+  grep -Fq -- "$common_flag" "$check_root/analyze-dry-run.txt" ||
+    die "analyze omits common iOS flag: ${common_flag}"
+done
 grep -Fq -- '--target=armv7-apple-ios6.0' \
   "$check_root/ios6-override-dry-run.txt" ||
   die 'deployment-target override did not reach the target triple'

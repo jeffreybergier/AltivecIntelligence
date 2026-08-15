@@ -153,10 +153,20 @@ When a formal protocol (like `NSApplicationDelegate`) is not available in an old
 #endif
 ```
 
-### 3. Bypassing Enum/Availability Warnings
-When assigning an enum value that is marked as unavailable or has been renamed (e.g. `NSTextAlignmentCenter`), use an explicit **`(NSInteger)`** cast. This bypasses the compiler's strict conversion and availability guards.
+### 3. Enum/Availability Compatibility Shims
+When an enum value is marked as unavailable or has been renamed (e.g.
+`NSTextAlignmentCenter`), expose its ABI-compatible integer value through an
+`XP`-prefixed compatibility symbol, such as
+`#define XPTextAlignmentCenter ((NSInteger)1)`. Do not directly reference the
+newer enum inside the shim; casting that symbol does not bypass its availability
+annotation.
 
-### 4. The "XP_" Category Pattern
+### 4. The "XP" Compatibility Pattern
+Prefix every app-level cross-version compatibility symbol with `XP`, including
+aliases, constants, types, dummy protocols, and category methods. For example,
+use `XPTextAlignmentCenter`, not a normal `k`-prefixed constant, for an enum
+compatibility shim.
+
 When a method is completely missing from an older SDK (e.g. `setContentBorderThickness:`), do not call it directly. Instead, implement a category on that class with an `XP_` prefix. Use the **Runtime Check** and **Function Pointer** patterns within this category to safely bridge the gap:
 ```objectivec
 - (void)XP_methodName:(id)arg {
