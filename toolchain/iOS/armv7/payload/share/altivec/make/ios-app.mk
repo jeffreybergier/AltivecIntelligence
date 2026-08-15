@@ -308,30 +308,40 @@ __altivec_ios_validate:
 	done; \
 	if [[ -n "$(strip $(ALTIVEC_MANAGED_VERSION))" ]]; then \
 		for directory in $(ALTIVEC_MANAGED_INCLUDE_DIRS); do \
-			[[ -d "$$directory" ]] || { \
-				printf 'error: managed library include directory is missing: %s\n' \
+			[[ -d "$$directory" && -x "$$directory" ]] || { \
+				printf 'error: managed library include directory is inaccessible: %s\n' \
 					"$$directory" >&2; \
 				exit 1; \
 			}; \
 		done; \
 		for library in $(ALTIVEC_MANAGED_ARCHIVES); do \
-			[[ -f "$$library" ]] || { \
-				printf 'error: managed static library is missing: %s\n' \
+			[[ -f "$$library" && -r "$$library" ]] || { \
+				printf 'error: managed static library is unreadable: %s\n' \
 					"$$library" >&2; \
 				exit 1; \
 			}; \
 		done; \
-		[[ -d "$(ALTIVEC_MANAGED_BUNDLE_DIR)" ]] || { \
-			printf 'error: managed bundle resources are missing: %s\n' \
+		[[ -d "$(ALTIVEC_MANAGED_BUNDLE_DIR)" && \
+			-x "$(ALTIVEC_MANAGED_BUNDLE_DIR)" ]] || { \
+			printf 'error: managed bundle directory is inaccessible: %s\n' \
 				"$(ALTIVEC_MANAGED_BUNDLE_DIR)" >&2; \
 			exit 1; \
 		}; \
+		managed_bundle_root="$$(cd "$(ALTIVEC_MANAGED_BUNDLE_DIR)" && /bin/pwd -P)"; \
 		for resource in $(ALTIVEC_MANAGED_RESOURCE_FILES); do \
-			[[ -f "$$resource" ]] || { \
-				printf 'error: managed bundle resource is missing: %s\n' \
+			[[ -f "$$resource" && ! -L "$$resource" && -r "$$resource" ]] || { \
+				printf 'error: managed bundle resource is unreadable: %s\n' \
 					"$$resource" >&2; \
 				exit 1; \
 			}; \
+			resource_parent="$$(cd "$${resource%/*}" && /bin/pwd -P)"; \
+			resolved_resource="$$resource_parent/$${resource##*/}"; \
+			case "$$resolved_resource" in \
+				"$$managed_bundle_root"/*) ;; \
+				*) printf 'error: managed resource escapes bundle: %s\n' \
+					"$$resource" >&2; \
+				   exit 1 ;; \
+			esac; \
 		done; \
 		for resource in "$(ALTIVEC_MANAGED_BUNDLE_DIR)"/*; do \
 			[[ -e "$$resource" ]] || continue; \
@@ -397,9 +407,18 @@ $(_altivec_app_executable): $(_altivec_objects) $(INFO_PLIST) \
 		$(foreach library,$(ALTIVEC_MANAGED_ARCHIVES),"$(library)") \
 		$(_altivec_framework_flags) \
 		$(APP_LDLIBS)
-	@if [[ -n "$(strip $(ALTIVEC_MANAGED_VERSION))" ]]; then \
+	@set -eu; \
+	if [[ -n "$(strip $(ALTIVEC_MANAGED_VERSION))" ]]; then \
 		printf '[RESOURCES] Altivec %s\n' "$(ALTIVEC_MANAGED_VERSION)"; \
-		/bin/cp -R "$(ALTIVEC_MANAGED_BUNDLE_DIR)/." "$(_altivec_app_dir)/"; \
+		managed_bundle_root="$$(cd "$(ALTIVEC_MANAGED_BUNDLE_DIR)" && /bin/pwd -P)"; \
+		for resource in $(ALTIVEC_MANAGED_RESOURCE_FILES); do \
+			resource_parent="$$(cd "$${resource%/*}" && /bin/pwd -P)"; \
+			resolved_resource="$$resource_parent/$${resource##*/}"; \
+			relative_resource="$${resolved_resource#"$$managed_bundle_root"/}"; \
+			destination_path="$(_altivec_app_dir)/$$relative_resource"; \
+			/bin/mkdir -p "$${destination_path%/*}"; \
+			/bin/cp -f "$$resource" "$$destination_path"; \
+		done; \
 	fi
 	@/bin/cp -f "$(INFO_PLIST)" "$(_altivec_app_dir)/Info.plist"
 	@printf 'APPL????' > "$(_altivec_app_dir)/PkgInfo"

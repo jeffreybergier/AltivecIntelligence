@@ -75,6 +75,24 @@ done
   exit 1
 }
 
+if [[ -d "${altivec_prefix}/Libraries/Current" ]]; then
+  managed_root="$(
+    cd "${altivec_prefix}/Libraries/Current" && /bin/pwd -P
+  )"
+  readonly managed_root
+  inaccessible_path="$(
+    "${altivec_bin}/find" "$managed_root" \
+      \( -type d ! -perm -005 -o -type f ! -perm -004 \) \
+      -print -quit
+  )"
+  readonly inaccessible_path
+  [[ -z "$inaccessible_path" ]] || {
+    printf 'error: selected library path is inaccessible to mobile: %s\n' \
+      "$inaccessible_path" >&2
+    exit 1
+  }
+fi
+
 if ! /usr/bin/dpkg-query -S "$common_makefile" |
     "${altivec_bin}/grep" -Fq \
       'com.altivecintelligence.toolchain:'; then

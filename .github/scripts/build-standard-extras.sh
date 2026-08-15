@@ -72,6 +72,13 @@ altivec-release build "${target_args[@]}"
   die 'CURLphone did not stage the Font Awesome license'
 [[ ! -d apps/CURLphone/build-release/CURLphone.app/Frameworks ]] ||
   die 'CURLphone unexpectedly embedded an iOS framework'
+inaccessible_resource="$(
+  find "${prebuilt_root}/libs/cocoa/build-phone/Resources" \
+    -type f ! -perm -004 -print -quit
+)"
+readonly inaccessible_resource
+[[ -z "$inaccessible_resource" ]] ||
+  die "prebuilt iOS resource is not world-readable: ${inaccessible_resource}"
 
 arc_plan="$(mktemp "${TMPDIR:-/tmp}/altivec-arc-plan.XXXXXX")"
 readonly arc_plan

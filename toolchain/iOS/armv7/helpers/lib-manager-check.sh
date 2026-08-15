@@ -12,7 +12,7 @@ if (($# != 1)); then
   exit 2
 fi
 
-for tool in bash chmod cp curl env grep jq mktemp openssl readlink \
+for tool in bash chmod cp curl env find grep jq mktemp openssl readlink \
   realpath rm unzip zip; do
   command -v "$tool" >/dev/null 2>&1 ||
     die "required validation tool not found: ${tool}"
@@ -94,6 +94,9 @@ printf '%s\n' 'fake package resource' \
   > "$fixture_root/AltivecCocoa-iOS-static/Resources/Fonts/TestFont.otf"
 printf '%s\n' 'build-only stamp' \
   > "$fixture_root/AltivecCocoa-iOS-static/Resources/Fonts/.stamp"
+chmod 0700 "$fixture_root/AltivecCocoa-iOS-static/Resources/Fonts"
+chmod 0600 \
+  "$fixture_root/AltivecCocoa-iOS-static/Resources/Fonts/TestFont.otf"
 
 (
   cd "$fixture_root"
@@ -254,6 +257,13 @@ grep -Fq 'Using cached AltivecCore 1.0.9' "$check_root/install.txt" ||
 [[ -f "$library_root/1.0.9/Bundle/cacert.pem" &&
   -f "$library_root/1.0.9/Bundle/Fonts/TestFont.otf" ]] ||
   die 'install did not normalize managed app resources'
+find "$library_root/1.0.9/Bundle/Fonts" -prune -perm 0755 -print |
+  grep -Fqx "$library_root/1.0.9/Bundle/Fonts" ||
+  die 'install did not normalize the managed resource directory mode'
+find "$library_root/1.0.9/Bundle/Fonts/TestFont.otf" \
+  -prune -perm 0644 -print |
+  grep -Fqx "$library_root/1.0.9/Bundle/Fonts/TestFont.otf" ||
+  die 'install did not normalize the managed resource file mode'
 [[ ! -e "$library_root/1.0.9/Bundle/Fonts/.stamp" ]] ||
   die 'install copied a private build stamp into managed resources'
 jq -e '.version == "1.0.9" and .repository ==
@@ -263,6 +273,13 @@ jq -e '.version == "1.0.9" and .repository ==
 grep -Fq 'ALTIVEC_MANAGED_VERSION := 1.0.9' \
   "$fake_prefix/share/altivec-lib/current.mk" ||
   die 'install did not generate the selected Make fragment'
+
+chmod 0600 "$library_root/1.0.9/Bundle/Fonts/TestFont.otf"
+run_manager install 1.0.9 > "$check_root/repair.txt"
+find "$library_root/1.0.9/Bundle/Fonts/TestFont.otf" \
+  -prune -perm 0644 -print |
+  grep -Fqx "$library_root/1.0.9/Bundle/Fonts/TestFont.otf" ||
+  die 'reinstall did not repair an existing managed resource mode'
 
 rm "$library_root/Current" \
   "$fake_prefix/share/altivec-lib/current.mk" \
@@ -312,6 +329,12 @@ run_manager update > "$check_root/update.txt" 2>&1
 grep -Fq 'ALTIVEC_MANAGED_VERSION := 1.0.10' \
   "$fake_prefix/share/altivec-lib/current.mk" ||
   die 'update did not refresh the selected Make fragment'
+chmod 0600 "$library_root/1.0.10/Bundle/Fonts/TestFont.otf"
+run_manager update > "$check_root/current-update.txt"
+find "$library_root/1.0.10/Bundle/Fonts/TestFont.otf" \
+  -prune -perm 0644 -print |
+  grep -Fqx "$library_root/1.0.10/Bundle/Fonts/TestFont.otf" ||
+  die 'current update did not repair an existing managed resource mode'
 
 run_manager select 1.0.9 > "$check_root/select.txt"
 [[ "$(readlink "$library_root/Current")" == '1.0.9' ]] ||

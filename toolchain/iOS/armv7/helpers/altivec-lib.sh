@@ -533,6 +533,14 @@ validate_extracted_tree() {
     die "library archive contains a special file: ${unexpected}"
 }
 
+# Release ZIP modes are untrusted; mobile consumes these root-installed files.
+normalize_library_permissions() {
+  local root="$1"
+
+  "$find_tool" "$root" -type d -exec "$chmod_tool" 0755 {} +
+  "$find_tool" "$root" -type f -exec "$chmod_tool" 0644 {} +
+}
+
 validate_bundle_tree() {
   local bundle_dir="$1"
   local resource=""
@@ -800,6 +808,7 @@ select_library_set() {
   local receipt_path="${version_root}/.altivec-lib-receipt.json"
 
   validate_receipt "$version" "$receipt_path"
+  normalize_library_permissions "$version_root"
   validate_library_set "$version" "$version_root"
 
   if [[ -e "$current_link" && ! -L "$current_link" ]]; then
@@ -853,6 +862,7 @@ install_prepared_release() {
 
   if [[ -d "$final_root" && ! -L "$final_root" ]]; then
     validate_receipt "$version" "$internal_receipt"
+    normalize_library_permissions "$final_root"
     validate_library_set "$version" "$final_root"
     if [[ ! -f "${receipt_dir}/${version}.json" ]]; then
       copy_external_receipt "$version"
@@ -906,6 +916,7 @@ install_prepared_release() {
   done < <("$find_tool" "${payload_root}/Bundle" -type f \
     -name '.stamp' -print)
 
+  normalize_library_permissions "$payload_root"
   validate_library_set "$version" "$payload_root"
   run_library_smoke_test "$version" "$payload_root"
 
@@ -975,6 +986,7 @@ command_install() {
   if [[ -d "$final_root" && ! -L "$final_root" ]]; then
     validate_receipt "$version" \
       "${final_root}/.altivec-lib-receipt.json"
+    normalize_library_permissions "$final_root"
     validate_library_set "$version" "$final_root"
     if [[ ! -f "${receipt_dir}/${version}.json" ||
         -L "${receipt_dir}/${version}.json" ]]; then
@@ -1014,6 +1026,10 @@ command_update() {
   selected="$(current_version 2>/dev/null || true)"
   if [[ -n "$selected" ]] && ! version_is_newer "$latest" "$selected"; then
     if [[ "$latest" == "$selected" ]]; then
+      validate_receipt "$selected" \
+        "${library_root}/${selected}/.altivec-lib-receipt.json"
+      normalize_library_permissions "${library_root}/${selected}"
+      validate_library_set "$selected" "${library_root}/${selected}"
       printf 'Altivec libraries %s are already current.\n' "$selected"
     else
       printf 'Selected Altivec libraries %s are newer than GitHub release %s; no update performed.\n' \
@@ -1073,6 +1089,7 @@ command_verify() {
   acquire_lock "verify ${version}"
   validate_receipt "$version" \
     "${version_root}/.altivec-lib-receipt.json"
+  normalize_library_permissions "$version_root"
   validate_library_set "$version" "$version_root"
   run_library_smoke_test "$version" "$version_root"
   update_verified_at "$version"

@@ -170,6 +170,7 @@ printf '%s\n' '/* fake cocoa header */' \
   > "$managed_root/AltivecCocoa/include/AltivecCocoa.h"
 printf '%s\n' 'managed CA bundle' > "$managed_root/Bundle/cacert.pem"
 printf '%s\n' 'managed font' > "$managed_root/Bundle/Fonts/font.ttf"
+printf '%s\n' 'unlisted managed resource' > "$managed_root/Bundle/unlisted.txt"
 {
   printf '%s\n' 'ALTIVEC_MANAGED_VERSION := 1.0.9'
   printf 'ALTIVEC_MANAGED_ROOT := %s\n' "$managed_root"
@@ -356,6 +357,18 @@ grep -Fq 'localization root escapes app project' \
   "$check_root/outside-localizations.txt" ||
   die 'outside-localization failure did not explain the project boundary'
 
+outside_managed_resource="$check_root/outside-managed.txt"
+printf '%s\n' 'outside managed resource' > "$outside_managed_resource"
+if make -C "$check_root/project/source/iOS" --no-print-directory \
+    __altivec_ios_validate ALTIVEC_PREFIX="$fake_prefix" \
+    ALTIVEC_MANAGED_RESOURCE_FILES="$outside_managed_resource" \
+    > "$check_root/outside-managed.txt.log" 2>&1; then
+  die 'managed-resource validation allowed a file outside its bundle'
+fi
+grep -Fq 'managed resource escapes bundle' \
+  "$check_root/outside-managed.txt.log" ||
+  die 'outside-managed-resource failure did not explain the bundle boundary'
+
 make -C "$check_root/project" --no-print-directory release \
   ALTIVEC_PREFIX="$fake_prefix" > "$check_root/release.txt"
 grep -Fq '[LOCALIZATIONS] ../shared/Resources' "$check_root/release.txt" ||
@@ -381,6 +394,8 @@ cmp "$check_root/project/source/iOS/Resources/Fonts/font.ttf" \
   die 'project directory resource did not override the managed font'
 [[ ! -e "$app_dir/Fonts/Fonts" ]] ||
   die 'managed and project directory resources nested incorrectly'
+[[ ! -e "$app_dir/unlisted.txt" ]] ||
+  die 'release copied a managed resource absent from the selected file list'
 
 for launch_image in \
   Default.png \

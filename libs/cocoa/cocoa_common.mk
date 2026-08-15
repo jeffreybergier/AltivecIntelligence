@@ -52,6 +52,7 @@ define download_font_to_target
 	}; \
 	if test -f "$@"; then \
 	  if verify_download "$@"; then \
+	    chmod 0644 "$@"; \
 	    echo "  > verified cached Font Awesome file: $@"; \
 	    exit 0; \
 	  fi; \
@@ -67,6 +68,7 @@ define download_font_to_target
 	         "(attempt $$attempt/$(FONT_DOWNLOAD_ATTEMPTS))"; \
 	    if curl $(FONT_CURL_FLAGS) "$$url" -o "$$tmp"; then \
 	      if verify_download "$$tmp"; then \
+	        chmod 0644 "$$tmp"; \
 	        mv "$$tmp" "$@"; \
 	        tmp=''; \
 	        exit 0; \
