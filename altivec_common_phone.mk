@@ -194,7 +194,7 @@ analyze: validate
 	fi
 	$(call analyze_report)
 
-validate: altivec-sdk-ensure validate-sdk validate-paths libs-ready cocoa-ready
+validate: altivec-sdk-install validate-sdk validate-paths libs-ready cocoa-ready
 
 validate-sdk:
 	@if [ ! -d "$(IOS_SDK_PATH)" ]; then echo " [!] ERROR: iOS SDK missing at $(IOS_SDK_PATH)"; exit 1; fi

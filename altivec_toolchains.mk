@@ -47,12 +47,12 @@ LIPO ?= $(LEGACY_BIN)/i386-apple-darwin9-lipo
 LIBTOOL ?= $(LEGACY_BIN)/i386-apple-darwin9-libtool
 DSYMUTIL ?= /usr/bin/dsymutil
 
-.PHONY: altivec-sdk-ensure
-altivec-sdk-ensure:
+.PHONY: altivec-sdk-install
+altivec-sdk-install:
 	@if [ -n "$(ALTIVEC_SDK_ARCHIVE_DIR)" ]; then \
-		ALTIVEC_SDK_ARCHIVE_DIR="$(ALTIVEC_SDK_ARCHIVE_DIR)" "$(ALTIVEC_SDK)" ensure; \
+		ALTIVEC_SDK_ARCHIVE_DIR="$(ALTIVEC_SDK_ARCHIVE_DIR)" "$(ALTIVEC_SDK)" install; \
 	else \
-		"$(ALTIVEC_SDK)" ensure; \
+		"$(ALTIVEC_SDK)" install; \
 	fi
 
 # This include supplies helpers, not the caller's default build target.

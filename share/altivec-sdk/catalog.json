@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "build_sdks": [
     {
       "id": "macos-10.5",
@@ -7,7 +7,6 @@
       "version": "10.5",
       "directory": "MacOSX10.5.sdk",
       "archive": "MacOSX10.5.sdk.tar.xz",
-      "url": "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.5.sdk.tar.xz",
       "format": "tar.xz",
       "archive_bytes": 30979044,
       "sha256": "3970800422a5e22122b92e7ce2f30513714272e4cd9096e551b8bd27466e3c2b",
@@ -24,7 +23,6 @@
       "version": "11.3",
       "directory": "MacOSX11.3.sdk",
       "archive": "MacOSX11.3.sdk.tar.xz",
-      "url": "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz",
       "format": "tar.xz",
       "archive_bytes": 51233540,
       "sha256": "cd4f08a75577145b8f05245a2975f7c81401d75e9535dcffbb879ee1deefcbf4",
@@ -41,7 +39,6 @@
       "version": "8.4",
       "directory": "iPhoneOS8.4.sdk",
       "archive": "iPhoneOS8.4.sdk.tar.gz",
-      "url": "https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS8.4.sdk.tar.gz",
       "format": "tar.gz",
       "archive_bytes": 33969945,
       "sha256": "677be5a92577c5e29cbab6067a9a624a3369af1cc00578941565886ea6a0a7da",
@@ -58,100 +55,31 @@
       "id": "apple-xcode-6.4-arclite-iphoneos",
       "bytes": 284128,
       "sha256": "f019ba9bf87bb7a47cfd063542d9e6ed81efe76472c869ad509230aafef18bf8"
-    }
-  ],
-  "device_source": {
-    "repository": "okanon/iPhoneOS.sdk",
-    "release_tag": "v0.0.1",
-    "release_url": "https://github.com/okanon/iPhoneOS.sdk/releases/tag/v0.0.1"
-  },
-  "device_sdks": [
-    {
-      "version": "8.4",
-      "directory": "iPhoneOS8.4.sdk",
-      "archive": "iPhoneOS8.4.sdk.tar.gz",
-      "url": "https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS8.4.sdk.tar.gz",
-      "sha256": "677be5a92577c5e29cbab6067a9a624a3369af1cc00578941565886ea6a0a7da",
-      "download_bytes": 33969945,
-      "unpacked_bytes": 165602796,
-      "architectures": ["armv7", "arm64"],
-      "deployment_targets": {
-        "armv7": "5.0",
-        "arm64": "7.0"
-      },
-      "linker_input": "dylib"
     },
     {
-      "version": "9.3",
-      "directory": "iPhoneOS9.3.sdk",
-      "archive": "iPhoneOS9.3.sdk.tar.gz",
-      "url": "https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS9.3.sdk.tar.gz",
-      "sha256": "e854603f6ab517bc6a221112eac3d21acd35f490680ff2be1048223c8b6cddc4",
-      "download_bytes": 7436651,
-      "unpacked_bytes": 41300899,
-      "architectures": ["armv7", "arm64"],
-      "deployment_targets": {
-        "armv7": "5.0",
-        "arm64": "7.0"
-      },
-      "linker_input": "tapi"
+      "id": "iphoneos-9.3-sdk-archive",
+      "bytes": 7436651,
+      "sha256": "e854603f6ab517bc6a221112eac3d21acd35f490680ff2be1048223c8b6cddc4"
     },
     {
-      "version": "10.3",
-      "directory": "iPhoneOS10.3.sdk",
-      "archive": "iPhoneOS10.3.sdk.tar.gz",
-      "url": "https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS10.3.sdk.tar.gz",
-      "sha256": "fcbbd539d18597b0a07883d97385d5ccac08ab5c02f4493421113a1f8e1ceb80",
-      "download_bytes": 12672859,
-      "unpacked_bytes": 64144736,
-      "architectures": ["armv7", "arm64"],
-      "deployment_targets": {
-        "armv7": "5.0",
-        "arm64": "7.0"
-      },
-      "linker_input": "tapi"
+      "id": "iphoneos-10.3-sdk-archive",
+      "bytes": 12672859,
+      "sha256": "fcbbd539d18597b0a07883d97385d5ccac08ab5c02f4493421113a1f8e1ceb80"
     },
     {
-      "version": "11.4",
-      "directory": "iPhoneOS11.4.sdk",
-      "archive": "iPhoneOS11.4.sdk.tar.gz",
-      "url": "https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS11.4.sdk.tar.gz",
-      "sha256": "8f895f49142959b552fdb527b7c936e334d438018bcf0f53f9c6df6f8696abba",
-      "download_bytes": 8056317,
-      "unpacked_bytes": 52559997,
-      "architectures": ["arm64"],
-      "deployment_targets": {
-        "arm64": "8.0"
-      },
-      "linker_input": "tapi"
+      "id": "iphoneos-11.4-sdk-archive",
+      "bytes": 8056317,
+      "sha256": "8f895f49142959b552fdb527b7c936e334d438018bcf0f53f9c6df6f8696abba"
     },
     {
-      "version": "12.4",
-      "directory": "iPhoneOS12.4.sdk",
-      "archive": "iPhoneOS12.4.sdk.tar.gz",
-      "url": "https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS12.4.sdk.tar.gz",
-      "sha256": "b603133a8b1f2e1d3fc39c3b6a32c6803ab56dfb7e7bb2fa7e2de3ad94973474",
-      "download_bytes": 7416001,
-      "unpacked_bytes": 50168898,
-      "architectures": ["arm64"],
-      "deployment_targets": {
-        "arm64": "8.0"
-      },
-      "linker_input": "tapi"
+      "id": "iphoneos-12.4-sdk-archive",
+      "bytes": 7416001,
+      "sha256": "b603133a8b1f2e1d3fc39c3b6a32c6803ab56dfb7e7bb2fa7e2de3ad94973474"
     },
     {
-      "version": "13.2",
-      "directory": "iPhoneOS13.2.sdk",
-      "archive": "iPhoneOS13.2.sdk.tar.gz",
-      "url": "https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1/iPhoneOS13.2.sdk.tar.gz",
-      "sha256": "b98b95c3979605dbf01f8064eaa25785ccc8dc0533dbab368461a6924ff9f375",
-      "download_bytes": 15367380,
-      "unpacked_bytes": 85511468,
-      "architectures": ["arm64"],
-      "deployment_targets": {
-        "arm64": "8.0"
-      },
-      "linker_input": "tapi"
+      "id": "iphoneos-13.2-sdk-archive",
+      "bytes": 15367380,
+      "sha256": "b98b95c3979605dbf01f8064eaa25785ccc8dc0533dbab368461a6924ff9f375"
     }
   ]
 }

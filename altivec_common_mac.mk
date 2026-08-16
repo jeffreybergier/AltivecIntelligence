@@ -219,7 +219,7 @@ analyze: validate
 	fi
 	$(call analyze_report)
 
-validate: altivec-sdk-ensure validate-sdk validate-paths libs-ready cocoa-ready
+validate: altivec-sdk-install validate-sdk validate-paths libs-ready cocoa-ready
 
 validate-sdk:
 	@if [ ! -d "$(SDK_MAC_OLD_PATH)" ]; then echo " [!] ERROR: Mac SDK 10.5 missing at $(SDK_MAC_OLD_PATH)"; exit 1; fi

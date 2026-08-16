@@ -15,6 +15,16 @@ on:
         description: Commit represented by the release tag
         required: true
         type: string
+    secrets:
+      ALTIVEC_SDK_MACOS_105_URL:
+        description: Private source URL for MacOSX10.5.sdk.tar.xz
+        required: true
+      ALTIVEC_SDK_MACOS_113_URL:
+        description: Private source URL for MacOSX11.3.sdk.tar.xz
+        required: true
+      ALTIVEC_SDK_IPHONEOS_84_URL:
+        description: Private source URL for iPhoneOS8.4.sdk.tar.gz
+        required: true
     outputs:
       release_version:
         description: Numeric version validated against the repository plists
@@ -73,6 +83,10 @@ jobs:
 
       - name: Fetch verified SDK build inputs
         uses: ./.github/actions/fetch-sdk
+        with:
+          macos_105_url: ${{ secrets.ALTIVEC_SDK_MACOS_105_URL }}
+          macos_113_url: ${{ secrets.ALTIVEC_SDK_MACOS_113_URL }}
+          iphoneos_84_url: ${{ secrets.ALTIVEC_SDK_IPHONEOS_84_URL }}
 
       - name: Check configured versions
         id: version
@@ -104,7 +118,7 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user/toolchain/iOS/armv7 \
             "$BUILD_IMAGE" \
-            -lc 'altivec-sdk ensure && make --no-print-directory check core-tools-check sdk-manager-check lib-manager-check ios-app-make-check'
+            -lc 'altivec-sdk install && make --no-print-directory check core-tools-check sdk-manager-check lib-manager-check ios-app-make-check'
 
   standard_assets:
     name: Package libraries and build samples
@@ -135,6 +149,10 @@ jobs:
 
       - name: Fetch verified SDK build inputs
         uses: ./.github/actions/fetch-sdk
+        with:
+          macos_105_url: ${{ secrets.ALTIVEC_SDK_MACOS_105_URL }}
+          macos_113_url: ${{ secrets.ALTIVEC_SDK_MACOS_113_URL }}
+          iphoneos_84_url: ${{ secrets.ALTIVEC_SDK_IPHONEOS_84_URL }}
 
       - name: Build standard extras
         run: |
@@ -149,7 +167,7 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user \
             "$BUILD_IMAGE" \
-            -lc 'altivec-sdk ensure && .github/scripts/build-standard-extras.sh'
+            -lc 'altivec-sdk install && .github/scripts/build-standard-extras.sh'
 
       - name: Upload standard release assets
         uses: actions/upload-artifact@v7
@@ -215,6 +233,10 @@ jobs:
       - name: Fetch verified SDK build inputs
         if: steps.payload_cache.outputs.cache-hit != 'true'
         uses: ./.github/actions/fetch-sdk
+        with:
+          macos_105_url: ${{ secrets.ALTIVEC_SDK_MACOS_105_URL }}
+          macos_113_url: ${{ secrets.ALTIVEC_SDK_MACOS_113_URL }}
+          iphoneos_84_url: ${{ secrets.ALTIVEC_SDK_IPHONEOS_84_URL }}
 
       - name: Report available disk
         if: steps.payload_cache.outputs.cache-hit != 'true'
@@ -232,7 +254,7 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user/toolchain/iOS/armv7 \
             "$BUILD_IMAGE" \
-            -lc 'altivec-sdk ensure && make --no-print-directory core-tools-package'
+            -lc 'altivec-sdk install && make --no-print-directory core-tools-package'
 
       - name: Validate core-tools handoff
         id: payload
@@ -319,6 +341,10 @@ jobs:
       - name: Fetch verified SDK build inputs
         if: steps.payload_cache.outputs.cache-hit != 'true'
         uses: ./.github/actions/fetch-sdk
+        with:
+          macos_105_url: ${{ secrets.ALTIVEC_SDK_MACOS_105_URL }}
+          macos_113_url: ${{ secrets.ALTIVEC_SDK_MACOS_113_URL }}
+          iphoneos_84_url: ${{ secrets.ALTIVEC_SDK_IPHONEOS_84_URL }}
 
       - name: Report available disk
         if: steps.payload_cache.outputs.cache-hit != 'true'
@@ -336,7 +362,7 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user/toolchain/iOS/armv7 \
             "$BUILD_IMAGE" \
-            -lc 'altivec-sdk ensure && make --no-print-directory llvm-package'
+            -lc 'altivec-sdk install && make --no-print-directory llvm-package'
 
       - name: Validate LLVM handoff
         id: payload

@@ -111,6 +111,10 @@ jobs:
 
       - name: Fetch verified SDK build inputs
         uses: ./.github/actions/fetch-sdk
+        with:
+          macos_105_url: ${{ secrets.ALTIVEC_SDK_MACOS_105_URL }}
+          macos_113_url: ${{ secrets.ALTIVEC_SDK_MACOS_113_URL }}
+          iphoneos_84_url: ${{ secrets.ALTIVEC_SDK_IPHONEOS_84_URL }}
 
       - name: Build and push by digest
         id: build
@@ -244,6 +248,10 @@ jobs:
       build_image: ${{ needs.merge_image.outputs.build_image }}
       release_tag: ${{ needs.prepare.outputs.release_tag }}
       release_sha: ${{ needs.prepare.outputs.release_sha }}
+    secrets:
+      ALTIVEC_SDK_MACOS_105_URL: ${{ secrets.ALTIVEC_SDK_MACOS_105_URL }}
+      ALTIVEC_SDK_MACOS_113_URL: ${{ secrets.ALTIVEC_SDK_MACOS_113_URL }}
+      ALTIVEC_SDK_IPHONEOS_84_URL: ${{ secrets.ALTIVEC_SDK_IPHONEOS_84_URL }}
 
   publish:
     name: Publish image and release assets

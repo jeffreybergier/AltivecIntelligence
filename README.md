@@ -53,13 +53,15 @@ curl -fsSL https://raw.githubusercontent.com/jeffreybergier/AltivecIntelligence/
 # 2. Pull the prebuilt image (one time, multi-GB — saves 5+ hours of osxcross build):
 docker compose pull
 
-# 3. Fetch the checksum-pinned SDK archives outside the image and ignore them:
+# 3. Keep the checksum-pinned SDK archives outside the image and ignore them:
 mkdir -p .altivec-sdk
 grep -qxF '.altivec-sdk/' .gitignore 2>/dev/null || printf '%s\n' '.altivec-sdk/' >> .gitignore
-docker run --rm --entrypoint altivec-sdk \
-  -e ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
-  -v "$PWD/.altivec-sdk:/altivec-sdk" \
-  ghcr.io/jeffreybergier/altivec-intelligence:latest fetch
+# Place these exact files in ./.altivec-sdk:
+#   MacOSX10.5.sdk.tar.xz
+#   MacOSX11.3.sdk.tar.xz
+#   iPhoneOS8.4.sdk.tar.gz
+docker compose run --rm altivec-sdk preflight
+docker compose run --rm altivec-sdk install
 
 # 4. Build your app (Makefile at the root of your project):
 docker compose run --rm altivec "make"
@@ -70,10 +72,11 @@ docker compose run --rm altivec-intelligence
 ```
 
 The template mounts named Docker volumes for `/cache` and the two installed SDK
-roots. `altivec-sdk ensure` verifies each archive and installs it on the first
-build; later builds in the same volumes skip extraction. `docker compose down
--v` removes the installed copies and caches, while the original archives remain
-in `.altivec-sdk/` on the host.
+roots. `altivec-sdk install` runs the archive preflight and installs each SDK;
+later builds in the same volumes skip extraction. `altivec-sdk status` reports
+both source and installation state. `docker compose down -v` removes the
+installed copies and caches, while the original archives remain in
+`.altivec-sdk/` on the host.
 
 Published images and release packages contain no Apple SDK, SDK archive, or
 ARCLite binary. `altivec-sdk audit-image IMAGE` verifies every image layer, and
@@ -82,6 +85,11 @@ reachable history. The image does contain ordinary static archives required by
 Ubuntu, GCC, LLVM, AltivecCore, and AltivecCocoa. It also contains the
 open-source Apple GCC/cctools lineage used by OSXCross; those components are
 not proprietary SDK content and remain subject to their upstream licenses.
+
+Repository release jobs obtain those same three archives only through the
+required GitHub Actions secrets `ALTIVEC_SDK_MACOS_105_URL`,
+`ALTIVEC_SDK_MACOS_113_URL`, and `ALTIVEC_SDK_IPHONEOS_84_URL`. The public SDK
+manager and catalog contain no source URLs and perform no network requests.
 
 The image also configures Git to trust bind-mounted project directories and
 points generic native build variables (`CC`, `CXX`, `LD`, `AR`) at Ubuntu's

@@ -1,6 +1,11 @@
-# Before building this development image, fetch the verified SDK inputs with:
+# Before building this development image, create ./.altivec-sdk and place these
+# exact files in it:
+#   MacOSX10.5.sdk.tar.xz
+#   MacOSX11.3.sdk.tar.xz
+#   iPhoneOS8.4.sdk.tar.gz
+# Then verify them with:
 #   ALTIVEC_SDK_CATALOG="$PWD/share/altivec-sdk/catalog.json" \
-#   ALTIVEC_SDK_ARCHIVE_DIR="$PWD/.altivec-sdk" bin/altivec-sdk fetch
+#   ALTIVEC_SDK_ARCHIVE_DIR="$PWD/.altivec-sdk" bin/altivec-sdk preflight
 services:
   altivec:
     build:

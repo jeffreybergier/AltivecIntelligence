@@ -41,7 +41,7 @@ deprecation warnings as those will be common when dealing with these old API's.
 
 ## 📦 Provisioned SDKs
 
-The image contains no Apple SDKs. `altivec-sdk ensure` verifies archives from
+The image contains no Apple SDKs. `altivec-sdk install` verifies archives from
 `/altivec-sdk` (or `ALTIVEC_SDK_ARCHIVE_DIR`) and installs them into the Compose
 SDK volumes at these paths:
 

@@ -656,27 +656,16 @@ test_altivec_app() {
 
 test_altivec_sdk() {
   local output=""
-  local sdk_count=""
-  local sdk_84_targets=""
 
-  output="$("$bin_dir/altivec-sdk" list)"
-  [[ "$output" == *"Device: "* ]]
-  [[ "$output" == *"Clang targets: "* ]]
-
-  # shellcheck disable=SC2016
-  sdk_count="$(printf '%s\n' "$output" |
-    "$bin_dir/awk" '$1 ~ /^[0-9]+[.][0-9]+$/ { count++ } END { print count }')"
-  # shellcheck disable=SC2016
-  sdk_84_targets="$(printf '%s\n' "$output" |
-    "$bin_dir/awk" '$1 == "8.4" { print $5 }')"
-
-  [[ "$sdk_count" == "6" ]]
-  [[ "$sdk_84_targets" == *armv7* ]]
-  [[ "$output" == *"13.2"* ]]
+  output="$("$bin_dir/altivec-sdk" status)"
+  [[ "$output" == *"Archive folder: /var/root"* ]]
+  [[ "$output" == *"iPhoneOS8.4.sdk.tar.gz"* ]]
+  [[ "$output" == *"INSTALLATION"* ]]
   "$bin_dir/altivec-sdk" --help > altivec-sdk.help
-  [[ "$(/bin/cat altivec-sdk.help)" == *"altivec-sdk install <version>"* ]]
+  [[ "$(/bin/cat altivec-sdk.help)" == *"altivec-sdk preflight"* ]]
+  [[ "$(/bin/cat altivec-sdk.help)" == *"altivec-sdk uninstall"* ]]
   [[ "$(/bin/cat altivec-sdk.help)" == \
-    *"altivec-sdk remove <version>"* ]]
+    *"This tool never downloads SDKs."* ]]
 }
 
 test_altivec_lib() {

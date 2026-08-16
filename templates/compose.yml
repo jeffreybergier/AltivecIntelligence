@@ -16,10 +16,15 @@
 # 2. Pull the image (one time, multi-GB — saves you the 5+ hour osxcross build):
 #    docker compose pull
 #
-# 3. Fetch the checksum-pinned SDK archives outside the image:
+# 3. Put the checksum-pinned SDK archives outside the image:
 #    mkdir -p .altivec-sdk
 #    printf '%s\n' '.altivec-sdk/' >> .gitignore
-#    docker compose run --rm altivec-sdk fetch
+#    Place these exact files in ./.altivec-sdk:
+#      MacOSX10.5.sdk.tar.xz
+#      MacOSX11.3.sdk.tar.xz
+#      iPhoneOS8.4.sdk.tar.gz
+#    docker compose run --rm altivec-sdk preflight
+#    docker compose run --rm altivec-sdk install
 #
 # 4. Try an example app baked into the image:
 #    docker compose run --rm altivec "cd /altivec/apps/SingleWindow && make"
@@ -67,8 +72,11 @@ services:
     environment:
       ALTIVEC_SDK_ARCHIVE_DIR: /altivec-sdk
     volumes:
-      # Mount Apple SDK archives read-write for fetching
-      - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk
+      # Mount local Apple SDK archives read-only
+      - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
+      # Share extracted SDK installations with the app containers
+      - altivec-sdk-legacy:/osxcross/legacy/target/SDK
+      - altivec-sdk-modern:/osxcross/modern/SDK
     entrypoint: altivec-sdk
 
   altivec-intelligence:

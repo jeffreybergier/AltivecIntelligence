@@ -246,7 +246,7 @@ __altivec_ios_validate:
 	[[ -d "$(SDKROOT)" ]] || { \
 		printf 'error: no selected iPhoneOS SDK at %s\n' "$(SDKROOT)" >&2; \
 		printf '%s\n' \
-			"run 'altivec-sdk install VERSION', then 'altivec-sdk select VERSION'" \
+			"place iPhoneOS8.4.sdk.tar.gz in root's ~/ and run 'altivec-sdk install'" \
 			>&2; \
 		exit 1; \
 	}; \

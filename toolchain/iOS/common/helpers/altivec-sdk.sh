@@ -6,42 +6,73 @@ readonly install_prefix="${ALTIVEC_SDK_INSTALL_PREFIX:-/var/altivec}"
 readonly sdk_root="${ALTIVEC_SDK_ROOT:-${install_prefix}/SDKs}"
 readonly catalog_path="${ALTIVEC_SDK_CATALOG:-${install_prefix}/share/altivec-sdk/catalog.json}"
 readonly state_root="${ALTIVEC_SDK_STATE_ROOT:-/var/lib/altivec-sdk}"
-readonly cache_root="${ALTIVEC_SDK_CACHE_ROOT:-/var/cache/altivec-sdk}"
-readonly temporary_root="${ALTIVEC_SDK_TMP_ROOT:-/var/tmp}"
+readonly testing="${ALTIVEC_SDK_TESTING:-0}"
+if [[ "$testing" == '1' && -n "${ALTIVEC_SDK_ARCHIVE_DIR:-}" ]]; then
+  archive_dir="$ALTIVEC_SDK_ARCHIVE_DIR"
+else
+  archive_dir=/var/root
+fi
+readonly archive_dir
 readonly bin_dir="${install_prefix}/bin"
 readonly current_sdk="${sdk_root}/Current.sdk"
 readonly receipt_dir="${state_root}/receipts"
-readonly download_dir="${cache_root}/downloads"
+readonly receipt_path="${receipt_dir}/8.4.json"
 readonly lock_dir="${state_root}/install.lock"
-readonly github_download_prefix='https://github.com/okanon/iPhoneOS.sdk/releases/download/v0.0.1'
-readonly testing="${ALTIVEC_SDK_TESTING:-0}"
+readonly archive_name='iPhoneOS8.4.sdk.tar.gz'
+readonly directory='iPhoneOS8.4.sdk'
+readonly sdk_path="${sdk_root}/${directory}"
 
 staging_dir=""
-verify_dir=""
 receipt_temp=""
 selection_temp=""
 lock_held=0
+sdk_entry=""
+
+jq_tool=""
+awk_tool=""
+wc_tool=""
+tar_tool=""
+openssl_tool=""
+
+readonly mkdir_tool='/bin/mkdir'
+readonly mv_tool='/bin/mv'
+readonly rm_tool='/bin/rm'
+readonly ln_tool='/bin/ln'
+readonly chmod_tool='/bin/chmod'
+readonly mktemp_tool='/bin/mktemp'
+readonly date_tool='/bin/date'
 
 die() {
   printf 'error: %s\n' "$*" >&2
   exit 1
 }
 
-warn() {
-  printf 'warning: %s\n' "$*" >&2
-}
-
 usage() {
   printf '%s\n' \
     'Usage:' \
-    '  altivec-sdk install <version>' \
-    '  altivec-sdk list' \
-    '  altivec-sdk remove <version>' \
-    '  altivec-sdk select <version>' \
-    '  altivec-sdk verify <version>' \
+    '  altivec-sdk help' \
+    '  altivec-sdk status' \
+    '  altivec-sdk preflight' \
+    '  altivec-sdk install' \
+    '  altivec-sdk uninstall' \
     '' \
-    'Installs verified iPhoneOS SDKs from the pinned' \
-    'okanon/iPhoneOS.sdk v0.0.1 GitHub release.'
+    "Archive folder: ${archive_dir}" \
+    "The default /var/root folder is root's ~/ on the iPhone." \
+    'Place this exact file in that folder:' \
+    "  ${archive_name}" \
+    '' \
+    "Expected path: ${archive_dir}/${archive_name}" \
+    "Installed SDK: ${sdk_path}" \
+    '' \
+    'Run status, preflight, install, and uninstall as root.' \
+    'This tool never downloads SDKs. It verifies and installs the local archive.'
+}
+
+require_exact_args() {
+  local expected="$1"
+  local message="$2"
+  shift 2
+  (($# == expected)) || die "$message"
 }
 
 resolve_tool() {
@@ -53,7 +84,6 @@ resolve_tool() {
     printf '%s\n' "$preferred"
     return 0
   fi
-
   resolved="$(command -v "$tool_name" 2>/dev/null)" || return 1
   [[ -x "$resolved" ]] || return 1
   printf '%s\n' "$resolved"
@@ -68,75 +98,73 @@ require_tool() {
   printf '%s\n' "$resolved"
 }
 
-jq_tool="$(require_tool jq)"
-grep_tool="$(require_tool grep)"
-awk_tool="$(require_tool awk)"
-clang_tool="$(require_tool clang)"
-linker_tool="$(require_tool ld)"
-file_tool="$(require_tool file)"
-otool_tool="$(require_tool otool)"
-tar_tool="$(require_tool tar)"
-curl_tool="$(require_tool curl)"
-openssl_tool="$(require_tool openssl)"
-readonly jq_tool grep_tool awk_tool clang_tool linker_tool
-readonly file_tool otool_tool tar_tool curl_tool openssl_tool
+initialize() {
+  local system_tool catalog_valid
 
-readonly mkdir_tool="/bin/mkdir"
-readonly mv_tool="/bin/mv"
-readonly rm_tool="/bin/rm"
-readonly ln_tool="/bin/ln"
-readonly chmod_tool="/bin/chmod"
-readonly readlink_tool="/bin/readlink"
-readonly mktemp_tool="/bin/mktemp"
-readonly date_tool="/bin/date"
-readonly uname_tool="/bin/uname"
-readonly sysctl_tool="/usr/sbin/sysctl"
-readonly dpkg_tool="/usr/bin/dpkg"
-readonly df_tool="/usr/bin/df"
+  [[ "$testing" == '0' || "$testing" == '1' ]] ||
+    die 'ALTIVEC_SDK_TESTING must be 0 or 1'
+  for system_tool in "$mkdir_tool" "$mv_tool" "$rm_tool" "$ln_tool" \
+      "$chmod_tool" "$mktemp_tool" "$date_tool"; do
+    [[ -x "$system_tool" ]] ||
+      die "required system command is missing: ${system_tool}"
+  done
 
-for system_tool in "$mkdir_tool" "$mv_tool" "$rm_tool" "$ln_tool" \
-  "$chmod_tool" "$readlink_tool" "$mktemp_tool" "$date_tool" \
-  "$uname_tool" "$df_tool"; do
-  [[ -x "$system_tool" ]] ||
-    die "required system command is missing: ${system_tool}"
-done
+  jq_tool="$(require_tool jq)"
+  awk_tool="$(require_tool awk)"
+  wc_tool="$(require_tool wc)"
+  tar_tool="$(require_tool tar)"
+  openssl_tool="$(require_tool openssl)"
 
-[[ "$testing" == "0" || "$testing" == "1" ]] ||
-  die 'ALTIVEC_SDK_TESTING must be 0 or 1'
+  [[ -r "$catalog_path" ]] || die "SDK catalog is missing: ${catalog_path}"
+  catalog_valid="$(
+    "$jq_tool" -r '
+      .schema == 3 and
+      (.build_sdks | type == "array" and length == 3) and
+      ([.build_sdks[] | select(.id == "iphoneos-8.4")] | length == 1) and
+      (.build_sdks[] | select(.id == "iphoneos-8.4") |
+        .platform == "iphoneos" and
+        .version == "8.4" and
+        .directory == "iPhoneOS8.4.sdk" and
+        .archive == "iPhoneOS8.4.sdk.tar.gz" and
+        .format == "tar.gz" and
+        (.archive_bytes | type == "number" and . > 0) and
+        (.sha256 | test("^[0-9a-f]{64}$")) and
+        (.required_paths | type == "array" and length > 0) and
+        (has("url") | not))
+    ' "$catalog_path"
+  )"
+  [[ "$catalog_valid" == 'true' ]] ||
+    die "SDK catalog is invalid: ${catalog_path}"
+  sdk_entry="$(
+    "$jq_tool" -cer '.build_sdks[] | select(.id == "iphoneos-8.4")' \
+      "$catalog_path"
+  )" || die 'iPhoneOS 8.4 is not in the bundled catalog'
 
-[[ -r "$catalog_path" ]] ||
-  die "SDK catalog is missing: ${catalog_path}"
+  trap cleanup EXIT
+}
 
-catalog_valid="$(
-  "$jq_tool" -r '
-    .schema == 2 and
-    .device_source.repository == "okanon/iPhoneOS.sdk" and
-    .device_source.release_tag == "v0.0.1" and
-    (.device_sdks | type == "array" and length > 0)
-  ' "$catalog_path"
-)"
-[[ "$catalog_valid" == "true" ]] ||
-  die "SDK catalog is invalid: ${catalog_path}"
-
-cleanup_temp_dir() {
-  local path="$1"
-
-  [[ -n "$path" ]] || return 0
-  case "$path" in
-    "${sdk_root}"/.install.*|"${temporary_root}"/altivec-sdk-verify.*)
-      ;;
-    *)
-      warn "refusing to clean unexpected temporary path: ${path}"
-      return 1
-      ;;
-  esac
-
-  if [[ -d "$path" && ! -L "$path" ]]; then
-    "$rm_tool" -r -- "$path"
-  elif [[ -e "$path" || -L "$path" ]]; then
-    warn "temporary path is not a real directory: ${path}"
-    return 1
+require_root() {
+  if [[ "$testing" == '1' ]]; then
+    return 0
   fi
+  [[ "${EUID}" -eq 0 ]] || die 'this command must run as root'
+}
+
+entry_value() {
+  printf '%s\n' "$sdk_entry" | "$jq_tool" -er "$1"
+}
+
+hash_file() {
+  local digest_output
+
+  digest_output="$("$openssl_tool" dgst -sha256 "$1")"
+  printf '%s\n' "${digest_output##*= }"
+}
+
+file_bytes() {
+  # $1 below is an awk field reference.
+  # shellcheck disable=SC2016
+  "$wc_tool" -c < "$1" | "$awk_tool" '{print $1}'
 }
 
 cleanup() {
@@ -144,220 +172,50 @@ cleanup() {
   local cleanup_rc=0
 
   trap - EXIT
-
-  if ! cleanup_temp_dir "$verify_dir"; then
-    cleanup_rc=1
-  fi
-  if ! cleanup_temp_dir "$staging_dir"; then
-    cleanup_rc=1
-  fi
-
-  if [[ -n "$receipt_temp" && -f "$receipt_temp" &&
-      ! -L "$receipt_temp" ]]; then
-    case "$receipt_temp" in
-      "${receipt_dir}"/.*.json.*)
-        "$rm_tool" -f -- "$receipt_temp" || cleanup_rc=1
+  if [[ -n "$staging_dir" ]]; then
+    case "$staging_dir" in
+      "${sdk_root}"/.install.8.4.*)
+        if [[ -d "$staging_dir" && ! -L "$staging_dir" ]]; then
+          "$rm_tool" -r -- "$staging_dir" || cleanup_rc=1
+        fi
         ;;
       *)
-        warn "refusing to clean unexpected receipt path: ${receipt_temp}"
+        printf 'warning: refusing to clean unexpected path: %s\n' \
+          "$staging_dir" >&2
         cleanup_rc=1
         ;;
     esac
   fi
-
+  if [[ -n "$receipt_temp" && -f "$receipt_temp" && ! -L "$receipt_temp" ]]; then
+    case "$receipt_temp" in
+      "${receipt_dir}"/.8.4.json.*)
+        "$rm_tool" -f -- "$receipt_temp" || cleanup_rc=1
+        ;;
+      *) cleanup_rc=1 ;;
+    esac
+  fi
   if [[ -n "$selection_temp" && -L "$selection_temp" ]]; then
     case "$selection_temp" in
       "${sdk_root}"/.Current.sdk.*)
         "$rm_tool" -f -- "$selection_temp" || cleanup_rc=1
         ;;
-      *)
-        warn "refusing to clean unexpected selection path: ${selection_temp}"
-        cleanup_rc=1
-        ;;
+      *) cleanup_rc=1 ;;
     esac
   fi
-
   if [[ "$lock_held" -eq 1 ]]; then
-    "$rm_tool" -f -- "${lock_dir}/owner" 2>/dev/null || cleanup_rc=1
-    "$rm_tool" -f -- "${lock_dir}/command" 2>/dev/null || cleanup_rc=1
+    "$rm_tool" -f -- "${lock_dir}/owner" "${lock_dir}/command" \
+      2>/dev/null || cleanup_rc=1
     /bin/rmdir "$lock_dir" 2>/dev/null || cleanup_rc=1
   fi
-
   if [[ "$rc" -eq 0 && "$cleanup_rc" -ne 0 ]]; then
     rc=1
   fi
   exit "$rc"
 }
-trap cleanup EXIT
-
-require_root() {
-  if [[ "$testing" == "1" ]]; then
-    return 0
-  fi
-  [[ "${EUID}" -eq 0 ]] || die 'this command must run as root'
-}
-
-validate_version() {
-  local version="$1"
-  [[ "$version" =~ ^[0-9]+[.][0-9]+$ ]] ||
-    die "invalid SDK version: ${version}"
-}
-
-catalog_entry() {
-  local version="$1"
-  local entry=""
-
-  entry="$(
-    # shellcheck disable=SC2016
-    "$jq_tool" -cer --arg version "$version" \
-      '.device_sdks[] | select(.version == $version)' "$catalog_path"
-  )" || die "SDK ${version} is not in the bundled catalog"
-  printf '%s\n' "$entry"
-}
-
-entry_value() {
-  local entry="$1"
-  local filter="$2"
-  printf '%s\n' "$entry" | "$jq_tool" -er "$filter"
-}
-
-device_model=""
-device_arch="unknown"
-dpkg_arch="unknown"
-toolchain_has_armv7=0
-toolchain_has_arm64=0
-linker_has_tapi=0
-toolchain_targets=""
-linker_version=""
-
-detect_capabilities() {
-  local arm64_capable=""
-  local processor=""
-  local targets_output=""
-  local linker_output=""
-
-  device_model="$("$uname_tool" -m 2>/dev/null || printf 'unknown')"
-  processor="$("$uname_tool" -p 2>/dev/null || printf 'unknown')"
-
-  if [[ -x "$sysctl_tool" ]]; then
-    arm64_capable="$(
-      "$sysctl_tool" -n hw.optional.arm64 2>/dev/null || true
-    )"
-  fi
-  if [[ -x "$dpkg_tool" ]]; then
-    dpkg_arch="$(
-      "$dpkg_tool" --print-architecture 2>/dev/null || printf 'unknown'
-    )"
-  fi
-
-  if [[ "$arm64_capable" == "1" || "$dpkg_arch" == *arm64* ||
-      "$processor" == "arm64" ]]; then
-    device_arch="arm64"
-  elif [[ "$processor" == arm* || "$dpkg_arch" == "iphoneos-arm" ]]; then
-    device_arch="armv7"
-  fi
-
-  targets_output="$("$clang_tool" --print-targets 2>/dev/null || true)"
-  if printf '%s\n' "$targets_output" |
-      "$grep_tool" -Eq '^[[:space:]]*arm[[:space:]]+-'; then
-    toolchain_has_armv7=1
-  fi
-  if printf '%s\n' "$targets_output" |
-      "$grep_tool" -Eq '^[[:space:]]*aarch64[[:space:]]+-'; then
-    toolchain_has_arm64=1
-  fi
-
-  toolchain_targets=""
-  [[ "$toolchain_has_armv7" -eq 1 ]] && toolchain_targets="armv7"
-  if [[ "$toolchain_has_arm64" -eq 1 ]]; then
-    toolchain_targets="${toolchain_targets:+${toolchain_targets},}arm64"
-  fi
-  [[ -n "$toolchain_targets" ]] || toolchain_targets="none"
-
-  linker_output="$("$linker_tool" -v 2>&1 || true)"
-  if [[ "$linker_output" == *"TAPI support using:"* ]]; then
-    linker_has_tapi=1
-  fi
-  linker_version="${linker_output%%$'\n'*}"
-  [[ -n "$linker_version" ]] || linker_version="unknown"
-}
-
-compatible_arches=""
-incompatibility_reason=""
-
-evaluate_compatibility() {
-  local sdk_arches="$1"
-  local linker_input="$2"
-  local sdk_arch=""
-
-  compatible_arches=""
-  incompatibility_reason=""
-
-  for sdk_arch in ${sdk_arches//,/ }; do
-    case "$sdk_arch" in
-      armv7)
-        if [[ "$toolchain_has_armv7" -eq 1 ]]; then
-          compatible_arches="${compatible_arches:+${compatible_arches},}armv7"
-        fi
-        ;;
-      arm64)
-        if [[ "$toolchain_has_arm64" -eq 1 ]]; then
-          compatible_arches="${compatible_arches:+${compatible_arches},}arm64"
-        fi
-        ;;
-    esac
-  done
-
-  if [[ -z "$compatible_arches" ]]; then
-    incompatibility_reason="SDK targets ${sdk_arches}; Clang targets ${toolchain_targets}"
-    return 1
-  fi
-
-  if [[ "$linker_input" == "tapi" && "$linker_has_tapi" -ne 1 ]]; then
-    incompatibility_reason='installed linker lacks TAPI framework discovery'
-    compatible_arches=""
-    return 1
-  fi
-  return 0
-}
-
-evaluate_entry() {
-  local entry="$1"
-  local sdk_arches=""
-  local linker_input=""
-
-  IFS=$'\t' read -r sdk_arches linker_input < <(
-    printf '%s\n' "$entry" |
-      "$jq_tool" -er \
-        '[(.architectures | join(",")), .linker_input] | @tsv'
-  )
-  evaluate_compatibility "$sdk_arches" "$linker_input"
-}
-
-preferred_architecture() {
-  local arches="$1"
-
-  if [[ "$device_arch" == "arm64" && ",${arches}," == *,arm64,* ]]; then
-    printf 'arm64\n'
-  elif [[ ",${arches}," == *,armv7,* ]]; then
-    printf 'armv7\n'
-  elif [[ ",${arches}," == *,arm64,* ]]; then
-    printf 'arm64\n'
-  else
-    return 1
-  fi
-}
-
-format_mib() {
-  local bytes="$1"
-  "$awk_tool" -v bytes="$bytes" \
-    'BEGIN { printf "%.1f MiB", bytes / 1048576 }'
-}
 
 ensure_runtime_dirs() {
-  "$mkdir_tool" -p "$sdk_root" "$receipt_dir" "$download_dir"
+  "$mkdir_tool" -p "$sdk_root" "$receipt_dir"
   "$chmod_tool" 0755 "$sdk_root" "$state_root" "$receipt_dir"
-  "$chmod_tool" 0700 "$cache_root" "$download_dir"
 }
 
 acquire_lock() {
@@ -366,217 +224,161 @@ acquire_lock() {
   fi
   lock_held=1
   printf '%s\n' "$$" > "${lock_dir}/owner"
-  printf '%s\n' "${1:-unknown}" > "${lock_dir}/command"
-}
-
-validate_sdk_directory() {
-  local version="$1"
-  local sdk_path="$2"
-
-  [[ -d "$sdk_path" && ! -L "$sdk_path" ]] ||
-    die "SDK is not a real directory: ${sdk_path}"
-  [[ -f "$sdk_path/SDKSettings.plist" ]] ||
-    die "SDK ${version} is missing SDKSettings.plist"
-  [[ -f "$sdk_path/System/Library/Frameworks/Foundation.framework/Headers/Foundation.h" ]] ||
-    die "SDK ${version} is missing Foundation headers"
-  [[ -f "$sdk_path/System/Library/Frameworks/UIKit.framework/Headers/UIKit.h" ]] ||
-    die "SDK ${version} is missing UIKit headers"
-
-  if [[ ! -e "$sdk_path/usr/lib/libSystem.dylib" &&
-      ! -f "$sdk_path/usr/lib/libSystem.B.dylib" &&
-      ! -f "$sdk_path/usr/lib/libSystem.tbd" ]]; then
-    die "SDK ${version} is missing a libSystem linker input"
-  fi
+  printf '%s\n' "$1" > "${lock_dir}/command"
 }
 
 validate_archive_paths() {
-  local archive_path="$1"
-  local expected_directory="$2"
-  local member=""
-  local normalized=""
+  local archive="$1"
+  local member normalized
   local member_count=0
 
-  "$tar_tool" -tzf "$archive_path" >/dev/null ||
-    die 'downloaded SDK archive is not a valid gzip-compressed tar archive'
-
+  if ! "$tar_tool" -tzf "$archive" >/dev/null; then
+    printf 'error: invalid SDK archive: %s\n' "$archive" >&2
+    return 1
+  fi
   while IFS= read -r member; do
     [[ -n "$member" ]] || continue
-    case "$member" in
-      /*)
-        die "SDK archive contains an absolute path: ${member}"
-        ;;
-    esac
-
     normalized="${member#./}"
     case "$normalized" in
-      ""|"."|..|../*|*/../*|*/..|*/./*)
-        die "SDK archive contains an unsafe path: ${member}"
+      /*|..|../*|*/../*|*/..|*/./*)
+        printf 'error: unsafe path in SDK archive %s: %s\n' \
+          "$archive" "$member" >&2
+        return 1
         ;;
-      "$expected_directory"|"$expected_directory"/*)
-        ;;
+      "$directory"|"$directory"/*) ;;
       *)
-        die "SDK archive has an unexpected top-level path: ${member}"
+        printf 'error: unexpected path in SDK archive %s: %s\n' \
+          "$archive" "$member" >&2
+        return 1
         ;;
     esac
     member_count=$((member_count + 1))
-  done < <("$tar_tool" -tzf "$archive_path")
-
-  [[ "$member_count" -gt 0 ]] || die 'SDK archive is empty'
+  done < <("$tar_tool" -tzf "$archive")
+  if [[ "$member_count" -eq 0 ]]; then
+    printf 'error: SDK archive is empty: %s\n' "$archive" >&2
+    return 1
+  fi
 }
 
-run_sdk_smoke_test() {
-  local version="$1"
-  local sdk_path="$2"
-  local arches="$3"
-  local architecture=""
-  local deployment_target=""
-  local entry=""
-  local source_path=""
-  local executable_path=""
-  local file_output=""
-  local target_triple=""
+sdk_is_valid() {
+  local path="$1"
+  local required
 
-  architecture="$(preferred_architecture "$arches")" ||
-    die "cannot choose a verification architecture from: ${arches}"
-  entry="$(catalog_entry "$version")"
+  [[ -d "$path" && ! -L "$path" ]] || return 1
+  while IFS= read -r required; do
+    [[ -e "$path/$required" ]] || return 1
+  done < <(printf '%s\n' "$sdk_entry" | "$jq_tool" -r '.required_paths[]')
+  [[ -e "$path/usr/lib/libSystem.dylib" ||
+    -f "$path/usr/lib/libSystem.B.dylib" ||
+    -f "$path/usr/lib/libSystem.tbd" ]]
+}
+
+receipt_is_valid() {
+  local expected="$1"
+
+  [[ -f "$receipt_path" && ! -L "$receipt_path" ]] || return 1
+  # $expected below is a jq variable.
   # shellcheck disable=SC2016
-  deployment_target="$(
-    printf '%s\n' "$entry" |
-      "$jq_tool" -er --arg arch "$architecture" \
-        '.deployment_targets[$arch]'
-  )"
+  "$jq_tool" -e --arg expected "$expected" \
+    '.archive_sha256 == $expected' "$receipt_path" >/dev/null 2>&1
+}
 
-  case "$architecture" in
-    armv7) target_triple="armv7-apple-ios${deployment_target}" ;;
-    arm64) target_triple="arm64-apple-ios${deployment_target}" ;;
-    *) die "unsupported verification architecture: ${architecture}" ;;
-  esac
+archive_state() {
+  local archive="${archive_dir}/${archive_name}"
+  local expected expected_bytes actual actual_bytes
 
-  verify_dir="$(
-    "$mktemp_tool" -d \
-      "${temporary_root}/altivec-sdk-verify.${version}.XXXXXX"
-  )"
-  source_path="${verify_dir}/main.m"
-  executable_path="${verify_dir}/sdk-smoke"
+  expected="$(entry_value '.sha256')"
+  expected_bytes="$(entry_value '.archive_bytes | tostring')"
+  if [[ ! -e "$archive" && ! -L "$archive" ]]; then
+    printf 'missing\n'
+  elif [[ ! -f "$archive" || -L "$archive" ]]; then
+    printf 'invalid\n'
+  else
+    actual_bytes="$(file_bytes "$archive")"
+    actual="$(hash_file "$archive")"
+    if [[ "$actual_bytes" == "$expected_bytes" && "$actual" == "$expected" ]]; then
+      printf 'available\n'
+    else
+      printf 'invalid\n'
+    fi
+  fi
+}
 
-  printf '%s\n' \
-    '#import <Foundation/Foundation.h>' \
-    '#import <UIKit/UIKit.h>' \
-    'int main(void) { return 0; }' > "$source_path"
+installation_state() {
+  local expected
 
-  printf 'Checking SDK %s headers for %s...\n' "$version" "$architecture"
-  "$clang_tool" \
-    "--target=${target_triple}" \
-    -arch "$architecture" \
-    "-miphoneos-version-min=${deployment_target}" \
-    -isysroot "$sdk_path" \
-    "-B${bin_dir}" \
-    -x objective-c \
-    -fsyntax-only "$source_path"
+  expected="$(entry_value '.sha256')"
+  if sdk_is_valid "$sdk_path" && receipt_is_valid "$expected"; then
+    printf 'installed\n'
+  elif [[ -e "$sdk_path" || -L "$sdk_path" ]]; then
+    printf 'invalid\n'
+  else
+    printf 'missing\n'
+  fi
+}
 
-  printf 'Linking an SDK %s %s UIKit executable...\n' \
-    "$version" "$architecture"
-  "$clang_tool" \
-    "--target=${target_triple}" \
-    -arch "$architecture" \
-    "-miphoneos-version-min=${deployment_target}" \
-    -isysroot "$sdk_path" \
-    "-B${bin_dir}" \
-    "$source_path" \
-    -framework Foundation \
-    -framework UIKit \
-    -o "$executable_path"
+command_status() {
+  local source_state install_state
 
-  file_output="$("$file_tool" "$executable_path")"
-  [[ "$file_output" == *"Mach-O"* && "$file_output" == *"$architecture"* ]] ||
-    die "SDK smoke test produced an unexpected file: ${file_output}"
-  "$otool_tool" -hv "$executable_path" >/dev/null
+  require_root
+  source_state="$(archive_state)"
+  install_state="$(installation_state)"
+  printf 'Archive folder: %s\n\n' "$archive_dir"
+  printf '%-14s %-28s %-10s %-12s\n' \
+    SDK ARCHIVE SOURCE INSTALLATION
+  printf '%-14s %-28s %-10s %-12s\n' \
+    iPhoneOS8.4 "$archive_name" "$source_state" "$install_state"
+}
 
-  printf 'SDK %s compile/link test passed for %s.\n' \
-    "$version" "$architecture"
-  cleanup_temp_dir "$verify_dir"
-  verify_dir=""
+command_preflight() {
+  local archive="${archive_dir}/${archive_name}"
+  local expected expected_bytes actual actual_bytes
+
+  require_root
+  expected="$(entry_value '.sha256')"
+  expected_bytes="$(entry_value '.archive_bytes | tostring')"
+  printf 'Checking %s...\n' "$archive"
+  [[ -f "$archive" && ! -L "$archive" ]] ||
+    die "required SDK archive is missing: ${archive}"
+  actual_bytes="$(file_bytes "$archive")"
+  [[ "$actual_bytes" == "$expected_bytes" ]] ||
+    die "SDK size mismatch: got ${actual_bytes}; expected ${expected_bytes}"
+  actual="$(hash_file "$archive")"
+  [[ "$actual" == "$expected" ]] ||
+    die "SDK checksum mismatch: got ${actual}; expected ${expected}"
+  validate_archive_paths "$archive" || return 1
+  printf 'SDK archive preflight passed: %s\n' "$archive_name"
 }
 
 write_receipt() {
-  local version="$1"
-  local entry="$2"
-  local arches="$3"
-  local installed_at=""
-  local clang_version=""
-  local receipt_path="${receipt_dir}/${version}.json"
+  local expected installed_at
 
+  expected="$(entry_value '.sha256')"
   installed_at="$("$date_tool" -u '+%Y-%m-%dT%H:%M:%SZ')"
-  IFS= read -r clang_version < <("$clang_tool" --version)
-  receipt_temp="${receipt_dir}/.${version}.json.$$"
-
+  receipt_temp="${receipt_dir}/.8.4.json.$$"
+  # Dollar-prefixed names below are jq variables.
   # shellcheck disable=SC2016
-  printf '%s\n' "$entry" |
-    "$jq_tool" -e \
-      --arg installed_at "$installed_at" \
-      --arg verified_at "$installed_at" \
-      --arg compatible_arches "$arches" \
-      --arg clang_version "$clang_version" \
-      '{
-        schema: 1,
-        version: .version,
-        directory: .directory,
-        source_url: .url,
-        archive_sha256: .sha256,
-        installed_at: $installed_at,
-        verified_at: $verified_at,
-        verified_architectures: ($compatible_arches | split(",")),
-        clang_version: $clang_version
-      }' > "$receipt_temp"
+  "$jq_tool" -n -e \
+    --arg version '8.4' \
+    --arg archive "$archive_name" \
+    --arg archive_sha256 "$expected" \
+    --arg installed_at "$installed_at" \
+    '{
+      schema: 2,
+      version: $version,
+      archive: $archive,
+      archive_sha256: $archive_sha256,
+      installed_at: $installed_at
+    }' > "$receipt_temp"
   "$chmod_tool" 0644 "$receipt_temp"
   "$mv_tool" "$receipt_temp" "$receipt_path"
   receipt_temp=""
 }
 
-update_verified_at() {
-  local version="$1"
-  local receipt_path="${receipt_dir}/${version}.json"
-  local verified_at=""
-
-  [[ -f "$receipt_path" && ! -L "$receipt_path" ]] || {
-    warn "SDK ${version} has no manager receipt; verification was not recorded"
-    return 0
-  }
-
-  verified_at="$("$date_tool" -u '+%Y-%m-%dT%H:%M:%SZ')"
-  receipt_temp="${receipt_dir}/.${version}.json.$$"
-  # shellcheck disable=SC2016
-  "$jq_tool" -e --arg verified_at "$verified_at" \
-    '.verified_at = $verified_at' "$receipt_path" > "$receipt_temp"
-  "$chmod_tool" 0644 "$receipt_temp"
-  "$mv_tool" "$receipt_temp" "$receipt_path"
-  receipt_temp=""
-}
-
-select_sdk() {
-  local version="$1"
-  local entry=""
-  local directory=""
-  local sdk_path=""
-  local receipt_path=""
-
-  entry="$(catalog_entry "$version")"
-  directory="$(entry_value "$entry" '.directory')"
-  sdk_path="${sdk_root}/${directory}"
-  receipt_path="${receipt_dir}/${version}.json"
-
-  [[ -f "$receipt_path" && ! -L "$receipt_path" ]] ||
-    die "SDK ${version} is not managed by altivec-sdk"
-  validate_sdk_directory "$version" "$sdk_path"
-
-  if ! evaluate_entry "$entry"; then
-    die "SDK ${version} is incompatible: ${incompatibility_reason}"
-  fi
-
+select_installed_sdk() {
   if [[ -e "$current_sdk" && ! -L "$current_sdk" ]]; then
     die "selection path exists and is not a symlink: ${current_sdk}"
   fi
-
   selection_temp="${sdk_root}/.Current.sdk.$$"
   "$ln_tool" -s "$directory" "$selection_temp"
   if [[ -L "$current_sdk" ]]; then
@@ -584,307 +386,111 @@ select_sdk() {
   fi
   "$mv_tool" "$selection_temp" "$current_sdk"
   selection_temp=""
-  printf 'Selected iPhoneOS SDK %s: %s -> %s\n' \
-    "$version" "$current_sdk" "$directory"
-}
-
-command_list() {
-  local selected_target=""
-  local version=""
-  local directory=""
-  local sdk_arches=""
-  local linker_input=""
-  local download_bytes=""
-  local status=""
-  local selected=""
-  local compatibility=""
-  local reason=""
-  local sdk_path=""
-  local receipt_path=""
-
-  if [[ -L "$current_sdk" ]]; then
-    selected_target="$("$readlink_tool" "$current_sdk")"
-  elif [[ -e "$current_sdk" ]]; then
-    warn "selection path is not a symlink: ${current_sdk}"
-  fi
-
-  printf 'Device: %s (%s; dpkg %s)\n' \
-    "$device_model" "$device_arch" "$dpkg_arch"
-  printf 'Clang targets: %s\n' "$toolchain_targets"
-  if [[ "$linker_has_tapi" -eq 1 ]]; then
-    printf 'Linker: %s; TAPI framework discovery available\n' \
-      "$linker_version"
-  else
-    printf 'Linker: %s; binary framework inputs only\n' \
-      "$linker_version"
-  fi
-  printf '\n'
-  printf '%-7s %-10s %-8s %-13s %-13s %-10s\n' \
-    VERSION STATUS CURRENT SDK-TARGETS USABLE-TARGETS DOWNLOAD
-
-  while IFS=$'\t' read -r version directory sdk_arches linker_input \
-      download_bytes; do
-    sdk_path="${sdk_root}/${directory}"
-    receipt_path="${receipt_dir}/${version}.json"
-
-    if [[ -d "$sdk_path" && ! -L "$sdk_path" ]]; then
-      if [[ -f "$receipt_path" && ! -L "$receipt_path" ]]; then
-        status="installed"
-      else
-        status="unmanaged"
-      fi
-    elif [[ -e "$sdk_path" || -L "$sdk_path" ]]; then
-      status="broken"
-    else
-      status="available"
-    fi
-
-    if [[ "$selected_target" == "$directory" ]]; then
-      selected="yes"
-    else
-      selected="-"
-    fi
-
-    if evaluate_compatibility "$sdk_arches" "$linker_input"; then
-      compatibility="$compatible_arches"
-      reason=""
-    else
-      compatibility="-"
-      reason="$incompatibility_reason"
-    fi
-
-    printf '%-7s %-10s %-8s %-13s %-13s %-10s\n' \
-      "$version" "$status" "$selected" "$sdk_arches" \
-      "$compatibility" "$(format_mib "$download_bytes")"
-    if [[ -n "$reason" ]]; then
-      printf '  unavailable on this toolchain: %s\n' "$reason"
-    fi
-  done < <(
-    "$jq_tool" -r '
-      .device_sdks[] |
-      [
-        .version,
-        .directory,
-        (.architectures | join(",")),
-        .linker_input,
-        (.download_bytes | tostring)
-      ] |
-      @tsv
-    ' "$catalog_path"
-  )
 }
 
 command_install() {
-  local version="$1"
-  local entry=""
-  local directory=""
-  local archive=""
-  local url=""
-  local expected_sha=""
-  local download_bytes=""
-  local unpacked_bytes=""
-  local sdk_path=""
-  local receipt_path=""
-  local download_path=""
-  local digest_output=""
-  local actual_sha=""
-  local free_kb=""
-  local required_kb=0
+  local archive="${archive_dir}/${archive_name}"
+  local extracted expected
 
   require_root
-  entry="$(catalog_entry "$version")"
-  if ! evaluate_entry "$entry"; then
-    die "SDK ${version} is incompatible: ${incompatibility_reason}"
-  fi
-
-  directory="$(entry_value "$entry" '.directory')"
-  archive="$(entry_value "$entry" '.archive')"
-  url="$(entry_value "$entry" '.url')"
-  expected_sha="$(entry_value "$entry" '.sha256')"
-  download_bytes="$(entry_value "$entry" '.download_bytes | tostring')"
-  unpacked_bytes="$(entry_value "$entry" '.unpacked_bytes | tostring')"
-  sdk_path="${sdk_root}/${directory}"
-  receipt_path="${receipt_dir}/${version}.json"
-  download_path="${download_dir}/${archive}.part"
-
-  [[ "$url" == "${github_download_prefix}/${archive}" ]] ||
-    die "catalog URL is outside the pinned GitHub release: ${url}"
-
+  command_preflight
   ensure_runtime_dirs
-  acquire_lock "install ${version}"
+  acquire_lock 'install'
+  expected="$(entry_value '.sha256')"
 
-  if [[ -d "$sdk_path" && ! -L "$sdk_path" ]]; then
-    [[ -f "$receipt_path" && ! -L "$receipt_path" ]] ||
-      die "SDK destination exists without a manager receipt: ${sdk_path}"
-    validate_sdk_directory "$version" "$sdk_path"
-    printf 'iPhoneOS SDK %s is already installed at %s.\n' \
-      "$version" "$sdk_path"
+  if sdk_is_valid "$sdk_path" && receipt_is_valid "$expected"; then
+    select_installed_sdk
+    printf 'SDK already installed: %s\n' "$sdk_path"
     return 0
   fi
-  [[ ! -e "$sdk_path" && ! -L "$sdk_path" ]] ||
-    die "SDK destination is unsafe: ${sdk_path}"
-
-  # shellcheck disable=SC2016
-  free_kb="$(
-    "$df_tool" -Pk "$sdk_root" |
-      "$awk_tool" 'NR == 2 { print $4 }'
-  )"
-  [[ "$free_kb" =~ ^[0-9]+$ ]] ||
-    die "could not determine free space for ${sdk_root}"
-  required_kb=$(((download_bytes + unpacked_bytes + 1023) / 1024 + 65536))
-  if ((free_kb < required_kb)); then
-    die "SDK ${version} needs approximately ${required_kb} KiB free; only ${free_kb} KiB is available"
+  if [[ -e "$sdk_path" || -L "$sdk_path" ]]; then
+    die "existing SDK is incomplete or unverified: ${sdk_path}; run altivec-sdk uninstall first"
+  fi
+  if [[ -e "$current_sdk" && ! -L "$current_sdk" ]]; then
+    die "selection path exists and is not a symlink: ${current_sdk}"
   fi
 
-  printf 'Downloading iPhoneOS SDK %s (%s)...\n' \
-    "$version" "$(format_mib "$download_bytes")"
-  if ! "$curl_tool" \
-      --fail \
-      --location \
-      --proto '=https' \
-      --proto-redir '=https' \
-      --retry 5 \
-      --retry-delay 2 \
-      --retry-all-errors \
-      --connect-timeout 30 \
-      --continue-at - \
-      --output "$download_path" \
-      "$url"; then
-    die "download failed; the partial file was retained for retry: ${download_path}"
-  fi
-
-  digest_output="$("$openssl_tool" dgst -sha256 "$download_path")"
-  actual_sha="${digest_output##*= }"
-  if [[ "$actual_sha" != "$expected_sha" ]]; then
-    "$rm_tool" -f -- "$download_path"
-    die "SDK checksum mismatch: got ${actual_sha}, expected ${expected_sha}"
-  fi
-  printf 'Verified SHA-256 %s.\n' "$expected_sha"
-
-  validate_archive_paths "$download_path" "$directory"
-  staging_dir="$(
-    "$mktemp_tool" -d "${sdk_root}/.install.${version}.XXXXXX"
-  )"
-  printf 'Extracting into a private staging directory...\n'
+  staging_dir="$("$mktemp_tool" -d "${sdk_root}/.install.8.4.XXXXXX")"
+  printf 'Extracting %s...\n' "$archive_name"
   "$tar_tool" --no-same-owner --no-same-permissions \
-    -xzf "$download_path" -C "$staging_dir"
-  validate_sdk_directory "$version" "${staging_dir}/${directory}"
-  run_sdk_smoke_test \
-    "$version" "${staging_dir}/${directory}" "$compatible_arches"
-
-  "$mv_tool" "${staging_dir}/${directory}" "$sdk_path"
+    -xzf "$archive" -C "$staging_dir"
+  extracted="${staging_dir}/${directory}"
+  sdk_is_valid "$extracted" || die 'extracted iPhoneOS 8.4 SDK failed validation'
+  "$mv_tool" "$extracted" "$sdk_path"
   /bin/rmdir "$staging_dir"
   staging_dir=""
-  write_receipt "$version" "$entry" "$compatible_arches"
-  "$rm_tool" -f -- "$download_path"
-
-  if [[ ! -e "$current_sdk" && ! -L "$current_sdk" ]]; then
-    select_sdk "$version"
-  fi
-
-  printf 'Installed iPhoneOS SDK %s at %s.\n' "$version" "$sdk_path"
+  write_receipt
+  select_installed_sdk
+  printf 'Installed SDK: %s\n' "$sdk_path"
 }
 
-command_remove() {
-  local version="$1"
-  local entry=""
-  local directory=""
-  local sdk_path=""
-  local receipt_path="${receipt_dir}/${version}.json"
+command_uninstall() {
+  local removed=0
 
   require_root
-  entry="$(catalog_entry "$version")"
-  directory="$(entry_value "$entry" '.directory')"
-  [[ "$directory" == "iPhoneOS${version}.sdk" ]] ||
-    die "SDK ${version} has an unsafe catalog directory: ${directory}"
-  sdk_path="${sdk_root}/${directory}"
-
   ensure_runtime_dirs
-  acquire_lock "remove ${version}"
-
-  [[ -d "$sdk_path" && ! -L "$sdk_path" ]] ||
-    die "SDK ${version} is not installed"
-  if [[ -L "$current_sdk" && -e "$current_sdk" &&
-      "$current_sdk" -ef "$sdk_path" ]]; then
-    die "cannot remove selected iPhoneOS SDK ${version}; select another version first"
+  acquire_lock 'uninstall'
+  case "$sdk_path" in
+    "${sdk_root}"/iPhoneOS8.4.sdk) ;;
+    *) die "refusing to uninstall unexpected SDK path: ${sdk_path}" ;;
+  esac
+  if [[ -e "$current_sdk" && ! -L "$current_sdk" ]]; then
+    die "selection path exists and is not a symlink: ${current_sdk}"
   fi
-  [[ -f "$receipt_path" && ! -L "$receipt_path" ]] ||
-    die "SDK ${version} is not managed by altivec-sdk"
-
-  "$rm_tool" -r -- "$sdk_path"
+  if [[ -L "$current_sdk" ]]; then
+    "$rm_tool" -f -- "$current_sdk"
+  fi
+  if [[ -d "$sdk_path" && ! -L "$sdk_path" ]]; then
+    "$rm_tool" -r -- "$sdk_path"
+    removed=1
+  elif [[ -e "$sdk_path" || -L "$sdk_path" ]]; then
+    "$rm_tool" -f -- "$sdk_path"
+    removed=1
+  fi
   "$rm_tool" -f -- "$receipt_path"
-  printf 'Removed iPhoneOS SDK %s from %s.\n' "$version" "$sdk_path"
-}
-
-command_select() {
-  local version="$1"
-
-  require_root
-  ensure_runtime_dirs
-  acquire_lock "select ${version}"
-  select_sdk "$version"
-}
-
-command_verify() {
-  local version="$1"
-  local entry=""
-  local directory=""
-  local sdk_path=""
-
-  require_root
-  entry="$(catalog_entry "$version")"
-  if ! evaluate_entry "$entry"; then
-    die "SDK ${version} is incompatible: ${incompatibility_reason}"
+  if [[ "$removed" -eq 1 ]]; then
+    printf 'Uninstalled SDK: %s\n' "$sdk_path"
+  else
+    printf 'SDK not installed: %s\n' "$sdk_path"
   fi
-  directory="$(entry_value "$entry" '.directory')"
-  sdk_path="${sdk_root}/${directory}"
-
-  ensure_runtime_dirs
-  acquire_lock "verify ${version}"
-  validate_sdk_directory "$version" "$sdk_path"
-  run_sdk_smoke_test "$version" "$sdk_path" "$compatible_arches"
-  update_verified_at "$version"
-  printf 'iPhoneOS SDK %s verification passed.\n' "$version"
+  printf 'Source archive left untouched: %s/%s\n' \
+    "$archive_dir" "$archive_name"
 }
 
-detect_capabilities
+command_name="${1:-}"
+case "$command_name" in
+  -h|--help|help)
+    require_exact_args 1 'help takes no arguments' "$@"
+    usage
+    exit 0
+    ;;
+  '')
+    usage >&2
+    exit 2
+    ;;
+esac
 
-if (($# == 0)); then
-  usage >&2
-  exit 2
-fi
-
-case "$1" in
-  list)
-    (($# == 1)) || die 'list takes no arguments'
-    command_list
+initialize
+case "$command_name" in
+  status)
+    require_exact_args 1 'status takes no arguments' "$@"
+    command_status
+    ;;
+  preflight)
+    require_exact_args 1 'preflight takes no arguments' "$@"
+    command_preflight
     ;;
   install)
-    (($# == 2)) || die 'install requires exactly one SDK version'
-    validate_version "$2"
-    command_install "$2"
+    require_exact_args 1 'install takes no arguments' "$@"
+    command_install
     ;;
-  remove)
-    (($# == 2)) || die 'remove requires exactly one SDK version'
-    validate_version "$2"
-    command_remove "$2"
-    ;;
-  select)
-    (($# == 2)) || die 'select requires exactly one SDK version'
-    validate_version "$2"
-    command_select "$2"
-    ;;
-  verify)
-    (($# == 2)) || die 'verify requires exactly one SDK version'
-    validate_version "$2"
-    command_verify "$2"
-    ;;
-  -h|--help|help)
-    (($# == 1)) || die 'help takes no arguments'
-    usage
+  uninstall)
+    require_exact_args 1 'uninstall takes no arguments' "$@"
+    command_uninstall
     ;;
   *)
     usage >&2
-    die "unknown command: $1"
+    printf 'error: unknown command: %s\n' "$command_name" >&2
+    exit 2
     ;;
 esac

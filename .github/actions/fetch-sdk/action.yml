@@ -1,12 +1,85 @@
 name: Fetch verified SDK build inputs
-description: Fetch the checksum-pinned SDK archives used by release jobs.
+description: Fetch SDK archives from secret URLs used only by release jobs.
+
+inputs:
+  macos_105_url:
+    description: Secret URL for MacOSX10.5.sdk.tar.xz
+    required: true
+  macos_113_url:
+    description: Secret URL for MacOSX11.3.sdk.tar.xz
+    required: true
+  iphoneos_84_url:
+    description: Secret URL for iPhoneOS8.4.sdk.tar.gz
+    required: true
 
 runs:
   using: composite
   steps:
-    - name: Fetch checksum-pinned SDK archives
+    - name: Fetch and preflight SDK archives
       shell: bash
       env:
         ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
         ALTIVEC_SDK_ARCHIVE_DIR: ${{ runner.temp }}/.altivec-sdk
-      run: '"${GITHUB_WORKSPACE}/bin/altivec-sdk" fetch'
+        ALTIVEC_SDK_MACOS_105_URL: ${{ inputs.macos_105_url }}
+        ALTIVEC_SDK_MACOS_113_URL: ${{ inputs.macos_113_url }}
+        ALTIVEC_SDK_IPHONEOS_84_URL: ${{ inputs.iphoneos_84_url }}
+      run: |
+        set -euo pipefail
+
+        require_secret_url() {
+          local name="$1"
+          local value="$2"
+          [[ "$value" =~ ^https://[^[:space:]]+$ ]] || {
+            printf 'error: %s must be configured as an HTTPS repository secret\n' \
+              "$name" >&2
+            exit 1
+          }
+        }
+
+        fetch_archive() {
+          local url="$1"
+          local filename="$2"
+          local output="${ALTIVEC_SDK_ARCHIVE_DIR}/${filename}"
+          local temporary="${output}.part"
+
+          if [[ -f "$output" ]]; then
+            return 0
+          fi
+          rm -f -- "$temporary"
+          if ! curl \
+              --fail \
+              --location \
+              --silent \
+              --show-error \
+              --proto '=https' \
+              --proto-redir '=https' \
+              --retry 5 \
+              --retry-delay 2 \
+              --retry-all-errors \
+              --connect-timeout 30 \
+              --output "$temporary" \
+              "$url"; then
+            rm -f -- "$temporary"
+            printf 'error: failed to fetch %s\n' "$filename" >&2
+            exit 1
+          fi
+          mv "$temporary" "$output"
+        }
+
+        require_secret_url ALTIVEC_SDK_MACOS_105_URL \
+          "$ALTIVEC_SDK_MACOS_105_URL"
+        require_secret_url ALTIVEC_SDK_MACOS_113_URL \
+          "$ALTIVEC_SDK_MACOS_113_URL"
+        require_secret_url ALTIVEC_SDK_IPHONEOS_84_URL \
+          "$ALTIVEC_SDK_IPHONEOS_84_URL"
+
+        mkdir -p "$ALTIVEC_SDK_ARCHIVE_DIR"
+        chmod 0700 "$ALTIVEC_SDK_ARCHIVE_DIR"
+        fetch_archive "$ALTIVEC_SDK_MACOS_105_URL" \
+          MacOSX10.5.sdk.tar.xz
+        fetch_archive "$ALTIVEC_SDK_MACOS_113_URL" \
+          MacOSX11.3.sdk.tar.xz
+        fetch_archive "$ALTIVEC_SDK_IPHONEOS_84_URL" \
+          iPhoneOS8.4.sdk.tar.gz
+
+        "${GITHUB_WORKSPACE}/bin/altivec-sdk" preflight

@@ -4,7 +4,7 @@
 include ../../altivec_toolchains.mk
 
 all: phone mac
-all phone mac: | altivec-sdk-ensure
+all phone mac: | altivec-sdk-install
 
 phone:
 	@echo "==========================================================="

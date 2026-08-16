@@ -4,12 +4,13 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly script_dir
-if [[ -r /altivec/share/altivec-sdk/catalog.json ]]; then
-  default_catalog=/altivec/share/altivec-sdk/catalog.json
-else
+if [[ -r "$script_dir/../share/altivec-sdk/catalog.json" ]]; then
   default_catalog="$script_dir/../share/altivec-sdk/catalog.json"
+else
+  default_catalog=/altivec/share/altivec-sdk/catalog.json
 fi
 readonly default_catalog catalog_path="${ALTIVEC_SDK_CATALOG:-$default_catalog}"
+readonly archive_dir="${ALTIVEC_SDK_ARCHIVE_DIR:-/altivec-sdk}"
 readonly legacy_sdk_dir="${ALTIVEC_SDK_LEGACY_DIR:-/osxcross/legacy/target/SDK}"
 readonly modern_sdk_dir="${ALTIVEC_SDK_MODERN_DIR:-/osxcross/modern/SDK}"
 
@@ -21,23 +22,41 @@ die() {
 usage() {
   printf '%s\n' \
     'Usage:' \
-    '  altivec-sdk ensure' \
-    '  altivec-sdk fetch' \
-    '  altivec-sdk verify' \
+    '  altivec-sdk help' \
     '  altivec-sdk status' \
-    '  altivec-sdk purge' \
+    '  altivec-sdk preflight' \
+    '  altivec-sdk install' \
+    '  altivec-sdk uninstall' \
+    '' \
+    "Archive folder inside the container: ${archive_dir}" \
+    'With Compose, this is the project folder ./.altivec-sdk on the host.' \
+    '' \
+    'Place these exact files in that folder:' \
+    '  MacOSX10.5.sdk.tar.xz' \
+    '  MacOSX11.3.sdk.tar.xz' \
+    '  iPhoneOS8.4.sdk.tar.gz' \
+    '' \
+    'This tool never downloads SDKs. It verifies and installs local archives.' \
+    'Set ALTIVEC_SDK_ARCHIVE_DIR to use a different archive folder.' \
+    '' \
+    'Compliance commands used by release automation:' \
     '  altivec-sdk audit [ROOT]' \
     '  altivec-sdk audit-image IMAGE' \
-    '  altivec-sdk audit-repository [ROOT]' \
-    '' \
-    'Verifies and installs the SDK archives required by Altivec Intelligence.' \
-    'Set ALTIVEC_SDK_ARCHIVE_DIR to use a non-default archive directory.'
+    '  altivec-sdk audit-repository [ROOT]'
+}
+
+require_exact_args() {
+  local expected="$1"
+  local message="$2"
+  shift 2
+  (($# == expected)) || die "$message"
 }
 
 require_tools() {
   local tool
   for tool in "$@"; do
-    command -v "$tool" >/dev/null 2>&1 || die "required command is missing: ${tool}"
+    command -v "$tool" >/dev/null 2>&1 ||
+      die "required command is missing: ${tool}"
   done
 }
 
@@ -55,53 +74,32 @@ file_bytes() {
   wc -c < "$1" | tr -d '[:space:]'
 }
 
-require_tools jq
-[[ -r "$catalog_path" ]] || die "SDK catalog is missing: ${catalog_path}"
-jq -e '
-  .schema == 2 and
-  (.build_sdks | type == "array" and length == 3) and
-  all(.build_sdks[];
-    (.id | type == "string") and
-    (.archive | type == "string") and
-    (.url | test("^https://")) and
-    (.directory | type == "string") and
-    (.sha256 | test("^[0-9a-f]{64}$")) and
-    (.archive_bytes | type == "number" and . > 0 and floor == .) and
-    (.format == "tar.xz" or .format == "tar.gz") and
-    (.destination == "legacy" or .destination == "modern") and
-    (.required_paths | type == "array" and length > 0)) and
-  (.device_sdks | type == "array" and length > 0) and
-  all(.device_sdks[];
-    (.version | type == "string" and length > 0) and
-    (.archive | type == "string" and length > 0) and
-    (.url | test("^https://")) and
-    (.directory | type == "string" and length > 0) and
-    (.sha256 | test("^[0-9a-f]{64}$")) and
-    (.download_bytes | type == "number" and . > 0 and floor == .)) and
-  (.prohibited_files | type == "array" and length > 0) and
-  all(.prohibited_files[];
-    (.id | type == "string" and length > 0) and
-    (.bytes | type == "number" and . > 0 and floor == .) and
-    (.sha256 | test("^[0-9a-f]{64}$")))
-' "$catalog_path" >/dev/null || die "SDK catalog is invalid: ${catalog_path}"
-
-archive_candidates=()
-if [[ -n "${ALTIVEC_SDK_ARCHIVE_DIR:-}" ]]; then
-  archive_candidates+=("$ALTIVEC_SDK_ARCHIVE_DIR")
-else
-  archive_candidates+=(
-    /altivec-sdk
-    /repo/user/.altivec-sdk
-    /repo/altivec/.altivec-sdk
-  )
-  search_directory="$PWD"
-  while :; do
-    archive_candidates+=("$search_directory/.altivec-sdk")
-    [[ "$search_directory" != / ]] || break
-    search_directory="${search_directory%/*}"
-    [[ -n "$search_directory" ]] || search_directory=/
-  done
-fi
+initialize_catalog() {
+  require_tools jq
+  [[ -r "$catalog_path" ]] || die "SDK catalog is missing: ${catalog_path}"
+  jq -e '
+    .schema == 3 and
+    (.build_sdks | type == "array" and length == 3) and
+    ([.build_sdks[].id] ==
+      ["macos-10.5", "macos-11.3", "iphoneos-8.4"]) and
+    all(.build_sdks[];
+      (.platform == "macos" or .platform == "iphoneos") and
+      (.version | type == "string" and length > 0) and
+      (.archive | type == "string" and length > 0) and
+      (.directory | type == "string" and test("[.]sdk$")) and
+      (.sha256 | test("^[0-9a-f]{64}$")) and
+      (.archive_bytes | type == "number" and . > 0 and floor == .) and
+      (.format == "tar.xz" or .format == "tar.gz") and
+      (.destination == "legacy" or .destination == "modern") and
+      (.required_paths | type == "array" and length > 0) and
+      (has("url") | not)) and
+    (.prohibited_files | type == "array" and length > 0) and
+    all(.prohibited_files[];
+      (.id | type == "string" and length > 0) and
+      (.bytes | type == "number" and . > 0 and floor == .) and
+      (.sha256 | test("^[0-9a-f]{64}$")))
+  ' "$catalog_path" >/dev/null || die "SDK catalog is invalid: ${catalog_path}"
+}
 
 sdk_entries() {
   jq -cr '.build_sdks[]' "$catalog_path"
@@ -120,16 +118,7 @@ sdk_parent() {
 }
 
 archive_path() {
-  local filename="$1"
-  local directory
-
-  for directory in "${archive_candidates[@]}"; do
-    if [[ -f "$directory/$filename" ]]; then
-      printf '%s\n' "$directory/$filename"
-      return 0
-    fi
-  done
-  return 1
+  printf '%s/%s\n' "$archive_dir" "$1"
 }
 
 receipt_path() {
@@ -146,17 +135,31 @@ validate_archive_paths() {
   case "$format" in
     tar.xz) list_args=(-tJf) ;;
     tar.gz) list_args=(-tzf) ;;
-    *) die "unsupported SDK archive format: ${format}" ;;
+    *)
+      printf 'error: unsupported SDK archive format: %s\n' "$format" >&2
+      return 1
+      ;;
   esac
+
+  if ! tar "${list_args[@]}" "$archive" >/dev/null; then
+    printf 'error: invalid SDK archive: %s\n' "$archive" >&2
+    return 1
+  fi
 
   while IFS= read -r member; do
     normalized="${member#./}"
     case "$normalized" in
-      /*|../*|*/../*|*/..)
-        die "unsafe path in SDK archive ${archive}: ${member}"
+      /*|../*|*/../*|*/..|*/./*)
+        printf 'error: unsafe path in SDK archive %s: %s\n' \
+          "$archive" "$member" >&2
+        return 1
         ;;
       "$expected_root"|"$expected_root"/*) ;;
-      *) die "unexpected path in SDK archive ${archive}: ${member}" ;;
+      *)
+        printf 'error: unexpected path in SDK archive %s: %s\n' \
+          "$archive" "$member" >&2
+        return 1
+        ;;
     esac
   done < <(tar "${list_args[@]}" "$archive")
 }
@@ -181,62 +184,228 @@ verify_entry_archive() {
   expected_bytes="$(entry_value "$entry" '.archive_bytes')"
   format="$(entry_value "$entry" '.format')"
   directory="$(entry_value "$entry" '.directory')"
-  archive="$(archive_path "$filename")" || {
-    printf 'error: required SDK archive is missing: %s\n' "$filename" >&2
-    printf 'searched:\n' >&2
-    printf '  %s\n' "${archive_candidates[@]}" >&2
+  archive="$(archive_path "$filename")"
+
+  if [[ ! -f "$archive" || -L "$archive" ]]; then
+    printf 'error: required SDK archive is missing: %s\n' "$archive" >&2
     return 1
-  }
+  fi
   actual_bytes="$(file_bytes "$archive")"
-  [[ "$actual_bytes" == "$expected_bytes" ]] ||
-    die "SDK size mismatch for ${archive}: got ${actual_bytes}; expected ${expected_bytes}"
+  if [[ "$actual_bytes" != "$expected_bytes" ]]; then
+    printf 'error: SDK size mismatch for %s: got %s; expected %s\n' \
+      "$archive" "$actual_bytes" "$expected_bytes" >&2
+    return 1
+  fi
   actual="$(hash_file "$archive")"
-  [[ "$actual" == "$expected" ]] ||
-    die "SDK checksum mismatch for ${archive}: got ${actual}"
-  validate_archive_paths "$archive" "$format" "$directory"
+  if [[ "$actual" != "$expected" ]]; then
+    printf 'error: SDK checksum mismatch for %s: got %s; expected %s\n' \
+      "$archive" "$actual" "$expected" >&2
+    return 1
+  fi
+  validate_archive_paths "$archive" "$format" "$directory" || return 1
   printf '%s\n' "$archive"
 }
 
-fetch_entry() {
+archive_status() {
   local entry="$1"
-  local filename url expected expected_bytes output temporary actual actual_bytes
+  local filename expected expected_bytes archive actual actual_bytes
 
   filename="$(entry_value "$entry" '.archive')"
-  url="$(entry_value "$entry" '.url')"
   expected="$(entry_value "$entry" '.sha256')"
   expected_bytes="$(entry_value "$entry" '.archive_bytes')"
-  output="$fetch_dir/$filename"
-  mkdir -p "$fetch_dir"
-
-  if [[ -f "$output" ]]; then
-    actual_bytes="$(file_bytes "$output")"
-    actual="$(hash_file "$output")"
+  archive="$(archive_path "$filename")"
+  if [[ ! -e "$archive" && ! -L "$archive" ]]; then
+    printf 'missing\n'
+  elif [[ ! -f "$archive" || -L "$archive" ]]; then
+    printf 'invalid\n'
+  else
+    actual_bytes="$(file_bytes "$archive")"
+    actual="$(hash_file "$archive")"
     if [[ "$actual_bytes" == "$expected_bytes" && "$actual" == "$expected" ]]; then
-      printf 'SDK archive already verified: %s\n' "$output"
-      return
+      printf 'available\n'
+    else
+      printf 'invalid\n'
     fi
-    die "existing SDK archive has the wrong checksum: ${output}"
+  fi
+}
+
+installation_status() {
+  local entry="$1"
+  local directory destination parent sdk_path receipt expected
+
+  directory="$(entry_value "$entry" '.directory')"
+  destination="$(entry_value "$entry" '.destination')"
+  expected="$(entry_value "$entry" '.sha256')"
+  parent="$(sdk_parent "$destination")"
+  sdk_path="$parent/$directory"
+  receipt="$(receipt_path "$parent" "$directory")"
+  if validate_installed_sdk "$entry" "$sdk_path" &&
+      [[ -f "$receipt" && ! -L "$receipt" ]] &&
+      grep -Fqx "$expected" "$receipt"; then
+    printf 'installed\n'
+  elif [[ -e "$sdk_path" || -L "$sdk_path" ]]; then
+    printf 'invalid\n'
+  else
+    printf 'missing\n'
+  fi
+}
+
+command_status() {
+  local entry directory archive source_state install_state
+
+  require_tools awk grep tr wc
+  printf 'Archive folder: %s\n\n' "$archive_dir"
+  printf '%-16s %-29s %-10s %-12s\n' \
+    SDK ARCHIVE SOURCE INSTALLATION
+  while IFS= read -r entry; do
+    directory="$(entry_value "$entry" '.directory')"
+    archive="$(entry_value "$entry" '.archive')"
+    source_state="$(archive_status "$entry")"
+    install_state="$(installation_status "$entry")"
+    printf '%-16s %-29s %-10s %-12s\n' \
+      "${directory%.sdk}" "$archive" "$source_state" "$install_state"
+  done < <(sdk_entries)
+}
+
+command_preflight() {
+  local entry archive
+  local rc=0
+
+  require_tools awk tar tr wc
+  printf 'Checking SDK archives in %s...\n' "$archive_dir"
+  while IFS= read -r entry; do
+    if archive="$(verify_entry_archive "$entry")"; then
+      printf '  available: %s\n' "${archive##*/}"
+    else
+      rc=1
+    fi
+  done < <(sdk_entries)
+  if [[ "$rc" -ne 0 ]]; then
+    printf 'error: SDK archive preflight failed\n' >&2
+    return 1
+  fi
+  printf 'SDK archive preflight passed.\n'
+}
+
+validate_install_destination() {
+  local entry="$1"
+  local directory destination parent sdk_path receipt expected
+
+  directory="$(entry_value "$entry" '.directory')"
+  destination="$(entry_value "$entry" '.destination')"
+  expected="$(entry_value "$entry" '.sha256')"
+  parent="$(sdk_parent "$destination")"
+  sdk_path="$parent/$directory"
+  receipt="$(receipt_path "$parent" "$directory")"
+  if [[ ! -e "$sdk_path" && ! -L "$sdk_path" ]]; then
+    return 0
+  fi
+  if validate_installed_sdk "$entry" "$sdk_path" &&
+      [[ -f "$receipt" && ! -L "$receipt" ]] &&
+      grep -Fqx "$expected" "$receipt"; then
+    return 0
+  fi
+  printf 'error: existing SDK is incomplete or unverified: %s\n' \
+    "$sdk_path" >&2
+  printf 'error: run altivec-sdk uninstall before installing again\n' >&2
+  return 1
+}
+
+install_entry() {
+  local entry="$1"
+  local directory destination parent sdk_path receipt archive expected format
+  local staging extracted lock_file
+  local -a extract_args
+
+  directory="$(entry_value "$entry" '.directory')"
+  destination="$(entry_value "$entry" '.destination')"
+  expected="$(entry_value "$entry" '.sha256')"
+  format="$(entry_value "$entry" '.format')"
+  archive="$(archive_path "$(entry_value "$entry" '.archive')")"
+  parent="$(sdk_parent "$destination")"
+  sdk_path="$parent/$directory"
+  receipt="$(receipt_path "$parent" "$directory")"
+  mkdir -p "$parent"
+
+  lock_file="$parent/.altivec-sdk.lock"
+  exec 9>"$lock_file"
+  flock 9
+
+  if validate_installed_sdk "$entry" "$sdk_path" &&
+      [[ -f "$receipt" && ! -L "$receipt" ]] &&
+      grep -Fqx "$expected" "$receipt"; then
+    printf 'SDK already installed: %s\n' "$sdk_path"
+    flock -u 9
+    return 0
   fi
 
-  temporary="$(mktemp "$fetch_dir/.${filename}.XXXXXX")"
-  if ! curl --fail --location --silent --show-error \
-      --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 30 \
-      "$url" -o "$temporary"; then
-    rm -f -- "$temporary"
-    die "failed to download SDK archive: ${url}"
+  staging="$(mktemp -d "$parent/.altivec-sdk.install.XXXXXX")"
+  case "$format" in
+    tar.xz) extract_args=(--no-same-owner -xJf) ;;
+    tar.gz) extract_args=(--no-same-owner -xzf) ;;
+  esac
+  if ! tar "${extract_args[@]}" "$archive" -C "$staging"; then
+    rm -rf -- "$staging"
+    die "failed to extract SDK archive: ${archive}"
   fi
-  actual_bytes="$(file_bytes "$temporary")"
-  if [[ "$actual_bytes" != "$expected_bytes" ]]; then
-    rm -f -- "$temporary"
-    die "downloaded SDK size mismatch for ${filename}: got ${actual_bytes}; expected ${expected_bytes}"
+  extracted="$staging/$directory"
+  if ! validate_installed_sdk "$entry" "$extracted"; then
+    rm -rf -- "$staging"
+    die "extracted SDK failed validation: ${directory}"
   fi
-  actual="$(hash_file "$temporary")"
-  if [[ "$actual" != "$expected" ]]; then
-    rm -f -- "$temporary"
-    die "downloaded SDK checksum mismatch for ${filename}: got ${actual}"
+  mv "$extracted" "$sdk_path"
+  rmdir "$staging"
+  printf '%s\n' "$expected" > "$receipt.tmp"
+  mv "$receipt.tmp" "$receipt"
+  printf 'Installed SDK: %s\n' "$sdk_path"
+  flock -u 9
+}
+
+command_install() {
+  local entry
+  local rc=0
+
+  require_tools awk flock grep mkdir mktemp mv rm rmdir tar tr wc
+  command_preflight
+  while IFS= read -r entry; do
+    validate_install_destination "$entry" || rc=1
+  done < <(sdk_entries)
+  [[ "$rc" -eq 0 ]] || return 1
+  while IFS= read -r entry; do
+    install_entry "$entry"
+  done < <(sdk_entries)
+}
+
+uninstall_entry() {
+  local entry="$1"
+  local directory destination parent sdk_path receipt
+
+  directory="$(entry_value "$entry" '.directory')"
+  destination="$(entry_value "$entry" '.destination')"
+  parent="$(sdk_parent "$destination")"
+  sdk_path="$parent/$directory"
+  receipt="$(receipt_path "$parent" "$directory")"
+  case "$sdk_path" in
+    "$legacy_sdk_dir"/*.sdk|"$modern_sdk_dir"/*.sdk) ;;
+    *) die "refusing to uninstall unexpected SDK path: ${sdk_path}" ;;
+  esac
+  if [[ -e "$sdk_path" || -L "$sdk_path" ]]; then
+    rm -rf -- "$sdk_path"
+    printf 'Uninstalled SDK: %s\n' "$sdk_path"
+  else
+    printf 'SDK not installed: %s\n' "$sdk_path"
   fi
-  mv "$temporary" "$output"
-  printf 'Fetched SDK archive: %s\n' "$output"
+  rm -f -- "$receipt"
+}
+
+command_uninstall() {
+  local entry
+
+  require_tools rm
+  while IFS= read -r entry; do
+    uninstall_entry "$entry"
+  done < <(sdk_entries)
+  printf 'Source archives left untouched in %s.\n' "$archive_dir"
 }
 
 audit_root() {
@@ -258,7 +427,6 @@ audit_root() {
     done < <(find "$root" -xdev -type f -size "${size}c" -print0 2>/dev/null)
   done < <(jq -r '
     (.build_sdks[] | [.archive_bytes, .sha256, ("SDK archive " + .archive)]),
-    (.device_sdks[] | [.download_bytes, .sha256, ("SDK archive " + .archive)]),
     (.prohibited_files[] | [.bytes, .sha256, .id]) | @tsv
   ' "$catalog_path")
   printf 'SDK-free filesystem verified: %s\n' "$root"
@@ -282,10 +450,6 @@ with open(catalog_path, encoding="utf-8") as stream:
 restricted = {}
 for entry in catalog["build_sdks"]:
     restricted[(entry["archive_bytes"], entry["sha256"])] = (
-        f"SDK archive {entry['archive']}"
-    )
-for entry in catalog["device_sdks"]:
-    restricted[(entry["download_bytes"], entry["sha256"])] = (
         f"SDK archive {entry['archive']}"
     )
 for entry in catalog["prohibited_files"]:
@@ -376,8 +540,6 @@ with open(catalog_path, encoding="utf-8") as stream:
 prohibited = {
     entry["sha256"] for entry in catalog["build_sdks"]
 } | {
-    entry["sha256"] for entry in catalog["device_sdks"]
-} | {
     entry["sha256"] for entry in catalog["prohibited_files"]
 }
 
@@ -430,146 +592,55 @@ PY
   printf 'Apple SDK/ARCLite-free Git repository verified: %s\n' "$root"
 }
 
-ensure_entry() {
-  local entry="$1"
-  local directory destination parent sdk_path receipt archive expected
-  local format staging extracted lock_file
-  local -a extract_args
-
-  directory="$(entry_value "$entry" '.directory')"
-  destination="$(entry_value "$entry" '.destination')"
-  expected="$(entry_value "$entry" '.sha256')"
-  format="$(entry_value "$entry" '.format')"
-  parent="$(sdk_parent "$destination")"
-  sdk_path="$parent/$directory"
-  receipt="$(receipt_path "$parent" "$directory")"
-  mkdir -p "$parent"
-
-  lock_file="$parent/.altivec-sdk.lock"
-  exec 9>"$lock_file"
-  flock 9
-
-  if validate_installed_sdk "$entry" "$sdk_path" &&
-      [[ -f "$receipt" ]] && grep -Fqx "$expected" "$receipt"; then
-    printf 'SDK ready: %s\n' "$sdk_path"
-    flock -u 9
-    return 0
-  fi
-  if [[ -e "$sdk_path" || -L "$sdk_path" ]]; then
-    die "existing SDK is incomplete or unverified: ${sdk_path}; run altivec-sdk purge first"
-  fi
-
-  archive="$(verify_entry_archive "$entry")"
-  staging="$(mktemp -d "$parent/.altivec-sdk.install.XXXXXX")"
-  case "$format" in
-    tar.xz) extract_args=(--no-same-owner -xJf) ;;
-    tar.gz) extract_args=(--no-same-owner -xzf) ;;
-  esac
-  if ! tar "${extract_args[@]}" "$archive" -C "$staging"; then
-    rm -rf -- "$staging"
-    die "failed to extract SDK archive: ${archive}"
-  fi
-  extracted="$staging/$directory"
-  if ! validate_installed_sdk "$entry" "$extracted"; then
-    rm -rf -- "$staging"
-    die "extracted SDK failed validation: ${directory}"
-  fi
-  mv "$extracted" "$sdk_path"
-  rmdir "$staging"
-  printf '%s\n' "$expected" > "$receipt.tmp"
-  mv "$receipt.tmp" "$receipt"
-  printf 'Installed SDK: %s\n' "$sdk_path"
-  flock -u 9
-}
-
-status_entry() {
-  local entry="$1"
-  local directory destination parent sdk_path receipt expected
-
-  directory="$(entry_value "$entry" '.directory')"
-  destination="$(entry_value "$entry" '.destination')"
-  expected="$(entry_value "$entry" '.sha256')"
-  parent="$(sdk_parent "$destination")"
-  sdk_path="$parent/$directory"
-  receipt="$(receipt_path "$parent" "$directory")"
-  if validate_installed_sdk "$entry" "$sdk_path" &&
-      [[ -f "$receipt" ]] && grep -Fqx "$expected" "$receipt"; then
-    printf 'ready\t%s\n' "$sdk_path"
-  elif [[ -e "$sdk_path" || -L "$sdk_path" ]]; then
-    printf 'invalid\t%s\n' "$sdk_path"
-    return 1
-  else
-    printf 'missing\t%s\n' "$sdk_path"
-    return 1
-  fi
-}
-
-purge_entry() {
-  local entry="$1"
-  local directory destination parent sdk_path receipt
-
-  directory="$(entry_value "$entry" '.directory')"
-  destination="$(entry_value "$entry" '.destination')"
-  parent="$(sdk_parent "$destination")"
-  sdk_path="$parent/$directory"
-  receipt="$(receipt_path "$parent" "$directory")"
-  case "$sdk_path" in
-    "$legacy_sdk_dir"/*.sdk|"$modern_sdk_dir"/*.sdk) ;;
-    *) die "refusing to purge unexpected SDK path: ${sdk_path}" ;;
-  esac
-  rm -rf -- "$sdk_path"
-  rm -f -- "$receipt"
-  printf 'Removed SDK: %s\n' "$sdk_path"
-}
-
 command_name="${1:-}"
-fetch_dir="${ALTIVEC_SDK_ARCHIVE_DIR:-$PWD/.altivec-sdk}"
 case "$command_name" in
-  ensure)
-    require_tools awk flock grep mkdir mktemp mv rm rmdir tar tr wc
-    while IFS= read -r entry; do ensure_entry "$entry"; done < <(sdk_entries)
+  -h|--help|help)
+    require_exact_args 1 'help takes no arguments' "$@"
+    usage
+    exit 0
     ;;
-  fetch)
-    require_tools awk curl mkdir mktemp mv tr wc
-    while IFS= read -r entry; do fetch_entry "$entry"; done < <(sdk_entries)
+  '')
+    usage >&2
+    exit 2
     ;;
-  verify)
-    require_tools awk tar tr wc
-    while IFS= read -r entry; do
-      verified="$(verify_entry_archive "$entry")"
-      printf 'Verified SDK archive: %s\n' "$verified"
-    done < <(sdk_entries)
-    ;;
+esac
+
+initialize_catalog
+case "$command_name" in
   status)
-    require_tools grep
-    status_rc=0
-    while IFS= read -r entry; do
-      status_entry "$entry" || status_rc=1
-    done < <(sdk_entries)
-    exit "$status_rc"
+    require_exact_args 1 'status takes no arguments' "$@"
+    command_status
     ;;
-  purge)
-    require_tools rm
-    while IFS= read -r entry; do purge_entry "$entry"; done < <(sdk_entries)
+  preflight)
+    require_exact_args 1 'preflight takes no arguments' "$@"
+    command_preflight
+    ;;
+  install)
+    require_exact_args 1 'install takes no arguments' "$@"
+    command_install
+    ;;
+  uninstall)
+    require_exact_args 1 'uninstall takes no arguments' "$@"
+    command_uninstall
     ;;
   audit)
-    require_tools find
+    (($# <= 2)) || die 'audit accepts at most one root'
+    require_tools awk find
     audit_root "${2:-/}"
     ;;
   audit-image)
+    require_exact_args 2 'audit-image requires exactly one image' "$@"
     require_tools docker jq mktemp python3 rm tar
-    audit_image "${2:-}"
+    audit_image "$2"
     ;;
   audit-repository)
+    (($# <= 2)) || die 'audit-repository accepts at most one root'
     require_tools git grep head python3
     audit_repository "${2:-$PWD}"
     ;;
-  -h|--help|help)
-    usage
-    ;;
   *)
     usage >&2
-    [[ -n "$command_name" ]] && printf 'error: unknown command: %s\n' "$command_name" >&2
+    printf 'error: unknown command: %s\n' "$command_name" >&2
     exit 2
     ;;
 esac

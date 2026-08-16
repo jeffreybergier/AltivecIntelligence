@@ -71,7 +71,7 @@ done
 
 [[ -d "${altivec_prefix}/SDKs/Current.sdk" ]] || {
   printf '%s\n' \
-    'error: no selected SDK; install and select one with altivec-sdk first' >&2
+    "error: place iPhoneOS8.4.sdk.tar.gz in root's ~/ and run altivec-sdk install" >&2
   exit 1
 }
 

@@ -159,9 +159,9 @@ build_modern_toolchain() {
   # model. Replace those copies so every SDK used by subsequent project builds
   # was extracted by altivec-sdk from a checksum-verified archive.
   ALTIVEC_SDK_ARCHIVE_DIR="${ALTIVEC_SDK_ARCHIVE_DIR:-/altivec-sdk}" \
-    altivec-sdk purge
+    altivec-sdk uninstall
   ALTIVEC_SDK_ARCHIVE_DIR="${ALTIVEC_SDK_ARCHIVE_DIR:-/altivec-sdk}" \
-    altivec-sdk ensure
+    altivec-sdk install
 
   local tool tool_path
   for tool in ld ar ranlib lipo libtool nm otool strip install_name_tool; do
@@ -336,7 +336,7 @@ remove_sdk_inputs() {
   local fixed_sdk_header
 
   section 'Removing SDK input from the image filesystem'
-  altivec-sdk purge
+  altivec-sdk uninstall
   rm -rf -- "$modern_source"
   find "$legacy_root" -mindepth 1 -maxdepth 1 ! -name target \
     -exec rm -rf -- {} +
@@ -360,7 +360,7 @@ remove_sdk_inputs() {
   altivec-sdk audit /usr/local
 }
 
-altivec-sdk verify
+altivec-sdk preflight
 prepare_legacy_source
 run_logged 'legacy OSXCross and Apple GCC build' build_legacy_toolchain
 prepare_modern_source

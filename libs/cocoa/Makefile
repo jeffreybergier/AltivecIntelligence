@@ -4,7 +4,7 @@
 include ../../altivec_toolchains.mk
 
 all: mac-all phone-all
-all mac-static mac-dynamic mac-all mac phone-static phone-all phone: | altivec-sdk-ensure
+all mac-static mac-dynamic mac-all mac phone-static phone-all phone: | altivec-sdk-install
 
 mac-static:
 	@echo "==========================================================="
