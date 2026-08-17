@@ -72,8 +72,10 @@ docker compose run --rm altivec-intelligence
 ```
 
 The template mounts named Docker volumes for `/cache` and the two installed SDK
-roots. `altivec-sdk install` runs the archive preflight and installs each SDK;
-later builds in the same volumes skip extraction. `altivec-sdk status` reports
+roots. `altivec-sdk install` preflights the archives needed for missing SDKs and
+installs them. Later builds recognize receipt-backed installations and skip
+both archive verification and extraction. Run `altivec-sdk preflight` when you
+want to verify every source archive explicitly; `altivec-sdk status` reports
 both source and installation state. `docker compose down -v` removes the
 installed copies and caches, while the original archives remain in
 `.altivec-sdk/` on the host.

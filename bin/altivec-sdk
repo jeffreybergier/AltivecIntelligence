@@ -125,6 +125,31 @@ receipt_path() {
   printf '%s/.altivec-sdk-%s.receipt\n' "$1" "$2"
 }
 
+entry_sdk_path() {
+  local entry="$1"
+  local directory destination parent
+
+  directory="$(entry_value "$entry" '.directory')"
+  destination="$(entry_value "$entry" '.destination')"
+  parent="$(sdk_parent "$destination")"
+  printf '%s/%s\n' "$parent" "$directory"
+}
+
+installed_sdk_is_current() {
+  local entry="$1"
+  local directory destination parent sdk_path receipt expected
+
+  directory="$(entry_value "$entry" '.directory')"
+  destination="$(entry_value "$entry" '.destination')"
+  expected="$(entry_value "$entry" '.sha256')"
+  parent="$(sdk_parent "$destination")"
+  sdk_path="$parent/$directory"
+  receipt="$(receipt_path "$parent" "$directory")"
+  validate_installed_sdk "$entry" "$sdk_path" &&
+    [[ -f "$receipt" && ! -L "$receipt" ]] &&
+    grep -Fqx "$expected" "$receipt"
+}
+
 validate_archive_paths() {
   local archive="$1"
   local format="$2"
@@ -231,17 +256,10 @@ archive_status() {
 
 installation_status() {
   local entry="$1"
-  local directory destination parent sdk_path receipt expected
+  local sdk_path
 
-  directory="$(entry_value "$entry" '.directory')"
-  destination="$(entry_value "$entry" '.destination')"
-  expected="$(entry_value "$entry" '.sha256')"
-  parent="$(sdk_parent "$destination")"
-  sdk_path="$parent/$directory"
-  receipt="$(receipt_path "$parent" "$directory")"
-  if validate_installed_sdk "$entry" "$sdk_path" &&
-      [[ -f "$receipt" && ! -L "$receipt" ]] &&
-      grep -Fqx "$expected" "$receipt"; then
+  sdk_path="$(entry_sdk_path "$entry")"
+  if installed_sdk_is_current "$entry"; then
     printf 'installed\n'
   elif [[ -e "$sdk_path" || -L "$sdk_path" ]]; then
     printf 'invalid\n'
@@ -267,19 +285,18 @@ command_status() {
   done < <(sdk_entries)
 }
 
-command_preflight() {
+preflight_entries() {
   local entry archive
   local rc=0
 
-  require_tools awk tar tr wc
   printf 'Checking SDK archives in %s...\n' "$archive_dir"
-  while IFS= read -r entry; do
+  for entry in "$@"; do
     if archive="$(verify_entry_archive "$entry")"; then
       printf '  available: %s\n' "${archive##*/}"
     else
       rc=1
     fi
-  done < <(sdk_entries)
+  done
   if [[ "$rc" -ne 0 ]]; then
     printf 'error: SDK archive preflight failed\n' >&2
     return 1
@@ -287,22 +304,26 @@ command_preflight() {
   printf 'SDK archive preflight passed.\n'
 }
 
+command_preflight() {
+  local entry
+  local -a entries=()
+
+  require_tools awk tar tr wc
+  while IFS= read -r entry; do
+    entries+=("$entry")
+  done < <(sdk_entries)
+  preflight_entries "${entries[@]}"
+}
+
 validate_install_destination() {
   local entry="$1"
-  local directory destination parent sdk_path receipt expected
+  local sdk_path
 
-  directory="$(entry_value "$entry" '.directory')"
-  destination="$(entry_value "$entry" '.destination')"
-  expected="$(entry_value "$entry" '.sha256')"
-  parent="$(sdk_parent "$destination")"
-  sdk_path="$parent/$directory"
-  receipt="$(receipt_path "$parent" "$directory")"
+  sdk_path="$(entry_sdk_path "$entry")"
   if [[ ! -e "$sdk_path" && ! -L "$sdk_path" ]]; then
     return 0
   fi
-  if validate_installed_sdk "$entry" "$sdk_path" &&
-      [[ -f "$receipt" && ! -L "$receipt" ]] &&
-      grep -Fqx "$expected" "$receipt"; then
+  if installed_sdk_is_current "$entry"; then
     return 0
   fi
   printf 'error: existing SDK is incomplete or unverified: %s\n' \
@@ -331,9 +352,7 @@ install_entry() {
   exec 9>"$lock_file"
   flock 9
 
-  if validate_installed_sdk "$entry" "$sdk_path" &&
-      [[ -f "$receipt" && ! -L "$receipt" ]] &&
-      grep -Fqx "$expected" "$receipt"; then
+  if installed_sdk_is_current "$entry"; then
     printf 'SDK already installed: %s\n' "$sdk_path"
     flock -u 9
     return 0
@@ -362,18 +381,39 @@ install_entry() {
 }
 
 command_install() {
-  local entry
+  local entry sdk_path
+  local index
   local rc=0
+  local -a entries=() install_required=() missing_entries=()
 
   require_tools awk flock grep mkdir mktemp mv rm rmdir tar tr wc
-  command_preflight
   while IFS= read -r entry; do
-    validate_install_destination "$entry" || rc=1
+    entries+=("$entry")
+    if installed_sdk_is_current "$entry"; then
+      install_required+=(0)
+    elif validate_install_destination "$entry"; then
+      install_required+=(1)
+      missing_entries+=("$entry")
+    else
+      install_required+=(0)
+      rc=1
+    fi
   done < <(sdk_entries)
   [[ "$rc" -eq 0 ]] || return 1
-  while IFS= read -r entry; do
-    install_entry "$entry"
-  done < <(sdk_entries)
+  if ((${#missing_entries[@]} > 0)); then
+    preflight_entries "${missing_entries[@]}"
+  fi
+  for index in "${!entries[@]}"; do
+    entry="${entries[$index]}"
+    if [[ "${install_required[$index]}" -eq 1 ]]; then
+      install_entry "$entry"
+      continue
+    fi
+    sdk_path="$(entry_sdk_path "$entry")"
+    installed_sdk_is_current "$entry" ||
+      die "SDK installation changed during install: ${sdk_path}; run altivec-sdk install again"
+    printf 'SDK already installed: %s\n' "$sdk_path"
+  done
 }
 
 uninstall_entry() {
