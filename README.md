@@ -1,3 +1,10 @@
+> [!NOTE]
+> **AI Disclosure:** Altivec Intelligence has been lovingly crafted for retro
+> Apple devices by me. Also the writing in this README and associated 
+> [blog post](https://jeffburg.com/unenshittification/2026/04/22/Altivec-Intelligence.html) 
+> is 100% written by me. That said, the build system and makefiles are 100% AI
+> generated.
+
 [![AltiveIntelligence Fun 90's Header Image](docs/README.thumb.png)](docs/README.png)
 
 # 🤖 Altivec Intelligence
@@ -32,88 +39,95 @@ app repository — no submodule, no clone, no local toolchain build. This keeps
 your app code fully separate from the engine, and you update the engine by
 simply pulling a newer image.
 
+### BYOSDK
+
+Altivec Intelligence is BYOSDK (Bring Your Own SDK) 
+([reference](https://en.wikipedia.org/wiki/Mac_Mini#Form_and_design))
+and does not contain or download Apple SDK's. You must provide them yourself.
+The provided template compose file provides a way to "install" them via Docker
+volumes. Please google for the following files with "Github" as a keyword to
+find them:
+
+- `iPhoneOS8.4.sdk.tar.gz`
+- `MacOSX10.5.sdk.tar.xz`
+- `MacOSX11.3.sdk.tar.xz`
+
+The install script provided verifies the file checksums, so it will fail if
+you somehow found a different file with the same name.
+
 ### Set Up Your Project
 
-See [templates/compose.yml](templates/compose.yml) for the full template and
-notes on first-time AI assistant setup. The GHCR image ships the `/altivec/`
-runtime (cross-compilers, prebuilt AltivecCore/AltivecCocoa libs, sample app
-sources, and AI CLIs), but deliberately contains no Apple SDKs or ARCLite.
-SDK archives stay in your ignored `.altivec-sdk/` directory and are installed
-into named Docker volumes on the first build.
+**1. Create a folder for your app project**
+
+`mkdir MyCoolApp && cd MyCoolApp`
+
+or if you want it to be in a git repo
+
+`git init MyCoolApp && cd MyCoolApp`
+
+**2. Use the Docker Compose Template**
+
+1. Download the [templates/compose.yml](templates/compose.yml)
+1. Move or copy it into the `MyCoolApp` folder
+
+**3. Prepare the SDK's**
 
 ```bash
-# 0. If you do not already have a repository for your app idea,
-#    create one with git init
-git init MyCoolRepo && cd MyCoolRepo
-
-# 1. Drop the template compose.yml into your project root:
-curl -fsSL https://raw.githubusercontent.com/jeffreybergier/AltivecIntelligence/main/templates/compose.yml \
-     -o compose.yml
-
-# 2. Pull the prebuilt image (one time, multi-GB — saves 5+ hours of osxcross build):
-docker compose pull
-
-# 3. Keep the checksum-pinned SDK archives outside the image and ignore them:
-mkdir -p .altivec-sdk
-grep -qxF '.altivec-sdk/' .gitignore 2>/dev/null || printf '%s\n' '.altivec-sdk/' >> .gitignore
-# Place these exact files in ./.altivec-sdk:
-#   MacOSX10.5.sdk.tar.xz
-#   MacOSX11.3.sdk.tar.xz
-#   iPhoneOS8.4.sdk.tar.gz
-docker compose run --rm altivec-sdk preflight
-docker compose run --rm altivec-sdk install
-
-# 4. Build your app (Makefile at the root of your project):
-docker compose run --rm altivec "make"
-
-# 5. Use with AI assistant (interactive chooser picks
-#    Claude / Codex / Antigravity / Pi / OpenCode / Kimi):
-docker compose run --rm altivec-intelligence
+mkdir .altivec-sdk
+touch .gitignore && echo '.altivec-sdk/' >> .gitignore
+cp ~/Downloads/iPhoneOS8.4.sdk.tar.gz .altivec-sdk/
+cp ~/Downloads/MacOSX10.5.sdk.tar.xz .altivec-sdk/
+cp ~/Downloads/MacOSX11.3.sdk.tar.xz .altivec-sdk/
 ```
 
-The template mounts named Docker volumes for `/cache` and the two installed SDK
-roots. `altivec-sdk install` preflights the archives needed for missing SDKs and
-installs them. Later builds recognize receipt-backed installations and skip
-both archive verification and extraction. Run `altivec-sdk preflight` when you
-want to verify every source archive explicitly; `altivec-sdk status` reports
-both source and installation state. `docker compose down -v` removes the
-installed copies and caches, while the original archives remain in
-`.altivec-sdk/` on the host.
+**4. Pull the Docker Image and Install the SDK's**
 
-Published images and release packages contain no Apple SDK, SDK archive, or
-ARCLite binary. `altivec-sdk audit-image IMAGE` verifies every image layer, and
-`altivec-sdk audit-repository` verifies both the current Git tree and its full
-reachable history. The image does contain ordinary static archives required by
-Ubuntu, GCC, LLVM, AltivecCore, and AltivecCocoa. It also contains the
-open-source Apple GCC/cctools lineage used by OSXCross; those components are
-not proprietary SDK content and remain subject to their upstream licenses.
+```bash
+docker compose pull
+docker compose run --rm altivec-sdk install
+```
 
-Repository release jobs obtain those same three archives only through the
-required GitHub Actions secrets `ALTIVEC_SDK_MACOS_105_URL`,
-`ALTIVEC_SDK_MACOS_113_URL`, and `ALTIVEC_SDK_IPHONEOS_84_URL`. The public SDK
-manager and catalog contain no source URLs and perform no network requests.
+**5. Copy a Sample App and Compile**
 
-The image also configures Git to trust bind-mounted project directories and
-points generic native build variables (`CC`, `CXX`, `LD`, `AR`) at Ubuntu's
-toolchain. That keeps npm and gem native extensions from accidentally invoking
-the Apple cross-linker that is also available on `PATH`.
+There are 4 sample apps you can choose from, but CURLmac will be the best
+starting point. After it compiles with `make debug` you can launch the .app
+file on your modern Mac or your retro Mac.
+
+```bash
+docker compose run --rm altivec "cp -r /altivec/apps/CURLmac/. ./"
+docker compose run --rm altivec "make debug"
+```
+
+CURLmac is an example application that shows the basics of how you can do 
+modern networking even on a retro Mac. It is already linked to AltivecCore which
+includes libcurl, cJSON, and SQLite for modern networking and database 
+capabilities.
+
+**6. Use AI**
+
+Altivec Intelligence has built in AI tools which keeps them sandboxed. After
+running the following command you can choose which AI tool you want to use.
+Note if you want to try for free, use your Google account with 
+[Antigravity](https://antigravity.google/pricing)
+
+`docker compose run --rm altivec-intelligence`
 
 ### Introduce the AI to Your Project
 
 #### Introduction Prompt
 
-```
+``` 
 Hello, you are inside of a docker container that has a cross-compile
 environment for building retro Mac and iPhone Apps. My app code is in
 /repo/user. The Altivec engine and examples are in /altivec. The modern
 cross-compiler toolchain is in /osxcross/modern and the Apple GCC/PowerPC
 toolchain is in /osxcross/legacy/target. Please start by reading the README.md
-and AGENTS.md
-files in /altivec. Please always create makefiles for my app using 
-the altivec_common_[mac|phone].mk files in /altivec so I can ensure my 
-makefiles are small and make apps compatible with many retro Apple devices. 
-Make sure you treat my repo (/repo/user) as the base location for your work on 
-my app as changes made outside of volumes mounted in the compose.yml file will be lost when we finish this session.
+and AGENTS.md files in /altivec. Please always create makefiles for my app using
+the altivec_common_[mac|phone].mk files in /altivec so I can ensure my makefiles
+are small and make apps compatible with many retro Apple devices. Make sure you
+treat my repo (/repo/user) as the base location for your work on my app as
+changes made outside of volumes mounted in the compose.yml file will be lost
+when we finish this session. 
 ```
 
 #### Make a New App Prompt
@@ -130,11 +144,6 @@ run it to make sure it works.
 an iPhone app or Mac app. Also, if you want to do networking, you may consider
 using the CURLmac or CURLphone app as starting place because those have
 AltivecCore linked.
-
-The CURL samples include `AICURLConnection` as private convenience source for
-their demonstrations; it is not part of AltivecCore's public API. New app code
-should call libcurl directly and set `CURLOPT_CAINFO` to
-`AltivecCoreCertPath()` on every new or reset easy handle.
 
 ## Deploying to Hardware
 
