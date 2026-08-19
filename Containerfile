@@ -85,6 +85,7 @@ RUN apt-get update && apt-get install -y \
     librsvg2-bin \
     # --- Audio / video transcoding ---
     ffmpeg \
+    handbrake-cli \
     # --- macOS app bundle / packaging ---
     libplist-utils \
     xmlstarlet \
