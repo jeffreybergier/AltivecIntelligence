@@ -1,641 +1,836 @@
-#!/bin/bash
+#!/usr/bin/env node
+"use strict";
 
-# --- CONSTANTS ---
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly ALTIVEC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-readonly TEMPLATE_DIR="$ALTIVEC_ROOT/templates"
-readonly GDBINIT_FILE="$TEMPLATE_DIR/gdbinit"
-readonly LLDBINIT_FILE="$TEMPLATE_DIR/lldbinit"
-readonly REMOTE_MAC_BASE="~/Desktop/Altivec"
-readonly REMOTE_IOS_BASE="~/tmp_altivec"
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const readline = require("node:readline/promises");
+const { spawn } = require("node:child_process");
 
-# --- VARIABLES ---
-# Arguments
-INPUT_PATH=""
-DEVICE_SSH_STR=""
+const ALTIVEC_ROOT = path.resolve(__dirname, "..");
+const GDBINIT_FILE = path.join(ALTIVEC_ROOT, "templates", "gdbinit");
+const LLDBINIT_FILE = path.join(ALTIVEC_ROOT, "templates", "lldbinit");
+const REMOTE_MAC_PARENT = "Desktop/Altivec";
+const REMOTE_IOS_PARENT = "tmp_altivec";
+const DEFAULT_TIMEOUT = 60;
 
-# Application Preflight
-APP_BUNDLE_PATH=""
-APP_DIR=""
-APP_IPA_PATH=""
-APP_ZIP_PATH=""
-APP_DSYM_PATHS=()
-APP_NAME=""
-APP_GDBINIT=""
-APP_LLDBINIT=""
-APP_ENV_FILE=""     # auto-discovered .env (walked upward from APP_DIR)
-APP_TEMP_DIR=""     # /tmp/altivec-deploy.$$ — holds generated init files
-APP_GDBINIT_USE=""  # gdbinit actually passed to gdb (template, or merged copy)
-APP_LLDBINIT_USE="" # lldbinit actually passed to lldb (template, or merged copy)
+let activeChild = null;
+let stopRequested = false;
+const stopWaiters = new Set();
 
-# Device Preflight
-DEV_IS_REMOTE=false
-DEV_SSH_CMD=""
-DEV_OS=""      # Darwin
-DEV_TYPE=""    # mac || ios
-DEV_GDB=""     # path to gdb
-DEV_LLDB=""    # path to lldb
-DEV_LOG=""     # path to system log for tailing
-DEV_LOG_MAC="" # path to /var/log/system.log
-DEV_LOG_IOS="" # path to /var/log/syslog
-DEV_APPINST="" # path to appinst
-DEV_IPAINST="" # path to ipainstaller
-DEV_NEEDS_CLEANUP=false # Flag to track if we've touched the remote device
-NON_INTERACTIVE=false
-TIMEOUT=60
-
-# --- FUNCTIONS ---
-
-# Portable timeout replacement for macOS/Linux
-timeout_int() {
-  local sec="$1"; shift
-  # Use GNU timeout/gtimeout if available for efficiency
-  if command -v timeout >/dev/null 2>&1; then
-    timeout -s INT "$sec" "$@"
-    return $?
-  elif command -v gtimeout >/dev/null 2>&1; then
-    gtimeout -s INT "$sec" "$@"
-    return $?
-  fi
-
-  # Fallback: Loop-based timer
-  "$@" &
-  local pid=$!
-  local count=0
-  
-  # Check if process is alive every second
-  while [ $count -lt "$sec" ]; do
-    if ! kill -0 $pid 2>/dev/null; then
-      wait $pid 2>/dev/null
-      return $?
-    fi
-    sleep 1
-    count=$((count + 1))
-  done
-
-  # Timeout reached: Kill process
-  kill -TERM $pid 2>/dev/null
-  sleep 2
-  kill -KILL $pid 2>/dev/null
-  wait $pid 2>/dev/null
-  return 124
+class DeployError extends Error {
+  constructor(message, status = 1) {
+    super(message);
+    this.name = "DeployError";
+    this.status = status;
+  }
 }
 
-log_header() {
-  echo ""
-  echo "=== $1 ==="
+function logHeader(message) {
+  process.stdout.write(`\n=== ${message} ===\n`);
 }
 
-log_item() {
-  echo " > $1"
+function logItem(message) {
+  process.stdout.write(` > ${message}\n`);
 }
 
-log_fail() {
-  echo "[FAIL] $1"
+function logFail(message) {
+  process.stderr.write(`[FAIL] ${message}\n`);
 }
 
-log_instructions() {
-  local type="$1"
-  local is_remote="$2"
-  echo ""
-  echo "***************************************************"
-  if [ "$type" = "debugger" ]; then
-    echo "  DEBUGGER INSTRUCTIONS:"
-    echo "  - Type 'run' to launch the app."
-    echo "  - Press CTRL+C to pause the app."
-    echo "  - Type 'kill' to kill the app."
-    echo "  - Type 'quit' to exit the debugger."
-    if [ "$is_remote" = "true" ]; then
-      if [ "$DEV_TYPE" = "ios" ]; then
-        echo "  Note: Temporary files have been deleted, but"
-        echo "        the app will remain on the homescreen."
+function usage(scriptName = process.argv[1]) {
+  return [
+    `Usage: ${scriptName} <path_to_app_or_build_dir> --device <user@host> [options]`,
+    "",
+    "Options:",
+    "  -d, --device <user@host>  Required SSH deployment target",
+    "  -y, --yes [seconds]       Skip confirmation and debugger",
+    "      --timeout <seconds>   Set non-interactive timeout (default: 60)",
+    "  -h, --help                Show this help",
+  ].join("\n");
+}
+
+function positiveInteger(value, option) {
+  if (!/^\d+$/.test(value || "") || Number(value) <= 0) {
+    throw new DeployError(`${option} requires a positive number of seconds`);
+  }
+  return Number(value);
+}
+
+function parseArgs(argv) {
+  if (argv.length === 0) throw new DeployError("Missing application path");
+  if (argv[0] === "-h" || argv[0] === "--help") return { help: true };
+  if (argv[0].startsWith("-")) {
+    throw new DeployError("The application path must be the first argument");
+  }
+  const options = {
+    help: false,
+    inputPath: path.resolve(argv[0]),
+    device: null,
+    nonInteractive: false,
+    timeout: DEFAULT_TIMEOUT,
+  };
+  for (let index = 1; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "-h" || argument === "--help") {
+      options.help = true;
+    } else if (argument === "-d" || argument === "--device") {
+      const device = argv[index + 1];
+      if (!device || device.startsWith("-")) {
+        throw new DeployError(`${argument} requires a user@host value`);
+      }
+      options.device = device;
+      index += 1;
+    } else if (argument === "-y" || argument === "--yes") {
+      options.nonInteractive = true;
+      if (/^\d+$/.test(argv[index + 1] || "")) {
+        options.timeout = positiveInteger(argv[index + 1], argument);
+        index += 1;
+      }
+    } else if (argument === "--timeout") {
+      options.timeout = positiveInteger(argv[index + 1], argument);
+      index += 1;
+    } else {
+      throw new DeployError(`Unknown argument: ${argument}`);
+    }
+  }
+  if (!options.help && !options.device) {
+    throw new DeployError(
+      "Missing required SSH target: use --device <user@host>",
+    );
+  }
+  return options;
+}
+
+function requireConfirmationTerminal(options, input = process.stdin) {
+  if (!options.nonInteractive && !input.isTTY) {
+    throw new DeployError(
+      "Confirmation requires an interactive terminal; rerun with --yes",
+    );
+  }
+}
+
+function signalStatus(signal) {
+  if (signal === "SIGINT") return 130;
+  if (signal === "SIGTERM") return 143;
+  return 1;
+}
+
+function onSignal(signal) {
+  if (activeChild) {
+    activeChild.kill(signal);
+    return;
+  }
+  stopRequested = true;
+  for (const resolve of stopWaiters) resolve(signal);
+  stopWaiters.clear();
+}
+
+process.on("SIGINT", () => onSignal("SIGINT"));
+process.on("SIGTERM", () => onSignal("SIGTERM"));
+
+function run(command, args, options = {}) {
+  const {
+    capture = false,
+    allowFailure = false,
+    stderr = capture ? "pipe" : "inherit",
+  } = options;
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ["inherit", capture ? "pipe" : "inherit", stderr],
+    });
+    let stdout = "";
+    let errorOutput = "";
+    activeChild = child;
+    if (child.stdout) child.stdout.on("data", (chunk) => (stdout += chunk));
+    if (child.stderr)
+      child.stderr.on("data", (chunk) => (errorOutput += chunk));
+    child.once("error", (error) => {
+      if (activeChild === child) activeChild = null;
+      reject(new DeployError(`${command}: ${error.message}`));
+    });
+    child.once("close", (status, signal) => {
+      if (activeChild === child) activeChild = null;
+      const result = {
+        status: status ?? signalStatus(signal),
+        signal,
+        stdout,
+        stderr: errorOutput,
+      };
+      if (result.status === 0 || allowFailure) return resolve(result);
+      if (signal) {
+        return reject(
+          new DeployError("Deployment interrupted", signalStatus(signal)),
+        );
+      }
+      const detail = errorOutput.trim();
+      reject(
+        new DeployError(
+          `${command} exited with status ${result.status}${detail ? `: ${detail}` : ""}`,
+          result.status,
+        ),
+      );
+    });
+  });
+}
+
+function waitForStop(timeout) {
+  return new Promise((resolve) => {
+    if (stopRequested) return resolve("SIGINT");
+    let timer = null;
+    const finish = (signal) => {
+      if (timer) clearTimeout(timer);
+      stopWaiters.delete(finish);
+      resolve(signal);
+    };
+    stopWaiters.add(finish);
+    if (Number.isFinite(timeout))
+      timer = setTimeout(() => finish(null), timeout);
+  });
+}
+
+async function waitOrAbort(timeout, child = null) {
+  const signal = await waitForStop(timeout);
+  if (!signal) return;
+  await stopChild(child);
+  throw new DeployError("Deployment interrupted", signalStatus(signal));
+}
+
+function directoryEntries(directory) {
+  return fs
+    .readdirSync(directory, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function findAppBundles(inputPath, maxDepth = 2) {
+  const input = fs.statSync(inputPath);
+  if (input.isDirectory() && inputPath.endsWith(".app")) return [inputPath];
+  if (!input.isDirectory()) return [];
+  const matches = [];
+  const visit = (directory, depth) => {
+    for (const entry of directoryEntries(directory)) {
+      if (!entry.isDirectory()) continue;
+      const candidate = path.join(directory, entry.name);
+      if (entry.name.endsWith(".app")) matches.push(candidate);
+      else if (depth < maxDepth) visit(candidate, depth + 1);
+    }
+  };
+  visit(inputPath, 1);
+  return matches;
+}
+
+function selectArtifact(directory, appName, extension) {
+  const candidates = directoryEntries(directory)
+    .filter((entry) => entry.isFile() && entry.name.endsWith(extension))
+    .map((entry) => path.join(directory, entry.name));
+  const exact = candidates.find(
+    (candidate) => path.basename(candidate) === `${appName}${extension}`,
+  );
+  if (exact) return exact;
+  if (candidates.length <= 1) return candidates[0] || null;
+  throw new DeployError(
+    `Multiple ${extension} payloads found in ${directory}; expected ${appName}${extension}`,
+  );
+}
+
+function findEnvFile(startDirectory, maxHops = 8) {
+  let directory = path.resolve(startDirectory);
+  for (let hop = 0; hop < maxHops; hop += 1) {
+    const candidate = path.join(directory, ".env");
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile())
+      return candidate;
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  return null;
+}
+
+function parseEnv(contents) {
+  const variables = [];
+  for (const line of contents.split(/\r?\n/)) {
+    if (!line || line.startsWith("#") || !line.includes("=")) continue;
+    const separator = line.indexOf("=");
+    const key = line.slice(0, separator).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    variables.push([key, line.slice(separator + 1)]);
+  }
+  return variables;
+}
+
+function quoteLldbToken(value) {
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
+function buildDebuggerInit(template, variables, mode, envFile) {
+  const lines = [];
+  if (template) lines.push(template.replace(/\n$/, ""), "");
+  if (variables.length > 0) {
+    lines.push(`## auto-injected from ${envFile}`);
+    for (const [key, value] of variables) {
+      if (mode === "gdb") lines.push(`set environment ${key} ${value}`);
       else
-        echo "  Note: Remote files will be deleted"
-        echo "        automatically after quitting."
-      fi
-    fi
-  elif [ "$type" = "logs" ]; then
-    echo "  LOG INSTRUCTIONS:"
-    echo "  - Press CTRL+C to stop tailing logs."
-    if [ "$is_remote" = "true" ]; then
-      if [ "$DEV_TYPE" = "ios" ]; then
-        echo "  Note: Temporary files have been deleted, but"
-        echo "        the app will remain on the homescreen."
-      else
-        echo "  Note: Remote files will be deleted"
-        echo "        automatically after stopping."
-      fi
-    fi
-  elif [ "$type" = "logsnone" ]; then
-    echo "  NO LOGS FOUND:"
-    echo "  - The app has been launched on the remote Mac."
-    echo "  - No system log was found to tail."
-    echo "  - Press CTRL+C to stop the app and cleanup."
-    if [ "$is_remote" = "true" ]; then
-      echo "  Note: Remote files will be deleted"
-      echo "        automatically after stopping."
-    fi
-  fi
-  echo "***************************************************"
-  echo ""
+        lines.push(
+          `settings set target.env-vars ${quoteLldbToken(`${key}=${value}`)}`,
+        );
+    }
+  }
+  return `${lines.join("\n")}\n`;
 }
 
-cleanup() {
-  if [ "$DEV_NEEDS_CLEANUP" = true ]; then
-    if [ "$DEV_TYPE" = "mac" ]; then
-      echo "Stopping remote app..."
-      $DEV_SSH_CMD "killall '$APP_NAME' 2>/dev/null"
-      echo "Cleaning up remote Mac directory..."
-      $DEV_SSH_CMD "rm -rf $REMOTE_MAC_BASE"
-    elif [ "$DEV_TYPE" = "ios" ]; then
-      echo "Cleaning up remote iPhone directory..."
-      $DEV_SSH_CMD "rm -rf $REMOTE_IOS_BASE"
-    fi
-  fi
-  # Always nuke the local temp dir if we created one. The generated init
-  # files contain the secrets from .env, so we don't want them lingering
-  # in /tmp after the debugger exits.
-  if [ -n "$APP_TEMP_DIR" ] && [ -d "$APP_TEMP_DIR" ]; then
-    rm -rf "$APP_TEMP_DIR"
-  fi
+function discoverApplication(inputPath) {
+  logHeader("Application Preflight");
+  if (!fs.existsSync(inputPath)) {
+    throw new DeployError(`Application path does not exist: ${inputPath}`);
+  }
+  const bundles = findAppBundles(inputPath);
+  if (bundles.length === 0) {
+    throw new DeployError(`Could not find .app bundle in ${inputPath}`);
+  }
+  if (bundles.length > 1) {
+    throw new DeployError(
+      `Multiple .app bundles found; pass one explicitly:\n${bundles.map((item) => `       ${item}`).join("\n")}`,
+    );
+  }
+  const bundlePath = bundles[0];
+  const directory = path.dirname(bundlePath);
+  const appName = path.basename(bundlePath, ".app");
+  const ipaPath = selectArtifact(directory, appName, ".ipa");
+  const zipPath = selectArtifact(directory, appName, ".zip");
+  const dsymPaths = directoryEntries(directory)
+    .filter((entry) => entry.isDirectory() && entry.name.endsWith(".dSYM"))
+    .map((entry) => path.join(directory, entry.name));
+  const gdbInit = fs.existsSync(GDBINIT_FILE) ? GDBINIT_FILE : null;
+  const lldbInit = fs.existsSync(LLDBINIT_FILE) ? LLDBINIT_FILE : null;
+  const envFile = findEnvFile(directory);
+
+  logItem(`Found App: ${bundlePath}`);
+  if (ipaPath) logItem(`Found IPA: ${path.basename(ipaPath)}`);
+  if (zipPath) logItem(`Found ZIP: ${path.basename(zipPath)}`);
+  for (const dsymPath of dsymPaths)
+    logItem(`Found dSYM: ${path.basename(dsymPath)}`);
+  logItem(
+    gdbInit
+      ? `Found gdbinit: ${gdbInit}`
+      : `gdbinit: Not found (${GDBINIT_FILE})`,
+  );
+  logItem(
+    lldbInit
+      ? `Found lldbinit: ${lldbInit}`
+      : `lldbinit: Not found (${LLDBINIT_FILE})`,
+  );
+  logItem(
+    envFile
+      ? `Found .env: ${envFile}`
+      : ".env: Not found (no env-var injection)",
+  );
+  return {
+    bundlePath,
+    directory,
+    appName,
+    ipaPath,
+    zipPath,
+    dsymPaths,
+    gdbInit,
+    lldbInit,
+    envFile,
+    tempDirectory: null,
+    gdbInitToUse: gdbInit,
+    lldbInitToUse: lldbInit,
+  };
 }
 
-# Walk upward from $APP_DIR looking for a .env file. Stops at filesystem root
-# or after 8 hops, whichever comes first. Sets APP_ENV_FILE on hit; leaves
-# it empty otherwise (which is a perfectly fine outcome — the script then
-# uses the original debugger templates unmodified).
-find_env_file() {
-  local dir
-  dir=$(cd "$APP_DIR" 2>/dev/null && pwd) || return 0
-  local i=0
-  while [ $i -lt 8 ]; do
-    if [ -f "$dir/.env" ]; then
-      APP_ENV_FILE="$dir/.env"
-      return 0
-    fi
-    [ "$dir" = "/" ] && break
-    dir=$(cd "$dir/.." && pwd)
-    i=$((i + 1))
-  done
+function parseProbeOutput(output) {
+  const values = new Map();
+  for (const line of output.split(/\r?\n/)) {
+    const separator = line.indexOf("=");
+    if (separator >= 0)
+      values.set(line.slice(0, separator), line.slice(separator + 1));
+  }
+  return values;
 }
 
-# Concatenate the template file + one `set environment KEY VALUE`
-# (gdb) or `settings set target.env-vars KEY=VALUE` (lldb) line per .env
-# entry. Skips blanks, comments, and any line whose key doesn't look like an
-# environment-variable name. Always produces $output, even when .env is
-# absent (just the template, no env block) — single code path downstream.
-# Args: $1 template path (may be ""), $2 output path, $3 mode (gdb|lldb)
-build_debugger_init() {
-  local template="$1" output="$2" mode="$3"
-  local key value line
-
-  : > "$output"
-  if [ -n "$template" ] && [ -f "$template" ]; then
-    cat "$template" >> "$output"
-    echo "" >> "$output"
-  fi
-
-  [ -z "$APP_ENV_FILE" ] && return 0
-  [ ! -f "$APP_ENV_FILE" ] && return 0
-
-  echo "## auto-injected from $APP_ENV_FILE" >> "$output"
-  while IFS='' read -r line || [ -n "$line" ]; do
-    case "$line" in
-      ''|\#*) continue ;;
-      *=*)    ;;
-      *)      continue ;;
-    esac
-    key="${line%%=*}"
-    value="${line#*=}"
-    key=$(printf '%s' "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    case "$key" in
-      [A-Za-z_]*) ;;
-      *) continue ;;
-    esac
-    if [ "$mode" = "gdb" ]; then
-      printf 'set environment %s %s\n' "$key" "$value" >> "$output"
-    else
-      printf 'settings set target.env-vars %s=%s\n' "$key" "$value" >> "$output"
-    fi
-  done < "$APP_ENV_FILE"
-}
-
-# Generate the temp gdbinit/lldbinit pair into $APP_TEMP_DIR and set
-# APP_GDBINIT_USE / APP_LLDBINIT_USE to point at them. The remote path
-# logic relies on these files being named exactly "gdbinit" / "lldbinit"
-# so they scp into $REMOTE_MAC_BASE with the same basename the existing
-# `-x $REMOTE_MAC_BASE/gdbinit` invocation already expects.
-prepare_debugger_inits() {
-  if [ -z "$APP_ENV_FILE" ]; then
-    # No env to inject; use the templates directly.
-    APP_GDBINIT_USE="$APP_GDBINIT"
-    APP_LLDBINIT_USE="$APP_LLDBINIT"
-    return 0
-  fi
-  APP_TEMP_DIR="/tmp/altivec-deploy.$$"
-  mkdir -p "$APP_TEMP_DIR"
-  APP_GDBINIT_USE="$APP_TEMP_DIR/gdbinit"
-  APP_LLDBINIT_USE="$APP_TEMP_DIR/lldbinit"
-  build_debugger_init "$APP_GDBINIT"  "$APP_GDBINIT_USE"  gdb
-  build_debugger_init "$APP_LLDBINIT" "$APP_LLDBINIT_USE" lldb
-  log_item "Generated debugger inits with env from $(basename "$APP_ENV_FILE")"
-}
-
-preflight_app() {
-  log_header "Application Preflight"
-  
-  # Search for .app bundle
-  if [ -d "$INPUT_PATH" ] && [[ "$INPUT_PATH" == *.app ]]; then
-    APP_BUNDLE_PATH="$INPUT_PATH"
-  else
-    APP_BUNDLE_PATH=$(find "$INPUT_PATH" -maxdepth 2 -name "*.app" -type d -print -quit)
-  fi
-
-  if [ -z "$APP_BUNDLE_PATH" ]; then
-    log_fail "Could not find .app bundle in $INPUT_PATH"
-    return 1
-  fi
-  log_item "Found App: $APP_BUNDLE_PATH"
-
-  APP_DIR=$(dirname "$APP_BUNDLE_PATH")
-  APP_NAME=$(basename "$APP_BUNDLE_PATH" .app)
-  
-  # Search for payload
-  APP_IPA_PATH=$(find "$APP_DIR" -maxdepth 1 -name "*.ipa" -print -quit)
-  APP_ZIP_PATH=$(find "$APP_DIR" -maxdepth 1 -name "*.zip" -print -quit)
-  
-  if [ -n "$APP_IPA_PATH" ]; then log_item "Found IPA: $(basename "$APP_IPA_PATH")"; fi
-  if [ -n "$APP_ZIP_PATH" ]; then log_item "Found ZIP: $(basename "$APP_ZIP_PATH")"; fi
-  
-  # Search for dSYMs
-  while IFS= read -r dsym; do
-    if [ -n "$dsym" ]; then
-      APP_DSYM_PATHS+=("$dsym")
-      log_item "Found dSYM: $(basename "$dsym")"
-    fi
-  done < <(find "$APP_DIR" -maxdepth 1 -name "*.dSYM")
-
-  # Debugger inits
-  if [ -f "$GDBINIT_FILE" ]; then
-    APP_GDBINIT="$GDBINIT_FILE"
-    log_item "Found gdbinit: $GDBINIT_FILE"
-  else
-    log_item "gdbinit: Not found ($GDBINIT_FILE)"
-  fi
-  if [ -f "$LLDBINIT_FILE" ]; then
-    APP_LLDBINIT="$LLDBINIT_FILE"
-    log_item "Found lldbinit: $LLDBINIT_FILE"
-  else
-    log_item "lldbinit: Not found ($LLDBINIT_FILE)"
-  fi
-
-  # .env discovery — env vars get injected into the debugger init at launch
-  # so the inferior process (the app under gdb/lldb) sees them via getenv().
-  find_env_file
-  if [ -n "$APP_ENV_FILE" ]; then
-    log_item "Found .env: $APP_ENV_FILE"
-  else
-    log_item ".env: Not found (no env-var injection)"
-  fi
-
-  return 0
-}
-
-preflight_device() {
-  log_header "Device Preflight"
-
-  if [ -n "$DEVICE_SSH_STR" ]; then
-    DEV_IS_REMOTE=true
-    DEV_SSH_CMD="ssh $DEVICE_SSH_STR"
-
-    # Single SSH round-trip: gather all preflight data at once
-    local preflight_data
-    preflight_data=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$DEVICE_SSH_STR" '
-      MY_UNAME=$(uname)
-      printf "UNAME=%s\n" "$MY_UNAME"
-      if [ "$MY_UNAME" = "Darwin" ]; then
-        [ -d /var/mobile ] && printf "DEVTYPE=ios\n" || printf "DEVTYPE=mac\n"
-      else
-        printf "DEVTYPE=%s\n" "$MY_UNAME"
-      fi
-      printf "GDB=%s\n"    "$(command -v gdb          2>/dev/null)"
-      printf "LLDB=%s\n"   "$(command -v lldb         2>/dev/null)"
-      printf "APPINST=%s\n"  "$(command -v appinst      2>/dev/null)"
-      printf "IPAINST=%s\n"  "$(command -v ipainstaller 2>/dev/null)"
-      MY_UID=$(id -u)
-      [ -f "/Library/Logs/Console/$MY_UID/console.log" ] \
-        && printf "CONSOLE_LOG=/Library/Logs/Console/%s/console.log\n" "$MY_UID" \
-        || printf "CONSOLE_LOG=\n"
-      [ -f /var/log/system.log ] && printf "SYSLOG_MAC=/var/log/system.log\n" || printf "SYSLOG_MAC=\n"
-      [ -f /var/log/syslog ]     && printf "SYSLOG_IOS=/var/log/syslog\n"     || printf "SYSLOG_IOS=\n"
-    ' 2>/dev/null)
-
-    if [ $? -ne 0 ] || [ -z "$preflight_data" ]; then
-      log_fail "SSH connection to '$DEVICE_SSH_STR' failed"
-      echo "       Run 'ssh $DEVICE_SSH_STR' to debug the errors"
-      echo "       Note: Key authentication is required for this script"
-      return 1
-    fi
-    log_item "SSH Connection: OK"
-
-    # Parse all results from the single round-trip
-    DEV_OS=$(printf '%s' "$preflight_data"    | grep "^UNAME="       | cut -d= -f2-)
-    DEV_TYPE=$(printf '%s' "$preflight_data"  | grep "^DEVTYPE="     | cut -d= -f2-)
-    DEV_GDB=$(printf '%s' "$preflight_data"   | grep "^GDB="         | cut -d= -f2-)
-    DEV_LLDB=$(printf '%s' "$preflight_data"  | grep "^LLDB="        | cut -d= -f2-)
-    DEV_APPINST=$(printf '%s' "$preflight_data"  | grep "^APPINST="  | cut -d= -f2-)
-    DEV_IPAINST=$(printf '%s' "$preflight_data"  | grep "^IPAINST="  | cut -d= -f2-)
-    local console_log
-    console_log=$(printf '%s' "$preflight_data"  | grep "^CONSOLE_LOG=" | cut -d= -f2-)
-    DEV_LOG_MAC=$(printf '%s' "$preflight_data"  | grep "^SYSLOG_MAC="  | cut -d= -f2-)
-    DEV_LOG_IOS=$(printf '%s' "$preflight_data"  | grep "^SYSLOG_IOS="  | cut -d= -f2-)
-  else
-    DEV_IS_REMOTE=false
-    log_item "Local Deployment"
-
-    DEV_OS=$(uname)
-    if [ "$DEV_OS" = "Darwin" ]; then
-      [ -d /var/mobile ] && DEV_TYPE="ios" || DEV_TYPE="mac"
-    else
-      DEV_TYPE="$DEV_OS"
-    fi
-    DEV_GDB=$(command -v gdb          2>/dev/null)
-    DEV_LLDB=$(command -v lldb        2>/dev/null)
-    DEV_APPINST=$(command -v appinst      2>/dev/null)
-    DEV_IPAINST=$(command -v ipainstaller 2>/dev/null)
-
-    local uid console_log
-    uid=$(id -u)
-    console_log=""
-    [ -f "/Library/Logs/Console/$uid/console.log" ] && console_log="/Library/Logs/Console/$uid/console.log"
-    [ -f /var/log/system.log ] && DEV_LOG_MAC="/var/log/system.log"
-    [ -f /var/log/syslog ]     && DEV_LOG_IOS="/var/log/syslog"
-  fi
-
-  log_item "OS: $DEV_OS"
-  log_item "Type: $DEV_TYPE"
-  [ -n "$DEV_GDB" ]     && log_item "GDB: $DEV_GDB"               || log_item "GDB: Not found"
-  [ -n "$DEV_LLDB" ]    && log_item "LLDB: $DEV_LLDB"             || log_item "LLDB: Not found"
-  [ -n "$DEV_APPINST" ] && log_item "appinst: $DEV_APPINST"       || log_item "appinst: Not found"
-  [ -n "$DEV_IPAINST" ] && log_item "ipainstaller: $DEV_IPAINST"  || log_item "ipainstaller: Not found"
-
-  # On Tiger (10.4), GUI apps launched via `open` write NSLog to the per-user
-  # console log at /Library/Logs/Console/<uid>/console.log.
-  # Prefer this over /var/log/system.log for Mac deployments.
-  [ -n "$console_log" ]  && log_item "Console Log: $console_log"   || log_item "Console Log: Not found"
-  [ -n "$DEV_LOG_MAC" ]  && log_item "Syslog (Mac): $DEV_LOG_MAC"  || log_item "Syslog (Mac): Not found"
-  [ -n "$DEV_LOG_IOS" ]  && log_item "Syslog (iOS): $DEV_LOG_IOS"  || log_item "Syslog (iOS): Not found"
-
-  if [ -n "$console_log" ]; then
-    DEV_LOG="$console_log"
-  else
-    DEV_LOG="${DEV_LOG_MAC:-$DEV_LOG_IOS}"
-  fi
-
-  return 0
-}
-preflight_go_nogo() {
-  # 1. Check OS/Type
-  if [[ "$DEV_TYPE" != "mac" && "$DEV_TYPE" != "ios" ]]; then
-    log_fail "Unable to deploy Mac or iOS app to Linux"
-    echo "       Use -d to specify a remote device deployment with ssh"
-    return 1
-  fi
-
-  # 2. Match App to Device
-  if [ "$DEV_TYPE" = "mac" ]; then
-    if [ -n "$APP_IPA_PATH" ]; then
-      log_fail "Unable to deploy iOS app (ipa) to a Mac"
-      echo "       Use -d to specify a remote device deployment with ssh"
-      return 1
-    fi
-    if [ "$DEV_IS_REMOTE" = true ] && [ -z "$APP_ZIP_PATH" ]; then
-      log_fail "Remote Mac deployment requires a .zip payload. None found in $APP_DIR"
-      return 1
-    fi
-  fi
-
-  if [ "$DEV_TYPE" = "ios" ]; then
-    if [ -z "$APP_IPA_PATH" ]; then
-      log_fail "iPhone deployment requires an .ipa payload. None found in $APP_DIR"
-      return 1
-    fi
-    if [ -z "$DEV_APPINST" ] && [ -z "$DEV_IPAINST" ]; then
-      log_fail "No iPhone installer found (appinst or ipainstaller)."
-      echo "       Please install one of these utilities on your device."
-      return 1
-    fi
-  fi
-
-  return 0
-}
-
-preflight_summary() {
-  local choice=""
-  log_header "Deployment Summary"
-  
-  if ! preflight_go_nogo; then
-    return 1
-  fi
-  
-  if [ "$DEV_IS_REMOTE" = false ]; then
-    log_item "Action: Local launch of $APP_NAME"
-  elif [ "$DEV_TYPE" = "mac" ]; then
-    log_item "Action: Deploy $APP_NAME to Remote Mac ($DEVICE_SSH_STR)"
-    log_item "Transfer: $(basename "$APP_ZIP_PATH"), ${#APP_DSYM_PATHS[@]} dSYMs, and debugger inits"
-  elif [ "$DEV_TYPE" = "ios" ]; then
-    log_item "Action: Deploy $APP_NAME to Remote iPhone ($DEVICE_SSH_STR)"
-    log_item "Transfer: $(basename "$APP_IPA_PATH")"
-  fi
-
-  if [ "$NON_INTERACTIVE" = true ]; then
-    log_item "Continuing automatically (--yes set)"
-    return 0
-  fi
-
-  echo ""
-  read -p "Continue with deployment? (Y/n): " choice
-  if [[ ! "$choice" =~ ^[Yy]$ ]] && [ -n "$choice" ]; then
-    echo "Aborted."
-    exit 0
-  fi
-}
-
-execute_local() {
-  local bin_path="$APP_BUNDLE_PATH/Contents/MacOS/$APP_NAME"
-
-  prepare_debugger_inits
-
-  if [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_LLDB" ]; then
-    log_instructions "debugger"
-    # Run as a foreground child (not exec) so the EXIT trap fires after
-    # the debugger quits and cleans up $APP_TEMP_DIR — the generated
-    # lldbinit contains plaintext secrets from .env. gdb/lldb install
-    # their own SIGINT handlers, so Ctrl+C still reaches the debugger.
-    lldb -s "$APP_LLDBINIT_USE" "$bin_path"
-  elif [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_GDB" ]; then
-    log_instructions "debugger"
-    gdb -x "$APP_GDBINIT_USE" "$bin_path"
-  else
-    if [ "$NON_INTERACTIVE" = true ]; then
-      echo "Executing $APP_NAME for $TIMEOUT seconds (--yes)..."
-      if [ -n "$DEV_LOG" ]; then
-        tail -f "$DEV_LOG" | grep --line-buffered "$APP_NAME" &
-        TAIL_PID=$!
-        sleep 1
-      fi
-      open "$APP_BUNDLE_PATH"
-      if [ -n "$DEV_LOG" ]; then
-        sleep $TIMEOUT
-        kill $TAIL_PID 2>/dev/null
-        wait $TAIL_PID 2>/dev/null
-      else
-        sleep $TIMEOUT
-      fi
-    else
-      open "$APP_BUNDLE_PATH"
-      if [ -n "$DEV_LOG" ]; then
-        log_instructions "logs"
-        tail -f "$DEV_LOG" | grep --line-buffered "$APP_NAME"
-      fi
-    fi
-  fi
-}
-
-execute_remote_mac() {
-  local remote_app_path="$REMOTE_MAC_BASE/$APP_NAME.app"
-  local remote_bin_path="$remote_app_path/Contents/MacOS/$APP_NAME"
-  local transfer_list=()
-  
-  prepare_debugger_inits
-
-  $DEV_SSH_CMD "mkdir -p $REMOTE_MAC_BASE"
-  DEV_NEEDS_CLEANUP=true
-
-  # Prepare transfer list. The merged inits ($APP_*_USE) are named exactly
-  # `gdbinit` / `lldbinit` in $APP_TEMP_DIR so scp lands them in
-  # $REMOTE_MAC_BASE with the same basename the gdb/lldb invocations below
-  # already reference. Remote cleanup nukes $REMOTE_MAC_BASE on exit.
-  transfer_list+=("$APP_ZIP_PATH")
-  for dsym in "${APP_DSYM_PATHS[@]}"; do
-    transfer_list+=("$dsym")
-  done
-  [ -f "$APP_GDBINIT_USE" ]  && transfer_list+=("$APP_GDBINIT_USE")
-  [ -f "$APP_LLDBINIT_USE" ] && transfer_list+=("$APP_LLDBINIT_USE")
-
-  # Perform a single transfer
-  log_item "Transferring files to remote Mac..."
-  scp -O -r "${transfer_list[@]}" "$DEVICE_SSH_STR:$REMOTE_MAC_BASE/"
-
-  # Unzip on remote
-  local zip_name file_count
-  zip_name=$(basename "$APP_ZIP_PATH")
-  log_item "Unzipping..."
-  file_count=$($DEV_SSH_CMD "cd $REMOTE_MAC_BASE && unzip -l $zip_name | tail -1 | awk '{print \$2}' && unzip -q -o $zip_name")
-  log_item "Unzipped ($file_count files)"
-
-  if [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_LLDB" ]; then
-    log_instructions "debugger" "true"
-    $DEV_SSH_CMD -t "lldb -s $REMOTE_MAC_BASE/lldbinit $remote_bin_path"
-  elif [ "$NON_INTERACTIVE" = false ] && [ -n "$DEV_GDB" ]; then
-    log_instructions "debugger" "true"
-    $DEV_SSH_CMD -t "gdb -x $REMOTE_MAC_BASE/gdbinit $remote_bin_path"
-  else
-    if [ "$NON_INTERACTIVE" = true ]; then
-      log_item "Executing $APP_NAME on remote Mac for $TIMEOUT seconds (--yes)..."
-      if [ -n "$DEV_LOG" ]; then
-        $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME" &
-        TAIL_PID=$!
-        sleep 1
-      fi
-      $DEV_SSH_CMD "open $remote_app_path"
-      if [ -n "$DEV_LOG" ]; then
-        sleep $TIMEOUT
-        kill $TAIL_PID 2>/dev/null
-        wait $TAIL_PID 2>/dev/null
-      else
-        sleep $TIMEOUT
-      fi
-    else
-      $DEV_SSH_CMD "open $remote_app_path"
-      if [ -n "$DEV_LOG" ]; then
-        log_instructions "logs" "true"
-        $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
-      else
-        log_instructions "logsnone" "true"
-        # Wait for the user to press CTRL+C
-        while true; do sleep 1; done
-      fi
-    fi
-  fi
-}
-
-execute_remote_iphone() {
-  local ipa_name=$(basename "$APP_IPA_PATH")
-  local install_cmd=""
-  
-  $DEV_SSH_CMD "mkdir -p $REMOTE_IOS_BASE"
-  DEV_NEEDS_CLEANUP=true
-  scp -O "$APP_IPA_PATH" "$DEVICE_SSH_STR:$REMOTE_IOS_BASE/"
-  
-  if [ -n "$DEV_APPINST" ]; then
-    install_cmd="appinst $REMOTE_IOS_BASE/$ipa_name"
-  else
-    install_cmd="ipainstaller $REMOTE_IOS_BASE/$ipa_name"
-  fi
-  
-  $DEV_SSH_CMD "$install_cmd"
-  $DEV_SSH_CMD "rm $REMOTE_IOS_BASE/$ipa_name"
-  
-  if [ -n "$DEV_LOG" ]; then
-    log_instructions "logs" "true"
-    echo "Tailing logs for $APP_NAME..."
-    if [ "$NON_INTERACTIVE" = true ]; then
-      echo "Tailing logs for $TIMEOUT seconds (--yes)..."
-      timeout_int $TIMEOUT $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME" || true
-    else
-      $DEV_SSH_CMD "tail -f $DEV_LOG | grep --line-buffered $APP_NAME"
-    fi
-  fi
-}
-
-# --- MAIN ---
-
-trap cleanup EXIT
-
-if [ "$#" -lt 1 ]; then
-  echo "Usage: $0 <path_to_app_or_build_dir> [-d <user@host>] [-y|--yes]"
-  exit 1
+const REMOTE_PROBE = String.raw`
+MY_UNAME=$(uname)
+printf 'UNAME=%s\n' "$MY_UNAME"
+if [ "$MY_UNAME" = Darwin ]; then
+  [ -d /var/mobile ] && printf 'DEVTYPE=ios\n' || printf 'DEVTYPE=mac\n'
+else
+  printf 'DEVTYPE=%s\n' "$MY_UNAME"
 fi
+printf 'HOME=%s\n' "$HOME"
+printf 'GDB=%s\n' "$(command -v gdb 2>/dev/null)"
+printf 'LLDB=%s\n' "$(command -v lldb 2>/dev/null)"
+printf 'APPINST=%s\n' "$(command -v appinst 2>/dev/null)"
+printf 'IPAINST=%s\n' "$(command -v ipainstaller 2>/dev/null)"
+MY_UID=$(id -u)
+[ -f "/Library/Logs/Console/$MY_UID/console.log" ] && printf 'CONSOLE_LOG=/Library/Logs/Console/%s/console.log\n' "$MY_UID" || printf 'CONSOLE_LOG=\n'
+[ -f /var/log/system.log ] && printf 'SYSLOG_MAC=/var/log/system.log\n' || printf 'SYSLOG_MAC=\n'
+[ -f /var/log/syslog ] && printf 'SYSLOG_IOS=/var/log/syslog\n' || printf 'SYSLOG_IOS=\n'
+`;
 
-INPUT_PATH="$1"
-shift
+function deviceFromProbe(values, device) {
+  const consoleLog = values.get("CONSOLE_LOG") || null;
+  const macLog = values.get("SYSLOG_MAC") || null;
+  const iosLog = values.get("SYSLOG_IOS") || null;
+  return {
+    device,
+    os: values.get("UNAME") || "",
+    type: values.get("DEVTYPE") || "",
+    home: values.get("HOME") || "",
+    gdb: values.get("GDB") || null,
+    lldb: values.get("LLDB") || null,
+    appinst: values.get("APPINST") || null,
+    ipainstaller: values.get("IPAINST") || null,
+    consoleLog,
+    macLog,
+    iosLog,
+    log: consoleLog || macLog || iosLog,
+    needsCleanup: false,
+    remoteDirectory: null,
+  };
+}
 
-while [[ "$#" -gt 0 ]]; do
-  case $1 in
-    -d|--device) DEVICE_SSH_STR="$2"; shift ;;
-    -y|--yes) 
-      NON_INTERACTIVE=true
-      if [[ "$2" =~ ^[0-9]+$ ]]; then
-        TIMEOUT="$2"
-        shift
-      fi
-      ;;
-    *) log_fail "Unknown argument: $1"; exit 1 ;;
-  esac
-  shift
-done
+function logDevice(device) {
+  logItem(`OS: ${device.os}`);
+  logItem(`Type: ${device.type}`);
+  logItem(device.gdb ? `GDB: ${device.gdb}` : "GDB: Not found");
+  logItem(device.lldb ? `LLDB: ${device.lldb}` : "LLDB: Not found");
+  logItem(device.appinst ? `appinst: ${device.appinst}` : "appinst: Not found");
+  logItem(
+    device.ipainstaller
+      ? `ipainstaller: ${device.ipainstaller}`
+      : "ipainstaller: Not found",
+  );
+  logItem(
+    device.consoleLog
+      ? `Console Log: ${device.consoleLog}`
+      : "Console Log: Not found",
+  );
+  logItem(
+    device.macLog
+      ? `Syslog (Mac): ${device.macLog}`
+      : "Syslog (Mac): Not found",
+  );
+  logItem(
+    device.iosLog
+      ? `Syslog (iOS): ${device.iosLog}`
+      : "Syslog (iOS): Not found",
+  );
+}
 
-if ! preflight_app; then exit 1; fi
-if ! preflight_device; then exit 1; fi
-if ! preflight_summary; then exit 1; fi
+async function preflightDevice(options) {
+  logHeader("Device Preflight");
+  const result = await run(
+    "ssh",
+    [
+      "-o",
+      "BatchMode=yes",
+      "-o",
+      "ConnectTimeout=5",
+      options.device,
+      REMOTE_PROBE,
+    ],
+    { capture: true, stderr: "ignore" },
+  ).catch(() => null);
+  if (!result || !result.stdout.trim()) {
+    throw new DeployError(
+      `SSH connection to '${options.device}' failed\n       Run 'ssh ${options.device}' to debug the errors\n       Note: Key authentication is required for this script`,
+    );
+  }
+  logItem("SSH Connection: OK");
+  const device = deviceFromProbe(
+    parseProbeOutput(result.stdout),
+    options.device,
+  );
+  logDevice(device);
+  return device;
+}
 
-if [ "$DEV_IS_REMOTE" = false ]; then
-  execute_local
-elif [ "$DEV_TYPE" = "mac" ]; then
-  execute_remote_mac
-elif [ "$DEV_TYPE" = "ios" ]; then
-  execute_remote_iphone
-fi
+function validatePlan(application, device) {
+  if (device.type !== "mac" && device.type !== "ios") {
+    throw new DeployError(
+      `Unable to deploy to ${device.os || "this operating system"}; the SSH target must be a Mac or iPhone`,
+    );
+  }
+  if (!device.home.startsWith("/")) {
+    throw new DeployError(
+      "Remote preflight did not return an absolute home directory",
+    );
+  }
+  if (device.type === "mac") {
+    if (application.ipaPath && !application.zipPath) {
+      throw new DeployError("Unable to deploy an iOS app (ipa) to a Mac");
+    }
+    if (!application.zipPath) {
+      throw new DeployError(
+        `Remote Mac deployment requires a .zip payload. None found in ${application.directory}`,
+      );
+    }
+  } else {
+    if (!application.ipaPath) {
+      throw new DeployError(
+        `iPhone deployment requires an .ipa payload. None found in ${application.directory}`,
+      );
+    }
+    if (!device.appinst && !device.ipainstaller) {
+      throw new DeployError(
+        "No iPhone installer found (appinst or ipainstaller).",
+      );
+    }
+  }
+}
 
-exit 0
+async function confirmPlan(application, device, options) {
+  logHeader("Deployment Summary");
+  validatePlan(application, device);
+  if (device.type === "mac") {
+    logItem(
+      `Action: Deploy ${application.appName} to Remote Mac (${device.device})`,
+    );
+    logItem(
+      `Transfer: ${path.basename(application.zipPath)}, ${application.dsymPaths.length} dSYMs, and debugger inits`,
+    );
+  } else {
+    logItem(
+      `Action: Deploy ${application.appName} to Remote iPhone (${device.device})`,
+    );
+    logItem(`Transfer: ${path.basename(application.ipaPath)}`);
+  }
+  if (options.nonInteractive) {
+    logItem("Continuing automatically (--yes set)");
+    return true;
+  }
+  const prompt = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  stopWaiters.add(abort);
+  try {
+    const answer = await prompt.question(
+      "\nContinue with deployment? (Y/n): ",
+      {
+        signal: controller.signal,
+      },
+    );
+    return !answer || /^y$/i.test(answer);
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new DeployError("Deployment interrupted", 130);
+    }
+    throw error;
+  } finally {
+    stopWaiters.delete(abort);
+    prompt.close();
+  }
+}
+
+async function prepareDebuggerInits(application) {
+  if (!application.envFile) return;
+  const variables = parseEnv(fs.readFileSync(application.envFile, "utf8"));
+  application.tempDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "altivec-deploy-"),
+  );
+  fs.chmodSync(application.tempDirectory, 0o700);
+  application.gdbInitToUse = path.join(application.tempDirectory, "gdbinit");
+  application.lldbInitToUse = path.join(application.tempDirectory, "lldbinit");
+  const gdbTemplate = application.gdbInit
+    ? fs.readFileSync(application.gdbInit, "utf8")
+    : "";
+  const lldbTemplate = application.lldbInit
+    ? fs.readFileSync(application.lldbInit, "utf8")
+    : "";
+  fs.writeFileSync(
+    application.gdbInitToUse,
+    buildDebuggerInit(gdbTemplate, variables, "gdb", application.envFile),
+    { mode: 0o600 },
+  );
+  fs.writeFileSync(
+    application.lldbInitToUse,
+    buildDebuggerInit(lldbTemplate, variables, "lldb", application.envFile),
+    { mode: 0o600 },
+  );
+  logItem(
+    `Generated debugger inits with env from ${path.basename(application.envFile)}`,
+  );
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}
+
+function remoteRun(device, command, options = {}) {
+  const args = [...(options.tty ? ["-t"] : []), device.device, command];
+  return run("ssh", args, options);
+}
+
+function logInstructions(type, device) {
+  process.stdout.write(
+    "\n***************************************************\n",
+  );
+  if (type === "debugger") {
+    process.stdout.write(
+      "  DEBUGGER INSTRUCTIONS:\n" +
+        "  - Type 'run' to launch the app.\n" +
+        "  - Press CTRL+C to pause the app.\n" +
+        "  - Type 'kill' to kill the app.\n" +
+        "  - Type 'quit' to exit the debugger.\n",
+    );
+  } else if (type === "logs") {
+    process.stdout.write(
+      "  LOG INSTRUCTIONS:\n  - Press CTRL+C to stop tailing logs.\n",
+    );
+  } else {
+    process.stdout.write(
+      "  NO LOGS FOUND:\n" +
+        "  - The app has been launched on the remote Mac.\n" +
+        "  - No system log was found to tail.\n" +
+        "  - Press CTRL+C to stop the app and cleanup.\n",
+    );
+  }
+  if (device) {
+    if (device.type === "ios") {
+      process.stdout.write(
+        "  Note: Temporary files have been deleted, but\n" +
+          "        the app will remain on the homescreen.\n",
+      );
+    } else {
+      process.stdout.write(
+        "  Note: Remote files will be deleted\n" +
+          "        automatically after stopping.\n",
+      );
+    }
+  }
+  process.stdout.write(
+    "***************************************************\n\n",
+  );
+}
+
+function startLogTail(command, args) {
+  const child = spawn(command, args, { stdio: "inherit" });
+  child.once("error", (error) => {
+    process.stderr.write(`[WARN] Unable to tail logs: ${error.message}\n`);
+  });
+  return child;
+}
+
+async function stopChild(child) {
+  if (!child || child.exitCode !== null || child.signalCode) return;
+  child.kill("SIGTERM");
+  await new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (child.exitCode === null && !child.signalCode) child.kill("SIGKILL");
+    }, 2000);
+    child.once("close", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+function createRemoteDirectory(device, parent) {
+  const session = `${Date.now()}-${process.pid}-${Math.random().toString(16).slice(2, 10)}`;
+  return path.posix.join(device.home, parent, session);
+}
+
+async function executeRemoteMac(application, device, options) {
+  await prepareDebuggerInits(application);
+  device.remoteDirectory = createRemoteDirectory(device, REMOTE_MAC_PARENT);
+  await remoteRun(device, `mkdir -p ${shellQuote(device.remoteDirectory)}`);
+  device.needsCleanup = true;
+  const transfers = [application.zipPath, ...application.dsymPaths];
+  if (application.gdbInitToUse) transfers.push(application.gdbInitToUse);
+  if (application.lldbInitToUse) transfers.push(application.lldbInitToUse);
+  logItem("Transferring files to remote Mac...");
+  await run("scp", [
+    "-O",
+    "-r",
+    ...transfers,
+    `${device.device}:${shellQuote(`${device.remoteDirectory}/`)}`,
+  ]);
+  const zipName = path.basename(application.zipPath);
+  logItem("Unzipping...");
+  const unzip = await remoteRun(
+    device,
+    `cd ${shellQuote(device.remoteDirectory)} && unzip -l ${shellQuote(zipName)} | tail -1 | awk '{print $2}' && unzip -q -o ${shellQuote(zipName)}`,
+    { capture: true },
+  );
+  const fileCount = unzip.stdout.trim().split(/\r?\n/)[0] || "unknown";
+  logItem(`Unzipped (${fileCount} files)`);
+  const remoteAppPath = path.posix.join(
+    device.remoteDirectory,
+    `${application.appName}.app`,
+  );
+  const remoteBinaryPath = path.posix.join(
+    remoteAppPath,
+    "Contents",
+    "MacOS",
+    application.appName,
+  );
+  if (!options.nonInteractive && device.lldb) {
+    logInstructions("debugger", device);
+    const remoteInit = path.posix.join(device.remoteDirectory, "lldbinit");
+    const initArgument = application.lldbInitToUse
+      ? `-s ${shellQuote(remoteInit)} `
+      : "";
+    await remoteRun(
+      device,
+      `${shellQuote(device.lldb)} ${initArgument}${shellQuote(remoteBinaryPath)}`,
+      { tty: true },
+    );
+    return;
+  }
+  if (!options.nonInteractive && device.gdb) {
+    logInstructions("debugger", device);
+    const remoteInit = path.posix.join(device.remoteDirectory, "gdbinit");
+    const initArgument = application.gdbInitToUse
+      ? `-x ${shellQuote(remoteInit)} `
+      : "";
+    await remoteRun(
+      device,
+      `${shellQuote(device.gdb)} ${initArgument}${shellQuote(remoteBinaryPath)}`,
+      { tty: true },
+    );
+    return;
+  }
+  if (!options.nonInteractive) {
+    await remoteRun(device, `open ${shellQuote(remoteAppPath)}`);
+    if (device.log) {
+      logInstructions("logs", device);
+      await remoteRun(
+        device,
+        `tail -f ${shellQuote(device.log)} | grep --line-buffered -- ${shellQuote(application.appName)}`,
+      );
+    } else {
+      logInstructions("logsnone", device);
+      await waitOrAbort(Infinity);
+    }
+    return;
+  }
+  logItem(
+    `Executing ${application.appName} on remote Mac for ${options.timeout} seconds (--yes)...`,
+  );
+  let tail = null;
+  if (device.log) {
+    tail = startLogTail("ssh", [
+      device.device,
+      `tail -f ${shellQuote(device.log)} | grep --line-buffered -- ${shellQuote(application.appName)}`,
+    ]);
+    await waitOrAbort(1000, tail);
+  }
+  await remoteRun(device, `open ${shellQuote(remoteAppPath)}`);
+  await waitOrAbort(options.timeout * 1000, tail);
+  await stopChild(tail);
+}
+
+async function executeRemoteIphone(application, device, options) {
+  device.remoteDirectory = createRemoteDirectory(device, REMOTE_IOS_PARENT);
+  await remoteRun(device, `mkdir -p ${shellQuote(device.remoteDirectory)}`);
+  device.needsCleanup = true;
+  const ipaName = path.basename(application.ipaPath);
+  const remoteIpa = path.posix.join(device.remoteDirectory, ipaName);
+  await run("scp", [
+    "-O",
+    application.ipaPath,
+    `${device.device}:${shellQuote(`${device.remoteDirectory}/`)}`,
+  ]);
+  const installer = device.appinst || device.ipainstaller;
+  await remoteRun(device, `${shellQuote(installer)} ${shellQuote(remoteIpa)}`);
+  await remoteRun(device, `rm -f ${shellQuote(remoteIpa)}`);
+  if (!device.log) return;
+  logInstructions("logs", device);
+  process.stdout.write(`Tailing logs for ${application.appName}...\n`);
+  if (options.nonInteractive) {
+    process.stdout.write(
+      `Tailing logs for ${options.timeout} seconds (--yes)...\n`,
+    );
+    const tail = startLogTail("ssh", [
+      device.device,
+      `tail -f ${shellQuote(device.log)} | grep --line-buffered -- ${shellQuote(application.appName)}`,
+    ]);
+    await waitOrAbort(options.timeout * 1000, tail);
+    await stopChild(tail);
+  } else {
+    await remoteRun(
+      device,
+      `tail -f ${shellQuote(device.log)} | grep --line-buffered -- ${shellQuote(application.appName)}`,
+    );
+  }
+}
+
+async function cleanup(application, device) {
+  if (device && device.needsCleanup && device.remoteDirectory) {
+    if (device.type === "mac") {
+      process.stdout.write("Stopping remote app...\n");
+      await remoteRun(
+        device,
+        `killall ${shellQuote(application.appName)} 2>/dev/null || true`,
+        { allowFailure: true },
+      );
+      process.stdout.write("Cleaning up remote Mac directory...\n");
+    } else {
+      process.stdout.write("Cleaning up remote iPhone directory...\n");
+    }
+    await remoteRun(device, `rm -rf ${shellQuote(device.remoteDirectory)}`, {
+      allowFailure: true,
+    });
+  }
+  if (application && application.tempDirectory) {
+    fs.rmSync(application.tempDirectory, { recursive: true, force: true });
+  }
+}
+
+async function main(argv = process.argv.slice(2)) {
+  let application = null;
+  let device = null;
+  try {
+    const options = parseArgs(argv);
+    if (options.help) {
+      process.stdout.write(`${usage()}\n`);
+      return 0;
+    }
+    requireConfirmationTerminal(options);
+    application = discoverApplication(options.inputPath);
+    device = await preflightDevice(options);
+    if (!(await confirmPlan(application, device, options))) {
+      process.stdout.write("Aborted.\n");
+      return 0;
+    }
+    if (device.type === "mac")
+      await executeRemoteMac(application, device, options);
+    else await executeRemoteIphone(application, device, options);
+    return 0;
+  } finally {
+    await cleanup(application, device);
+  }
+}
+
+if (require.main === module) {
+  main()
+    .then((status) => {
+      process.exitCode = status;
+    })
+    .catch((error) => {
+      logFail(error.message);
+      if (process.argv.length === 2) process.stderr.write(`${usage()}\n`);
+      process.exitCode = error.status || 1;
+    });
+}
+
+module.exports = {
+  DeployError,
+  buildDebuggerInit,
+  deviceFromProbe,
+  findAppBundles,
+  findEnvFile,
+  parseArgs,
+  parseEnv,
+  parseProbeOutput,
+  requireConfirmationTerminal,
+  selectArtifact,
+  shellQuote,
+  usage,
+  validatePlan,
+};
