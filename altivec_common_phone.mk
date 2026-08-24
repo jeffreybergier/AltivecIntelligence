@@ -129,7 +129,7 @@ ALTIVEC_PLATFORM_TARGET = phone
 # --- Flags ---
 IOS_FLAGS = $(OPT_FLAGS) $(EXTRA_FLAGS) -g -std=c99 -pedantic -Wall -Wextra -Wconversion -Wsign-conversion -Wfloat-conversion \
             -Wimplicit-function-declaration -Wobjc-method-access \
-            -Wno-unused-command-line-argument -Wunguarded-availability -Wno-semicolon-before-method-body \
+            -Wunused-command-line-argument -Wunguarded-availability -Wno-semicolon-before-method-body \
             -isysroot $(IOS_SDK_PATH) \
             -B$(BIN_DIR)
 IOS_ARCH_FLAGS = -target arm64-apple-ios -arch armv7 -arch arm64 \
