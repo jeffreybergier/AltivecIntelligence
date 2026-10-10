@@ -30,3 +30,7 @@ toolchain/**/build-release
 # in case a future COPY . is added.
 Containerfile
 compose.yml
+
+**/build/
+**/__pycache__/
+test/fixtures/*/build*/

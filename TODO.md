@@ -172,31 +172,31 @@ in a short, readable Makefile; shared Altivec modules should own the build
 mechanics. Moving complexity into project-local helper Makefiles or scripts
 does not satisfy this goal.
 
-- [ ] Split compilation, universal merging, resources, signing, and packaging
+- [x] Split compilation, universal merging, resources, signing, and packaging
   into reusable fragments behind the existing common-Makefile entry points.
   Offer products for app, command-line executable, static library, and daemon,
   with explicit dependencies between them.
-- [ ] Make architecture sets configurable. Support the full existing Mac and
+- [x] Make architecture sets configurable. Support the full existing Mac and
   iOS matrices, legacy-only PPC/i386 (Retro-DLP), and single-slice development
   builds without overriding internal link rules. Declare SDK/deployment floors
   per slice and validate library slices before linking.
-- [ ] Provide documented source groups and per-language/per-group flags for C,
+- [x] Provide documented source groups and per-language/per-group flags for C,
   C++, Objective-C, and Objective-C++. Preserve Tiger MRC and optional ARC only
   in compatible iOS UI groups. Do not force one app's memory model on every app.
-- [ ] Promote current ad hoc hooks into named inputs: extra static libraries,
+- [x] Promote current ad hoc hooks into named inputs: extra static libraries,
   generated files, nested resource bundles, fonts/licenses, localizations,
   embedded executables, helper plists, entitlements, and package scripts. Keep
   an escape hatch, but make normal dependencies visible to Make.
-- [ ] Provide packaging modules for Mac ZIP, sandboxed iOS IPA, and jailbreak
+- [x] Provide packaging modules for Mac ZIP, sandboxed iOS IPA, and jailbreak
   rootful/rootless DEBs. Model install prefix, package architecture, ownership,
   compression, launchd definitions, and lifecycle hooks explicitly. Strappy's
   `Architecture: all` policy and rCloud's `iphoneos-arm` policy are project
   choices to validate, not a universal default to copy.
-- [ ] Treat sandbox policy and package format as separate choices. A rootless
+- [x] Treat sandbox policy and package format as separate choices. A rootless
   install does not imply an unsandboxed application; Retro-DLP explicitly keeps
   its app container. Sign each executable with its own entitlements and test
   the resulting package, including embedded daemons/helpers.
-- [ ] Add `make help`, `print-config`, `test-host`, `test-native`, and
+- [x] Add `make help`, `print-config`, `test-host`, `test-native`, and
   `validate-package` conventions. Show resolved outputs, compiler/SDK selection,
   architectures, minimum OS, and required inputs without building everything.
 

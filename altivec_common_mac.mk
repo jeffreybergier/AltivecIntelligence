@@ -1,3 +1,8 @@
+ifneq ($(strip $(PRODUCTS)),)
+ALTIVEC_PLATFORM := macOS
+_altivec_entry := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+include $(_altivec_entry)/make/products.mk
+else
 # Altivec Intelligence Common Makefile
 # This file contains the standard logic for quad-fat mac apps
 # Targets: ppc (10.4), x86 (10.4), x64 (10.9), arm (11.0)
@@ -357,3 +362,5 @@ $(INT_DIR)/arm/%.o: %.c
 
 .PHONY: release debug clean analyze validate validate-sdk altiveccore-bootstrap libs-ready \
         altiveccocoa-bootstrap cocoa-ready
+
+endif

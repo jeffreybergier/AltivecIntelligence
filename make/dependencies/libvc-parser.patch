@@ -1,0 +1,123 @@
+--- a/src/vc_parse.y
++++ b/src/vc_parse.y
+@@ -61,12 +61,14 @@
+ %token TOK_PARAM_NAME
+ %token TOK_PARAM_VALUE
+ %token TOK_VALUE
++%token TOK_INVALID
++
++%destructor { free($$); } TOK_GROUP
+ 
+ %%
+ 
+ vcard
+         : begin_line contentlines end_line { YYACCEPT; }
+-        | error '\n' { yyerrok; }
+         ;
+ 
+ begin_line
+@@ -83,12 +85,12 @@
+         : TOK_BEGIN_VCARD '\n' { current_vcard = vc_new (); }
+         | TOK_GROUP '.' TOK_BEGIN_VCARD '\n' {
+             current_vcard = vc_new ();
+-            vc_set_group (current_vcard, $1); }
++            vc_set_group (current_vcard, $1); free ($1); }
+         ;
+ 
+ end_line
+         : TOK_END_VCARD '\n'
+-        | TOK_GROUP '.' TOK_END_VCARD '\n'
++        | TOK_GROUP '.' TOK_END_VCARD '\n' { free ($1); }
+         ;
+ 
+ contentlines
+@@ -97,7 +99,7 @@
+         ;
+ 
+ group_contentline
+-        : TOK_GROUP '.' contentline { vc_set_group (current_vc, $1); }
++        : TOK_GROUP '.' contentline { vc_set_group (current_vc, $1); free ($1); }
+         | contentline
+         ;
+ 
+@@ -152,6 +154,7 @@
+ 
+ value
+         : TOK_VALUE { vc_set_value (current_vc, $1); }
++        | /* empty */ { vc_set_value (current_vc, ""); }
+         ;
+ 
+ %%
+@@ -166,6 +169,7 @@
+ {
+   vc_component *vc = NULL;
+   current_vcard = NULL;
++  current_vc = NULL;
+ 
+   yyin = fp;
+ 
+@@ -184,5 +188,10 @@
+   stop_track_position();
+   flush_buffer();
+ 
++  if (vc == NULL) vc_delete_deep (current_vcard);
++  current_vcard = NULL;
++  current_vc = NULL;
++  free (current_vc_param_name);
++  current_vc_param_name = NULL;
+   return vc;
+ }
+--- a/src/vc_scan.l
++++ b/src/vc_scan.l
+@@ -59,6 +59,7 @@
+ void flush_buffer()
+   {
+     YY_FLUSH_BUFFER;
++    BEGIN(0); /* Reset start condition after a rejected card. */
+   }
+ 
+ /****************************************
+@@ -96 +97 @@
+-NAME-CHAR       [\x21-\x2B\x2D\x2F-\x39\x3C\x3E-\x5A\x5C\x5E-\x7E]
++NAME-CHAR       [\x21-\x2B\x2D\x2F-\x39\x3C\x3E-\x40A-Z\x5C\x5E-\x60a-z\x7B-\x7E]
+@@ -109,7 +110,7 @@
+ {LF}                      { move_pos("\n"); yylval = NULL; return yytext[0]; }
+ "."                       { move_pos("."); yylval = NULL; return yytext[0]; }
+ ({ALPHA}|{DIGIT}|-)+/"."  { move_pos(yytext);
+-                            yylval = yytext;
++                            yylval = strdup (yytext);
+                             return TOK_GROUP; }
+ {NAME-CHAR}+              { move_pos(yytext);
+                             yylval = yytext;
+@@ -125,7 +126,7 @@
+ 
+ <SC_VALUE>
+ {
+-({VALUE-CHAR}|({CRLF}|{LF}){SP})*     { move_pos(yytext);
++({VALUE-CHAR}|({CRLF}|{LF}){SP})+     { move_pos(yytext);
+                             yylval = yytext;
+                             return TOK_VALUE; }
+ {LF}                      { move_pos("\n");
+@@ -155,7 +156,11 @@
+ 
+ <SC_PARAM_VALUE>
+ {
+-{SAFE-CHAR}*              { move_pos(yytext);
++{DQUOTE}[^\x22\x0D\x0A]*{DQUOTE} { move_pos(yytext);
++                            yytext[yyleng - 1] = '\0';
++                            yylval = yytext + 1;
++                            return TOK_PARAM_VALUE; }
++{SAFE-CHAR}+              { move_pos(yytext);
+                             yylval = yytext;
+                             return TOK_PARAM_VALUE; }
+ ","                       { move_pos(",");
+@@ -171,5 +176,9 @@
+                             return yytext[0]; }
+ }
+ 
++<*>{CR}                  { move_pos(yytext); }
++<*>.                     { move_pos(yytext); return TOK_INVALID; }
++<*>{LF}                  { move_pos(yytext); return TOK_INVALID; }
++
+ %%
+ 

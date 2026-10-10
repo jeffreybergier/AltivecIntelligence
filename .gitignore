@@ -4,3 +4,9 @@ libs/*/build-*
 libs/*/tarballs
 apps/*/build-*
 dist/
+
+# Shared Make module outputs
+build/
+build-*/
+test/fixtures/*/build*/
+__pycache__/

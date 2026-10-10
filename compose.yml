@@ -14,7 +14,7 @@ services:
       target: ghcr-action
       additional_contexts:
         altivec_sdk: ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}
-    image: altivec-image
+    image: ${ALTIVEC_IMAGE:-altivec-intelligence:local}
     working_dir: /repo/altivec
     environment:
       ALTIVEC_SDK_ARCHIVE_DIR: /altivec-sdk
@@ -35,7 +35,7 @@ services:
       target: ghcr-action
       additional_contexts:
         altivec_sdk: ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}
-    image: altivec-intelligence-image
+    image: ${ALTIVEC_IMAGE:-altivec-intelligence:local}
     stdin_open: true
     tty: true
     environment:

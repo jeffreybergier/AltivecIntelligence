@@ -382,6 +382,13 @@ RUN rm -rf /altivec/libs/libcurl/tarballs /altivec/libs/sqlite/tarballs \
  && altivec-sdk audit /opt \
  && altivec-sdk audit /usr/local
 
+# Runtime Make modules do not invalidate the expensive toolchain/library layer.
+FROM altivec-builder AS altivec-runtime
+COPY make/                    /altivec/make/
+COPY altivec_common_host.mk    /altivec/
+COPY test/test_make_products.py test/test_make_products_container.sh /altivec/test/
+COPY test/fixtures/           /altivec/test/fixtures/
+RUN apt-get update && apt-get install -y --no-install-recommends libcjson-dev python3-thrift python3-qrcode && rm -rf /var/lib/apt/lists/*
 COPY bin/                     /altivec/bin/
 COPY AGENTS.md README.md LICENSE /altivec/
 COPY docs/                    /altivec/docs/
@@ -394,5 +401,5 @@ RUN chmod +x /altivec/bin/* \
  && ln -sf AGENTS.md /altivec/GEMINI.md \
  && altivec-sdk audit /altivec
 
-FROM altivec-builder AS ghcr-action
+FROM altivec-runtime AS ghcr-action
 WORKDIR /altivec

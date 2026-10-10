@@ -248,10 +248,28 @@ package is currently built.
 - [`docs/altivec-deploy.md`](./docs/altivec-deploy.md): Deployment behavior and command-line specification for `altivec-deploy`.
 - `AGENTS.md`: AI mandates and technical constraints (also surfaced as CLAUDE.md / GEMINI.md via symlink).
 
+## Declarative application builds
+
+New application Makefiles declare `PRODUCTS`, source groups, resources and
+package policies, then include the existing common Makefile entry points.
+[The product API](docs/make-products.md) covers apps, daemons, CLI tools and
+static libraries, configurable slices, signing and offline test conventions.
+Root and child builds share `build/<platform>/<debug|release>/` outputs.
+
+Consumer Compose files default to `altivec-intelligence:local`; set
+`ALTIVEC_IMAGE` to select another image with the product modules. Build locally
+with `ALTIVEC_SDK_HOST_DIR=/path/to/sdk-archives docker compose build altivec`.
+The runtime module layer follows the expensive toolchain layer, so subsequent
+module-only changes reuse the toolchain cache.
+
 ## 🧩 Makefile Templates
 Use these thin templates in your app repo:
 - [`templates/Makefile.mac`](./templates/Makefile.mac)
 - [`templates/Makefile.phone`](./templates/Makefile.phone)
+
+The following knobs apply to the legacy `APP_NAME` interface. The templates
+above use the [product API](docs/make-products.md), including per-product
+`CORE`, `COCOA`, `PLIST`, and resource inputs.
 
 Optional AltivecCore knobs:
 - `ALTIVECCORE_REQUIRED=1`: enforce required Core artifacts at validate time.

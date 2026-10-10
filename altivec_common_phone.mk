@@ -1,3 +1,8 @@
+ifneq ($(strip $(PRODUCTS)),)
+ALTIVEC_PLATFORM := iOS
+_altivec_entry := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+include $(_altivec_entry)/make/products.mk
+else
 # Altivec Intelligence Common Makefile for Phone
 # Targets: iOS 5+ (armv7) and iOS 7+ (arm64)
 
@@ -276,3 +281,5 @@ $(INT_DIR)/%.o: %.c
 
 .PHONY: release debug clean analyze validate validate-sdk altiveccore-bootstrap libs-ready \
         altiveccocoa-bootstrap cocoa-ready
+
+endif

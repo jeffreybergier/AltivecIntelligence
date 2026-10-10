@@ -1,0 +1,93 @@
+--- a/src/libical/icaltz-util.c
++++ b/src/libical/icaltz-util.c
+@@ -265,10 +265,12 @@
+     /* Zone offset: hh[:mm[:ss]] */
+     type->gmtoff = strtol(p, &p, 10) * -3600;  /* sign of offset is reversed */
+     if (*p == ':') {
+-        type->gmtoff += strtol(++p, &p, 10) * 60;
++        p++;
++        type->gmtoff += strtol(p, &p, 10) * 60;
+     }
+     if (*p == ':') {
+-        type->gmtoff += strtol(++p, &p, 10);
++        p++;
++        type->gmtoff += strtol(p, &p, 10);
+     }
+     return p;
+ }
+@@ -287,7 +289,8 @@
+            including leap years, February 28 is day 59 and March 1 is day 60.
+            It is impossible to refer explicitly to the occasional February 29.
+         */
+-        day = strtol(++p, &p, 10);
++        p++;
++        day = strtol(p, &p, 10);
+     } else if (*p == 'M') {
+         /* The d'th day (0 <= d <= 6)
+            of week n of month m of the year (1 <= n <= 5, 1 <= m <= 12,
+@@ -296,9 +299,12 @@
+            Week 1 is the first week in which the d'th day occurs.
+            Day zero is Sunday.
+         */
+-        month = strtol(++p, &p, 10);
+-        week = strtol(++p, &p, 10);
+-        day = strtol(++p, &p, 10);
++        p++;
++        month = strtol(p, &p, 10);
++        p++;
++        week = strtol(p, &p, 10);
++        p++;
++        day = strtol(p, &p, 10);
+         if (week == 5) {
+             week = -1;
+         }
+@@ -308,7 +314,8 @@
+
+            Flag this by adding 1001 to the day.
+         */
+-        day = strtol(++p, &p, 10) + 1001;
++        p++;
++        day = strtol(p, &p, 10) + 1001;
+     }
+
+     /* Parse time */
+@@ -316,9 +323,16 @@
+     t->hour = 2;  /* default is 02:00 */
+
+     if (*p == '/') {
+-        t->hour = strtol(++p, &p, 10);
+-        if (*p == ':') t->minute = strtol(++p, &p, 10);
+-        if (*p == ':') t->second = strtol(++p, &p, 10);
++        p++;
++        t->hour = strtol(p, &p, 10);
++        if (*p == ':') {
++            p++;
++            t->minute = strtol(p, &p, 10);
++        }
++        if (*p == ':') {
++            p++;
++            t->second = strtol(p, &p, 10);
++        }
+     }
+
+     /* Do adjustments for extended TZ strings */
+--- a/src/libical/icaltimezone.c
++++ b/src/libical/icaltimezone.c
+@@ -2268,7 +2268,7 @@
+          comp; comp = nextc) {
+         icalproperty *dtstart_prop = NULL, *rrule_prop = NULL;
+         icalarray *rdates = icalarray_new(sizeof(struct rdate), 10);
+-        icaltimetype dtstart;
++        icaltimetype dtstart = icaltime_null_time();
+         struct observance obs;
+         size_t n;
+         unsigned trunc_dtstart = 0;
+@@ -2410,7 +2410,7 @@
+
+             /* Process any RRULE observances within our window */
+             if (ritr) {
+-                icaltimetype recur, prev_onset;
++                icaltimetype recur, prev_onset = obs.onset;
+
+                 while (!icaltime_is_null_time(recur = icalrecur_iterator_next(ritr))) {
+                     unsigned ydiff;

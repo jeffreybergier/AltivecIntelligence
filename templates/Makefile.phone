@@ -1,39 +1,13 @@
-# Thin template for app repos that use the Altivec GHCR image
-# (no submodule needed — /altivec/ is provided by the image).
-
-APP_NAME = MyPhoneApp
-SOURCES = main.m AppDelegate.m
-
-# Optional shared source roots. The common engine uses these for vpath source
-# lookup and static analyzer path resolution.
-# SOURCE_DIRS = ../shared
-
-# Optional per-source-group flags. Useful when app UI files use ARC but shared
-# engine files stay MRC, or when shared portable C needs a different warning
-# posture for iOS analysis/builds.
-# PHONE_SOURCE_FLAGS = -fobjc-arc
-# PHONE_EXTRA_SOURCE_FLAGS = -Wno-pedantic -Wno-conversion
-
-# Blind-copy ordinary root resources, including iOS icons and launch images.
-# Info.plist must live here; the common Makefile stages it to the app root.
-RES_DIR = Resources
-
-# Optional typed bundle resources:
-# BUNDLE_FONT_DIRS = ../shared/Resources/Fonts
-# BUNDLE_LOCALIZATION_DIRS = ../shared/Resources
-# PHONE_LDID_ENTITLEMENTS = Entitlements.plist
-# EXTRA_BUNDLE_STEPS = ...
-
-# Optional override if AltivecCore is required for this app:
-# ALTIVECCORE_REQUIRED = 1
-# ALTIVECCORE_LINKAGE = static
-# static is the only iPhone linkage mode and is required for legacy iOS devices.
-# ALTIVECCORE_DIR = /altivec/libs/core/build-phone
-
-# Optional override if AltivecCocoa is required for this app:
-# ALTIVECCOCOA_REQUIRED = 1
-# ALTIVECCOCOA_LINKAGE = static
-# static is the only iPhone linkage mode and is required for legacy iOS devices.
-# ALTIVECCOCOA_DIR = /altivec/libs/cocoa/build-phone
-
+# Sources and policy only; Altivec owns compilation and packaging.
+PRODUCTS = MyPhoneApp
+MyPhoneApp_TYPE = app
+MyPhoneApp_SIGN = 1
+MyPhoneApp_SANDBOX = container
+MyPhoneApp_SOURCES = main.m AppDelegate.m
+MyPhoneApp_PLIST = Resources/Info.plist
+MyPhoneApp_RESOURCES = $(filter-out Resources/Info.plist,$(wildcard Resources/*))
+MyPhoneApp_LDFLAGS = -framework UIKit -framework Foundation -framework CoreGraphics
+# MyPhoneApp_CORE = static
+# MyPhoneApp_COCOA = static
+# ARCHS = armv7
 include /altivec/altivec_common_phone.mk
