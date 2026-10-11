@@ -278,9 +278,10 @@ package policies, then include the existing common Makefile entry points.
 static libraries, configurable slices, signing and offline test conventions.
 Root and child builds share `build/<platform>/<debug|release>/` outputs.
 
-Consumer Compose files default to `altivec-intelligence:local`; set
-`ALTIVEC_IMAGE` to select another image with the product modules. Build locally
-with `mkdir -p .altivec-sdk ~/.altivec-sdk` followed by
+Consumer Compose files default to `ghcr.io/jeffreybergier/altivec-intelligence:latest`.
+Set `ALTIVEC_IMAGE=altivec-intelligence:local` to use a local build instead.
+This repository keeps that separate local image for toolchain development.
+Build it locally with `mkdir -p .altivec-sdk ~/.altivec-sdk` followed by
 `docker compose build altivec`. BuildKit requires both context directories to
 exist, even if one is empty; runtime Compose mounts create missing folders,
 but `docker compose build` does not. Alternatively, use
