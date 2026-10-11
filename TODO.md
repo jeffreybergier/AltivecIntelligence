@@ -315,32 +315,44 @@ on a supported device where claimed; a second generation never overwrites files.
 
 ## 5. Add project-first SDK archive discovery with a shared host fallback
 
-Currently, `bin/altivec-sdk` reads archives from a single directory:
-`ALTIVEC_SDK_ARCHIVE_DIR`, defaulting to `/altivec-sdk`. Both Compose files mount
-`ALTIVEC_SDK_HOST_DIR` (default `./.altivec-sdk`) there. The separate
-`docker/build-sdk-dependent.sh` helper checks `/altivec-sdk` and then
-`$ALTIVEC_ROOT/.altivec-sdk` (default `/altivec/.altivec-sdk`) only when
-`ALTIVEC_SDK_ARCHIVE_DIR` is unset; this is not a shared host-home fallback.
+Implemented in `73c59f2` (`feat(sdk): add project-first shared archive discovery`).
+`bin/altivec-sdk` resolves each archive from the project first, then the shared
+host folder. `docker/build-sdk-dependent.sh` uses the same lookup through
+`altivec-sdk locate`.
 
-- [ ] Add per-archive lookup with this default host search order: the project's
+- [x] Add per-archive lookup with this default host search order: the project's
   `./.altivec-sdk/` first, then `~/.altivec-sdk/`, shared across projects. Use the
   shared copy when an archive is absent locally, including when the project
   folder is missing or contains only some of the required archives. The host's
   `~/.altivec/` is currently mounted as the container's `/root` for settings and
-  credentials; the proposed shared archive directory is `~/.altivec-sdk/`.
-- [ ] Preserve explicit `ALTIVEC_SDK_HOST_DIR` and `ALTIVEC_SDK_ARCHIVE_DIR`
+  credentials; the separate shared archive directory is `~/.altivec-sdk/`.
+- [x] Preserve explicit `ALTIVEC_SDK_HOST_DIR` and `ALTIVEC_SDK_ARCHIVE_DIR`
   overrides and document how they take precedence over default discovery. Keep
   `status`, `preflight`, and `install` consistent, report the selected archive
   paths, and retain existing archive validation. Report an invalid project copy
   rather than silently substituting a shared copy.
-- [ ] Update `compose.yml`, `templates/compose.yml`, and the image-build SDK
+- [x] Update `compose.yml`, `templates/compose.yml`, and the image-build SDK
   inputs to expose the required host directories read-only and support the same
   precedence. Container home paths do not automatically refer to the host's
   home directory; account for the SDK-only service and BuildKit contexts too.
-- [ ] Update README/AGENTS guidance, CLI help, and Compose examples with the
+- [x] Update README/AGENTS guidance, CLI help, and Compose examples with the
   search order, host-to-container paths, overrides, and shared-folder setup.
   Add coverage for project precedence, shared fallback, split archive sets,
   missing directories, explicit overrides, and invalid archives.
+
+Compose mounts the project and shared folders read-only at `/altivec-sdk` and
+`/altivec-sdk-shared`, including the SDK-only service; BuildKit uses two matching
+archive contexts. `ALTIVEC_SDK_HOST_DIR` selects one host folder and disables
+fallback. `ALTIVEC_SDK_ARCHIVE_DIR` takes precedence and selects one path visible
+to the process; it does not create a host mount. Local image builds require both
+context directories to exist, or one existing folder selected by the host
+override.
+
+Validation on 2026-10-12: the SDK discovery suite passed 8 tests, including
+Compose source mappings, project precedence, shared fallback, split archive
+sets, overrides, and invalid archives. Two tests were skipped: installation
+requires Linux's `flock`, and the BuildKit smoke test is opt-in. This check did
+not rebuild the image or rerun those two tests.
 
 ## 6. Make validation useful to agents and humans
 
