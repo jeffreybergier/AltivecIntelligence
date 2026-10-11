@@ -31,6 +31,21 @@ Below is a Quick Start Guide. For more detailed information about the project's
 origins, technical matrix, and safety considerations, please see the
 [**FAQ**](docs/FAQ.md).
 
+## Start a generated project
+
+Use `altivec-app templates` to list offline Mac/iOS app, service and CLI/library
+starters. For example:
+
+```sh
+altivec-app new --template cocoa-shared --name MyApp \
+  --bundle-id com.example.myapp --destination ./MyApp
+```
+
+This creates a root Makefile, Compose setup, release configuration, artwork and
+layered test entry points.
+Run `make test-host` in the generated project before SDK-dependent builds.
+See [generated projects](docs/app-templates.md) for supported profiles and tests.
+
 ## 📦 Quick Start Guide
 
 **Altivec Intelligence** ships as a **prebuilt container image on GHCR**. You

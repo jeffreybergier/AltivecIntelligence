@@ -417,8 +417,20 @@ RUN cd /tmp/altivec-release-package \
  && test "$(altivec-release --version)" = "1.0.0" \
  && rm -rf /tmp/altivec-release-package /tmp/altivec-release-1.0.0.tgz
 
+# The offline generator ships its templates with the exact CLI release.
+COPY packages/altivec-app/ /tmp/altivec-app-package/
+RUN cd /tmp/altivec-app-package \
+ && test "$(node -p 'require("./package.json").version')" = "1.0.0" \
+ && npm pack --offline --ignore-scripts --pack-destination /tmp \
+ && npm install -g --prefix /usr/local --offline --ignore-scripts --no-audit --no-fund /tmp/altivec-app-1.0.0.tgz \
+ && ln -sf /usr/local/bin/altivec-app /altivec/bin/altivec-app \
+ && test "$(altivec-app --version)" = "1.0.0" \
+ && altivec-app templates --json >/dev/null \
+ && rm -rf /tmp/altivec-app-package /tmp/altivec-app-1.0.0.tgz
+
 RUN chmod +x /altivec/bin/* \
  && altivec-release --help >/dev/null \
+ && altivec-app --help >/dev/null \
  && altivec-sdk --help >/dev/null \
  && ln -sf AGENTS.md /altivec/CLAUDE.md \
  && ln -sf AGENTS.md /altivec/GEMINI.md \

@@ -1,0 +1,295 @@
+{
+  "schema_version": 1,
+  "template_version": "1.0.0",
+  "templates": [
+    {
+      "id": "ios-basic",
+      "description": "Sandboxed UIKit app with portable C model",
+      "platforms": [
+        "iOS"
+      ],
+      "memory": {
+        "macOS": "mrc",
+        "iOS": "arc-ui/mrc-shared"
+      },
+      "architectures": {
+        "macOS": [
+          "ppc",
+          "i386",
+          "x86_64",
+          "arm64"
+        ],
+        "iOS": [
+          "armv7",
+          "arm64"
+        ],
+        "linux": [
+          "host"
+        ]
+      },
+      "minimum_os": {
+        "ppc": "10.4",
+        "i386": "10.4",
+        "x86_64": "10.9",
+        "macOS-arm64": "11.0",
+        "armv7": "5.0",
+        "iOS-arm64": "7.0"
+      },
+      "packages": {
+        "macOS": [
+          "zip"
+        ],
+        "iOS": [
+          "ipa"
+        ],
+        "linux": [
+          "zip"
+        ]
+      },
+      "privilege": "sandboxed iOS app",
+      "device_backend": true
+    },
+    {
+      "id": "mac-basic",
+      "description": "Nibless MRC AppKit app with portable C model",
+      "platforms": [
+        "macOS"
+      ],
+      "memory": {
+        "macOS": "mrc",
+        "iOS": "arc-ui/mrc-shared"
+      },
+      "architectures": {
+        "macOS": [
+          "ppc",
+          "i386",
+          "x86_64",
+          "arm64"
+        ],
+        "iOS": [
+          "armv7",
+          "arm64"
+        ],
+        "linux": [
+          "host"
+        ]
+      },
+      "minimum_os": {
+        "ppc": "10.4",
+        "i386": "10.4",
+        "x86_64": "10.9",
+        "macOS-arm64": "11.0",
+        "armv7": "5.0",
+        "iOS-arm64": "7.0"
+      },
+      "packages": {
+        "macOS": [
+          "zip"
+        ],
+        "iOS": [
+          "ipa"
+        ],
+        "linux": [
+          "zip"
+        ]
+      },
+      "privilege": "sandboxed iOS app",
+      "device_backend": false
+    },
+    {
+      "id": "cocoa-shared",
+      "description": "AppKit/UIKit frontends and a shared C model with Objective-C facade",
+      "platforms": [
+        "macOS",
+        "iOS"
+      ],
+      "memory": {
+        "macOS": "mrc",
+        "iOS": "arc-ui/mrc-shared"
+      },
+      "architectures": {
+        "macOS": [
+          "ppc",
+          "i386",
+          "x86_64",
+          "arm64"
+        ],
+        "iOS": [
+          "armv7",
+          "arm64"
+        ],
+        "linux": [
+          "host"
+        ]
+      },
+      "minimum_os": {
+        "ppc": "10.4",
+        "i386": "10.4",
+        "x86_64": "10.9",
+        "macOS-arm64": "11.0",
+        "armv7": "5.0",
+        "iOS-arm64": "7.0"
+      },
+      "packages": {
+        "macOS": [
+          "zip"
+        ],
+        "iOS": [
+          "ipa"
+        ],
+        "linux": [
+          "zip"
+        ]
+      },
+      "privilege": "sandboxed iOS app",
+      "device_backend": false
+    },
+    {
+      "id": "cocoa-daemon",
+      "description": "UI and a separately signed service with a local socket protocol",
+      "platforms": [
+        "macOS",
+        "iOS"
+      ],
+      "memory": {
+        "macOS": "mrc",
+        "iOS": "arc-ui/mrc-shared"
+      },
+      "architectures": {
+        "macOS": [
+          "ppc",
+          "i386",
+          "x86_64",
+          "arm64"
+        ],
+        "iOS": [
+          "armv7",
+          "arm64"
+        ],
+        "linux": [
+          "host"
+        ]
+      },
+      "minimum_os": {
+        "ppc": "10.4",
+        "i386": "10.4",
+        "x86_64": "10.9",
+        "macOS-arm64": "11.0",
+        "armv7": "5.0",
+        "iOS-arm64": "7.0"
+      },
+      "packages": {
+        "macOS": [
+          "zip"
+        ],
+        "iOS": [
+          "deb-rootful",
+          "deb-rootless"
+        ],
+        "linux": [
+          "zip"
+        ]
+      },
+      "privilege": "user service; iOS jailbreak/root installation",
+      "device_backend": false
+    },
+    {
+      "id": "daemon",
+      "description": "Headless service and a small IPC test client",
+      "platforms": [
+        "macOS",
+        "iOS"
+      ],
+      "memory": {
+        "macOS": "portable C",
+        "iOS": "portable C"
+      },
+      "architectures": {
+        "macOS": [
+          "ppc",
+          "i386",
+          "x86_64",
+          "arm64"
+        ],
+        "iOS": [
+          "armv7",
+          "arm64"
+        ],
+        "linux": [
+          "host"
+        ]
+      },
+      "minimum_os": {
+        "ppc": "10.4",
+        "i386": "10.4",
+        "x86_64": "10.9",
+        "macOS-arm64": "11.0",
+        "armv7": "5.0",
+        "iOS-arm64": "7.0"
+      },
+      "packages": {
+        "macOS": [
+          "zip"
+        ],
+        "iOS": [
+          "deb-rootful"
+        ],
+        "linux": [
+          "zip"
+        ]
+      },
+      "privilege": "user service; iOS jailbreak/root installation",
+      "device_backend": false
+    },
+    {
+      "id": "cli-library",
+      "description": "Public C library, CLI consumer and portable tests",
+      "platforms": [
+        "macOS",
+        "iOS",
+        "linux"
+      ],
+      "memory": {
+        "macOS": "portable C",
+        "iOS": "portable C",
+        "linux": "portable C"
+      },
+      "architectures": {
+        "macOS": [
+          "ppc",
+          "i386",
+          "x86_64",
+          "arm64"
+        ],
+        "iOS": [
+          "armv7",
+          "arm64"
+        ],
+        "linux": [
+          "host"
+        ]
+      },
+      "minimum_os": {
+        "ppc": "10.4",
+        "i386": "10.4",
+        "x86_64": "10.9",
+        "macOS-arm64": "11.0",
+        "armv7": "5.0",
+        "iOS-arm64": "7.0"
+      },
+      "packages": {
+        "macOS": [
+          "zip"
+        ],
+        "iOS": [
+          "zip"
+        ],
+        "linux": [
+          "zip"
+        ]
+      },
+      "privilege": "shell user",
+      "device_backend": false
+    }
+  ]
+}

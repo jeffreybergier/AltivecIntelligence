@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import json
 import socket
+import stat
 import time
 import uuid
 import os
@@ -39,13 +40,14 @@ def safe_root(project, root, create=True):
     identity = project_marker.read_text().strip() if project_marker.is_file() else str(project)
     # Older engines recorded mount-specific absolute paths. Upgrade their
     # already-owned output trees on the next write; new markers are portable.
+    previous = None
     if marker.is_file():
         previous = marker.read_text()
         legacy = previous == str(project) or (previous.startswith('/')
                  and Path(previous).name == project.name)
         if previous != identity and not legacy:
             raise ValueError('BUILD_ROOT belongs to another project')
-    owned = marker.is_file()
+    owned = previous is not None
     if root.exists():
         if shutil.which('git'):
             check = subprocess.run(['git', '-C', str(project), 'ls-files', '--', str(root)],
@@ -58,9 +60,29 @@ def safe_root(project, root, create=True):
                     continue
                 if p.name in ('.git', 'Makefile', 'AGENTS.md', 'CMakeLists.txt', 'package.json') or p.suffix in ('.c', '.m', '.mm', '.cc', '.cpp', '.cxx', '.h', '.hh', '.hpp', '.mk', '.py', '.js', '.swift', '.rs', '.go'):
                     raise ValueError(f'BUILD_ROOT contains source: {p}')
-    if create:
+    if create and (not owned or previous != identity):
         root.mkdir(parents=True, exist_ok=True)
-        marker.write_text(identity)
+        # Platform/configuration builds can initialize the same root together.
+        # Publish a complete marker; readers must never observe a truncated one.
+        with tempfile.NamedTemporaryFile(mode='w', dir=root,
+                                         prefix='.altivec-owner-', delete=False) as f:
+            temporary = Path(f.name)
+            f.write(identity)
+        try:
+            try:
+                os.link(temporary, marker)
+            except FileExistsError:
+                if marker.is_symlink():
+                    raise ValueError('Build ownership marker must not be a symlink')
+                previous = marker.read_text()
+                legacy = previous == str(project) or (previous.startswith('/')
+                         and Path(previous).name == project.name)
+                if previous != identity:
+                    if not legacy:
+                        raise ValueError('BUILD_ROOT belongs to another project')
+                    os.replace(temporary, marker)
+        finally:
+            temporary.unlink(missing_ok=True)
     return root
 
 
@@ -91,7 +113,12 @@ def directory_mutex(path):
             path.mkdir()
             break
         except FileExistsError:
-            if path.is_symlink() or not path.is_dir():
+            try:
+                mode = path.lstat().st_mode
+            except FileNotFoundError:
+                # Another process released the mutex after mkdir failed.
+                continue
+            if not stat.S_ISDIR(mode):
                 raise ValueError(f'Unsafe build lock: {path}')
             time.sleep(0.05)
     try:

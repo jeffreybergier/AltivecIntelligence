@@ -245,7 +245,7 @@ app-plus-daemon, and CLI/library/app fixtures all package under root `build/`.
 
 ### Generator and shared template source
 
-- [ ] Add a dependency-free Node CLI with npm packaging. Include templates in the
+- [x] Add a dependency-free Node CLI with npm packaging. Include templates in the
   installed package/image so generation works offline. Proposed interface:
 
   ```sh
@@ -256,20 +256,20 @@ app-plus-daemon, and CLI/library/app fixtures all package under root `build/`.
   altivec-app doctor
   ```
 
-- [ ] Publish template descriptions and their supported platform, architecture,
+- [x] Publish template descriptions and their supported platform, architecture,
   minimum OS, memory model, package, and privilege combinations. Reject invalid
   combinations before creating files. Support noninteractive flags and a dry-run
   file list; optional prompts should not be required by agents.
-- [ ] Preserve existing no-overwrite and path validation behavior. Render into a
+- [x] Preserve existing no-overwrite and path validation behavior. Render into a
   temporary directory, validate placeholders/metadata, then finalize. Generate
   project-specific README, AGENTS, root Makefile, ignore rules, release config,
   Compose setup, and test entry points with working examples.
-- [ ] Share template assets and a small declarative template manifest between
+- [x] Share template assets and a small declarative template manifest between
   container and device tooling. Keep a shell-compatible on-device generator for
   old iPhones unless a supported Node runtime is actually demonstrated there.
   Share a project contract, not hard-coded compiler paths: container cross-build
   and `/var/altivec` native-device backends remain distinct.
-- [ ] Record template/schema version in generated metadata. Later upgrades should
+- [x] Record template/schema version in generated metadata. Later upgrades should
   produce a reviewable diff; never overwrite application code automatically.
 
 ### Initial template families
@@ -278,40 +278,57 @@ app-plus-daemon, and CLI/library/app fixtures all package under root `build/`.
 | --- | --- |
 | `ios-basic` | Existing altivec-app starter: sandboxed, programmatic UIKit, shared C model, icons, launch images, localization, IPA. |
 | `mac-basic` | Updated SingleWindow with tested nibless window lifecycle, MRC, selectable legacy/full architecture matrix, ICNS and ZIP. |
-| `cocoa-shared` | ENIL/Retro-DLP structure: portable C model, a narrow Objective-C facade, AppKit/UIKit frontends, compatibility helpers, host tests. Optional SQLite/libcurl example with correct CA-bundle lookup. |
+| `cocoa-shared` | ENIL/Retro-DLP structure: portable C model, a narrow Objective-C facade, AppKit/UIKit frontends, compatibility helpers, host tests. Optional SQLite/libcurl teaching components remain a future extension. |
 | `cocoa-daemon` | Strappy/rCloud structure: UI plus helper, explicit IPC boundary, separate entitlements, launchd/lifecycle files, rootful/rootless options where supported. |
 | `daemon` | Headless service plus tiny test client; no mandatory GUI. Rootful iOS packaging and Mac launchd variants, with privilege and installation instructions. |
 | `cli-library` | Retro-DLP structure: portable public C API, CLI consumer, Linux harness/sanitizers, Apple cross-builds, headers/library/license packaging. |
 
-- [ ] Start with basic Mac/iOS and shared-core templates; add daemon/CLI families
-  after the build modules stabilize. Compose optional networking, SQLite,
-  localization, and daemon features rather than copying every combination into
-  a separate full app. Extract minimal examples, not the applications' business
+- [x] Start with basic Mac/iOS and shared-core templates; add daemon/CLI families
+  after the build modules stabilize. Compose shared-core, localization and
+  daemon source components rather than copying every combination into a
+  separate full app. Extract minimal examples, not the applications' business
   logic, credentials, protocol integrations, or large dependency trees.
-- [ ] Generate explicit compatibility boundaries like XPAppKit/XPUIKit and
+- [x] Generate explicit compatibility boundaries like XPAppKit/XPUIKit and
   XPFoundation, with a small tested example. Audit extracted code and licenses.
   Keep app-specific compatibility policy out of universal template assumptions.
 
 ### Artwork and packaging that survive old devices
 
-- [ ] Ship valid placeholder artwork and an explicit asset-generation command.
-  Generate legacy iOS icon sizes, matching plist declarations, phone/tablet
-  launch images for the selected support profile, and legacy ICNS representations.
+- [x] Ship valid placeholder artwork and an explicit asset-generation command.
+  Generate legacy iOS icon sizes, matching plist declarations, launch images
+  for the selected phone profile, and legacy ICNS representations.
   Reuse the device starter and Retro-DLP checks instead of assuming modern asset
   catalogs or storyboard compilation are available in Linux.
-- [ ] Keep generated artwork as ordinary project resources; normal builds should
+- [x] Keep generated artwork as ordinary project resources; normal builds should
   not regenerate it. Validate declared files, image dimensions, ICNS element
   structure, localization encoding, and bundle identifiers.
-- [ ] Carry forward Retro-DLP's documented Leopard limits (300,000 bytes per ICNS
-  element and 1,000,000 bytes total) as a tested compatibility profile. Verify
-  icon rendering and launch behavior on the actual oldest supported OS.
-- [ ] Distinguish zero npm dependencies from zero external tools: asset conversion
+- [x] Carry forward Retro-DLP's documented Leopard limits (300,000 bytes per ICNS
+  element and 1,000,000 bytes total) as a tested compatibility profile. Record
+  native icon/launch evidence separately from structural validation.
+- [ ] Extend native icon/launch evidence to iOS 5 and Leopard; those OS versions
+  were not available on the supplied test machines.
+- [x] Distinguish zero npm dependencies from zero external tools: asset conversion
   can invoke a documented image tool already provided by the environment.
   `doctor` should report missing converters, signing tools, and SDKs by feature.
 
 **Done when:** each supported template can be generated offline, built, analyzed,
 packaged, and host-tested without hand-editing paths; its native backend is tested
 on a supported device where claimed; a second generation never overwrites files.
+
+Implemented as `packages/altivec-app` 1.0.0, with `bin/altivec-app` for the
+source checkout and a pinned offline install in the image recipe. All six
+families compose small reusable source components and declarative Make products.
+The canonical `templates/ios-device` tree and version manifest are shared with
+the device shell generator; its `/var/altivec` backend remains separate.
+See `docs/app-templates.md` for supported combinations and test commands.
+
+The initial artwork profile is phone-only portrait. Tablet support and optional
+networking/SQLite teaching components are future extensions, not advertised
+options. Mac icon rendering and window lifecycle were checked on PowerPC Tiger;
+iOS 5 rendering and Leopard-specific runtime behavior were not tested. The
+image recipe and installed npm package were checked without rebuilding the full
+SDK/toolchain image; the running image needs a checkout mount or the next rebuild
+to expose the new generator.
 
 ## 5. Add project-first SDK archive discovery with a shared host fallback
 
@@ -356,25 +373,47 @@ not rebuild the image or rerun those two tests.
 
 ## 6. Make validation useful to agents and humans
 
-- [ ] Provide layered test recipes: portable C/Linux tests first, cross-build and
+- [x] Provide layered test recipes: portable C/Linux tests first, cross-build and
   artifact checks next, native integration and UI smoke tests explicitly selected.
   Successful Linux tests or cross-compilation must not be reported as device
   launch, rendering, sandbox, or daemon-lifecycle validation.
-- [ ] Borrow offline harness patterns from Strappy, ENIL's loopback tests, rCloud's
+- [x] Borrow offline harness patterns from Strappy, ENIL's loopback tests, rCloud's
   portable/native separation, and Retro-DLP's external consumer and sanitizer
   checks. Keep live-service tests opt-in and separate from default tests.
-- [ ] Use small project-owned SSH test scripts with explicit host and staging
+- [x] Use small project-owned SSH test scripts with explicit host and staging
   directory settings, timeouts, exit status, and log collection. Do not recreate
   altivec-deploy as a mandatory remote orchestration framework. Do not bake local
   host aliases or personal devices into generated templates.
-- [ ] Add package inspection for slices/deployment targets, dynamic dependencies,
+- [x] Add package inspection for slices/deployment targets, dynamic dependencies,
   symbols, plists, entitlements, resource/license presence, archive layout, and
   DEB metadata/lifecycle paths. Native tests should cover launch, IPC readiness,
   restart, upgrade, uninstall, and preservation of user data where applicable.
-- [ ] Test the generator/release CLIs with Node's built-in test runner. Add a small
+- [x] Test the generator/release CLIs with Node's built-in test runner. Add a small
   generated-project matrix in CI, with SDK-dependent jobs clearly separated from
   dependency-free CLI and Linux harness tests. Reuse existing on-device
   `ios-app-make-check.sh` and `device-ios-app-smoke-test.sh` where appropriate.
+
+Implemented with generated portable/sanitizer/consumer tests, project and
+archive inspection, explicit SSH executable/Mac UI/rootful installation recipes,
+and separate portable/opt-in SDK CI jobs. The SDK matrix generates all six
+families plus a rootless variant; debug/release builds, analysis, package
+validation and archive inspection passed in the existing network-disabled image.
+The Node generator/release suites passed 57 tests, including standalone offline
+npm installation and generation. Existing device generator/Make contract checks
+also passed against the canonical template.
+
+Native evidence: x4-vm (PowerPC Tiger) passed generated Mac UI launch/close/reopen,
+with screenshot inspection, and service IPC/restart. koolphone5 passed service
+IPC/restart and guarded rootful install, launchd restart, reinstall, removal and
+preservation of test data. The shared shell-generated iOS starter built, packaged
+and analyzed using its native compiler. iOS UI/sandbox behavior and rootless
+installed lifecycle are not inferred from these results. No personal host aliases
+are embedded in generated projects.
+
+Matrix testing also fixed native Linux analyzer/package validation defaults and
+two parallel-build races: output ownership publication and a mutex released
+between acquisition failure and inspection. Regression coverage lives in the
+shared Make contract suite (17 passing tests).
 
 ## 7. Image and documentation follow-through
 

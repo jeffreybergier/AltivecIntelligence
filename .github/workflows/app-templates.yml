@@ -1,0 +1,43 @@
+name: App templates
+on:
+  push:
+    paths: ['packages/altivec-app/**', 'bin/altivec-app', 'make/**', 'test/altivec-app.test.cjs', 'test/test_app_templates_container.sh', 'templates/compose.yml', '.github/workflows/app-templates.yml']
+  pull_request:
+    paths: ['packages/altivec-app/**', 'bin/altivec-app', 'make/**', 'test/altivec-app.test.cjs', 'test/test_app_templates_container.sh', 'templates/compose.yml', '.github/workflows/app-templates.yml']
+  workflow_dispatch:
+    inputs:
+      sdk_matrix:
+        description: Run on the explicitly provisioned SDK runner
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node --test test/altivec-app.test.cjs
+      - run: |
+          node packages/altivec-app/bin/altivec-app.js new --template cli-library --name Example --bundle-id org.altivec.example --destination /tmp/altivec-ci-example
+          cd /tmp/altivec-ci-example
+          SANITIZE=1 node tools/test-host.cjs
+  sdk-matrix:
+    if: github.event_name == 'workflow_dispatch' && inputs.sdk_matrix
+    runs-on: [self-hosted, altivec-sdk]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generated SDK matrix (existing image and preinstalled SDK volumes)
+        run: |
+          docker run --rm --network none \
+            -v "$GITHUB_WORKSPACE:/altivec" \
+            -v altivec-ci-sdk-legacy:/osxcross/legacy/target/SDK:ro \
+            -v altivec-ci-sdk-modern:/osxcross/modern/SDK:ro \
+            --entrypoint bash altivec-intelligence:local \
+            /altivec/test/test_app_templates_container.sh

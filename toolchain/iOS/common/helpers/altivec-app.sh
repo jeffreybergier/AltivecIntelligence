@@ -21,6 +21,7 @@ die() {
 usage() {
   printf '%s\n' \
     'Usage:' \
+    '  altivec-app templates' \
     '  altivec-app new --name <executable-name> --bundle-id <identifier>' \
     '                  [--display-name <name>] [--destination <path>]' \
     '' \
@@ -38,6 +39,10 @@ if (($# == 0)); then
 fi
 
 case "$1" in
+  templates)
+    cat "${template_root}/template.conf"
+    exit 0
+    ;;
   new)
     shift
     ;;
@@ -52,6 +57,11 @@ esac
 
 while (($# > 0)); do
   case "$1" in
+    --template)
+      require_value "$@"
+      [[ "$2" == ios-basic ]] || die "device backend supports only ios-basic"
+      shift 2
+      ;;
     --name)
       require_value "$@"
       app_name="$2"
@@ -110,6 +120,7 @@ esac
   die "destination already exists: ${destination}"
 
 for required_path in \
+  template.conf \
   Makefile \
   source/iOS/Makefile \
   source/iOS/Info.plist \
@@ -208,6 +219,11 @@ render_file "${destination}/source/iOS/Info.plist"
 if "$grep_tool" -R '@ALTIVEC_' "$destination" >/dev/null 2>&1; then
   die 'template rendering left an unresolved placeholder'
 fi
+
+template_version="$(awk -F= '$1 == "template_version" { print $2 }' "${template_root}/template.conf")"
+[[ "$template_version" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] || die 'invalid template version'
+printf '{"schema_version":1,"template_version":"%s","template":"ios-basic","backend":"device","name":"%s","bundle_id":"%s"}\n' \
+  "$template_version" "$app_name" "$bundle_id" > "${destination}/.altivec-template.json"
 
 destination_created=0
 trap - EXIT

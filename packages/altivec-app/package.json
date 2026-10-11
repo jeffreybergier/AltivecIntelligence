@@ -1,0 +1,22 @@
+{
+  "name": "altivec-app",
+  "version": "1.0.0",
+  "description": "Offline legacy Apple and portable C project generator",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "altivec-app": "bin/altivec-app.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test ../../test/altivec-app.test.cjs"
+  }
+}

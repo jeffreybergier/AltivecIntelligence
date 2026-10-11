@@ -139,6 +139,58 @@ class MakeProducts(unittest.TestCase):
         self.make(root, 'clean', 'BUILD_ROOT=reports', 'PRODUCT=Fixture')
         self.assertFalse((root / 'reports/analyze/macOS/Fixture').exists())
 
+    @unittest.skipUnless(shutil.which('clang'), 'host analysis requires Clang')
+    def test_host_analyzer_uses_native_target(self):
+        root = self.fixture('simple')
+        self.make(root, 'analyze', 'PLATFORM=host',
+                  'Fixture_TYPE=executable', f'ANALYZER={shutil.which("clang")}')
+        reports = list((root / 'build/analyze/linux/Fixture').rglob('*.plist'))
+        self.assertEqual(len(reports), 1)
+
+    def test_host_package_validation_does_not_use_apple_lipo(self):
+        root = self.fixture('simple')
+        self.make(root, 'release', 'validate-package', 'PLATFORM=host',
+                  'Fixture_TYPE=executable', 'LIPO=/nonexistent/apple-lipo')
+        self.assertTrue((root / 'build/linux/release/Fixture/Fixture.zip').is_file())
+
+    def test_parallel_root_claims_publish_complete_identity(self):
+        root = self.fixture('simple')
+        identity = 'parallel-project-identity'
+        (root / '.altivec-project').write_text(identity)
+        command = ['python3', str(ROOT / 'make/build.py'), 'safe-root',
+                   str(root), str(root / 'build')]
+        processes = [subprocess.Popen(command, stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE) for _ in range(16)]
+        for process in processes:
+            _, error = process.communicate()
+            self.assertEqual(process.returncode, 0, error)
+        marker = root / 'build/.altivec-build-root'
+        self.assertEqual(marker.read_text(), identity)
+        self.assertFalse(list((root / 'build').glob('.altivec-owner-*')))
+
+    def test_mutex_released_between_mkdir_and_inspection(self):
+        import importlib.util
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('mutex_helper', ROOT / 'make/build.py')
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        lock = self.root / 'racing-lock'
+        original = Path.mkdir
+        raced = False
+
+        def mkdir(path, *args, **kwargs):
+            nonlocal raced
+            if path == lock and not raced:
+                raced = True
+                # The owner released it before the following lstat.
+                raise FileExistsError()
+            return original(path, *args, **kwargs)
+
+        with patch.object(Path, 'mkdir', mkdir):
+            with helper.directory_mutex(lock):
+                self.assertTrue((lock / 'owner.json').is_file())
+        self.assertFalse(lock.exists())
+
     def test_clean_waits_for_active_build(self):
         root = self.fixture('simple')
         self.make(root, 'release')

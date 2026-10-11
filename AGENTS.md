@@ -265,3 +265,18 @@ Publication requires an explicit `push`. Legacy `bump` is preparation-only.
 See `packages/altivec-release/README.md` for recovery and migration details.
 Test with `node --test test/altivec-release.test.cjs` (npm for package smoke;
 Python/PyYAML for the one-time migration fixtures).
+
+## Project generation and validation
+
+Use `altivec-app` for new projects; see `docs/app-templates.md` and
+`packages/altivec-app/README.md`. The Node package has no npm dependencies and
+ships all templates offline. The native device shell generator consumes the
+canonical `packages/altivec-app/templates/ios-device` tree; keep its manifest
+version aligned with `templates/catalog.json`. Update both repository and
+packaged Compose templates together (the generator tests check equality).
+Run `node --test test/altivec-app.test.cjs` for generation/host/package tests,
+and `bash test/test_app_templates_container.sh` inside the existing image with
+SDK volumes for cross-build validation. Mount current modules at `/altivec`;
+a full image rebuild is unnecessary for ordinary generator development.
+Native tests require explicit hosts and staging paths. Report their actual
+coverage separately from portable tests and package inspection.

@@ -48,7 +48,7 @@ _product-$(1): $(if $(filter app,$($(1)_TYPE)),$(call intermediates,$(1))/.bundl
 endef
 $(foreach p,$(PRODUCTS),$(eval $(call product_target,$(p))))
 ANALYZER ?= $(COMPILER_IOS)
-ANALYZE_ARCH ?= $(or $(firstword $(filter x86_64 arm64 armv7,$(ARCHS))),i386)
+ANALYZE_ARCH ?= $(if $(filter linux,$(ALTIVEC_PLATFORM)),host,$(or $(firstword $(filter x86_64 arm64 armv7,$(ARCHS))),i386))
 .PHONY: analyze
 analyze:
 	+$(ALTIVEC_BUILD_TOOL) guard $(call q,$(PROJECT_ROOT)) $(call q,$(BUILD_ROOT)) $(call q,$(ANALYZE_DIR)) $(MAKE) --no-print-directory -f $(call q,$(ENTRY_MAKEFILE)) _analyze
