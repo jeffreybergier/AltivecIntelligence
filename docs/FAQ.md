@@ -46,7 +46,8 @@ It cannot access your personal files on your host machine.
 The container's home directory is the `~/.altivec` folder on your host (mounted
 as `/root` via `compose.yml`). SSH access is therefore **disabled by default**:
 the container has no keys unless you provide them. To enable it — for example to
-let `altivec-deploy` push apps to real hardware — place your keys in
+use the [manual deployment recipes](deployment.md) with real hardware — place
+your keys in
 `~/.altivec/.ssh/` on the host, where they appear as `/root/.ssh` inside the
 container. Note that once keys are present, the AI can theoretically access any
 system those keys have access to. **Use this feature with caution.**

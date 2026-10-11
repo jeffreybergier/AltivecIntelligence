@@ -117,23 +117,32 @@ full SDK/toolchain image was not rebuilt for this CLI change.
 
 ## 2. Retire altivec-deploy
 
-- [ ] Remove `bin/altivec-deploy`, its dedicated test, `docs/altivec-deploy.md`, and
+- [x] Remove `bin/altivec-deploy`, its dedicated test, `docs/altivec-deploy.md`, and
   debugger-init templates after auditing references in README, AGENTS, image
   checks, and examples. A temporary message-only compatibility stub is optional
   if existing users need a transition release.
-- [ ] Replace the large deployment abstraction with short, editable recipes:
+- [x] Replace the large deployment abstraction with short, editable recipes:
   transfer and launch a Mac bundle; install an IPA; install rootful/rootless DEBs;
   retrieve logs/crash reports; start and stop a test daemon. State prerequisites,
   package type, writable staging location, and cleanup ownership.
-- [ ] Keep SSH/SCP/rsync and symbol generation. Audit `lldb` and other debugger-only
+- [x] Keep SSH/SCP/rsync and symbol generation. Audit `lldb` and other debugger-only
   image dependencies for removal; keep LLVM components needed by builds,
   analysis, and `dsymutil`. Debuggers can be documented as optional tools.
-- [ ] Preserve project-specific native test runners. Removing deployment tooling
+- [x] Preserve project-specific native test runners. Removing deployment tooling
   should not remove automated device tests or force interactive debugging.
 
 **Done when:** no template or agent guide recommends altivec-deploy; sample
 artifacts still have documented manual install/run/log instructions; normal
 builds and tests never require a debugger.
+
+Implemented with `docs/deployment.md` recipes and updated README, FAQ, and
+agent guidance. Removed the command, its dedicated tests, debugger-init templates,
+and the explicit image `lldb` dependency. Build/symbol tools and native test
+runners are retained. Validation: 8 offline build/package tests and 41 release
+CLI tests passed in the existing Linux image; recipe shell syntax, documentation
+links, and whitespace checks passed. The macOS host run had one failure in an
+unchanged architecture-validation test (which passed in Linux). The full image
+was not rebuilt; real-device recipes still require hardware validation.
 
 ## 3. Make repo-root builds and composed products first-class
 

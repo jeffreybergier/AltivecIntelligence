@@ -177,18 +177,10 @@ AltivecCore linked.
 
 ## Deploying to Hardware
 
-Use the `altivec-deploy` script to quickly push and debug your apps on 
-actual hardware.
-
-**1. Run on a remote Mac (via SSH)**:
-```bash
-docker compose run --rm altivec "altivec-deploy /altivec/apps/SingleWindow -d <mac_ip_or_hostname>"
-```
-
-**2. Run on a jailbroken iPhone (via SSH)**:
-```bash
-docker compose run --rm altivec "altivec-deploy /altivec/apps/SingleScreen -d <iphone_ip_or_hostname>
-```
+Use the [manual deployment recipes](docs/deployment.md) to transfer and launch
+Mac bundles, install IPAs or rootful/rootless DEBs, collect logs and crash reports,
+and start or stop a test daemon. They use SSH/SCP or rsync and require no debugger.
+Each recipe describes prerequisites, staging, and cleanup.
 
 **Note on Deploying to iPhone**
 This requires common jailbreak tools like:
@@ -275,7 +267,7 @@ package is currently built.
 - [`toolchain`](./toolchain/): Optional toolchain package sources. The current release-extras workflow builds only `iOS/armv7`; shared iOS helpers live in `iOS/common`.
 - [`compose.yml`](./compose.yml): The **engine-development** compose — clone-and-build the image locally and mount your live checkout at `/repo/altivec`. Only needed if you are customizing the engine itself.
 - [`bin`](./bin/): Runtime scripts on `PATH` inside the image, including `altivec-sdk` for verified SDK archive management.
-- [`docs/altivec-deploy.md`](./docs/altivec-deploy.md): Deployment behavior and command-line specification for `altivec-deploy`.
+- [`docs/deployment.md`](./docs/deployment.md): Manual install, run, log collection, and cleanup recipes.
 - `AGENTS.md`: AI mandates and technical constraints (also surfaced as CLAUDE.md / GEMINI.md via symlink).
 
 ## Declarative application builds

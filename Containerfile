@@ -20,7 +20,6 @@ RUN apt-get update && apt-get install -y \
     clang \
     llvm-dev \
     lld \
-    lldb \
     # GCC 14's C++ library preserves the unchecked behavior expected by the
     # legacy ld64 sources; Ubuntu 26's default GCC 15 enables bounds assertions.
     g++-14 \

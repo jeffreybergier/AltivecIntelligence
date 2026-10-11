@@ -37,7 +37,8 @@ deprecation warnings as those will be common when dealing with these old API's.
 - **Compatibility Path:** `/osxcross/target` is a symlink to `/osxcross/modern`; build files should use `altivec_toolchains.mk` rather than assuming this alias.
 - **Altivec Root:** `/altivec` (runtime repo baked into the image — `altivec_common_*.mk`, example app sources, prebuilt `libs/{core,cocoa}/build-{mac,phone}` outputs, `templates/`, and `bin/`). Sample binaries and the optional jailbroken-device toolchain are release assets, not image contents.
 - **User Root:** `/repo/user` (the user's app project, mounted from the host)
-- **Altivec Scripts on PATH:** `/altivec/bin` provides `altivec-deploy` (push/run an app on real hardware) and `altivec-chooser` (interactive AI CLI launcher)
+- **Altivec Scripts on PATH:** `/altivec/bin` provides `altivec-sdk`, `altivec-release`, and `altivec-chooser` (interactive AI CLI launcher).
+- **Device Work:** Follow `docs/deployment.md` for editable install/run/log recipes. Preserve project-specific automated native test runners. Builds and tests must not require an interactive debugger; debug builds and dSYM generation remain supported.
 
 ## 📦 Provisioned SDKs
 
