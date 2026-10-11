@@ -18,9 +18,13 @@ IOS_SDK_PATH = $(SDK_IOS_PATH)
 # lastword points at those instead and ALTIVEC_ROOT silently mislocates.
 _altivec_self_dir := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 ALTIVEC_ROOT ?= $(_altivec_self_dir)
+include $(ALTIVEC_ROOT)/make/roots.mk
+CONFIG ?= release
+ALTIVEC_PLATFORM := iOS
+ANALYZE_OUTPUT_DIR ?= $(BUILD_ROOT)/analyze/iOS/$(APP_NAME)
 
 # --- Default Build Settings ---
-BUILD_DIR ?= build-release
+BUILD_DIR ?= $(BUILD_ROOT)/iOS/$(CONFIG)/$(APP_NAME)
 INT_DIR = $(BUILD_DIR)/Intermediates
 APP_BUNDLE = $(BUILD_DIR)/$(APP_NAME).app
 PHONE_IPA = $(BUILD_DIR)/$(APP_NAME).ipa
@@ -167,15 +171,18 @@ endif
 
 release: validate
 	@echo "--- Building Phone Release ($(OPT_FLAGS)) ---"
-	@$(MAKE) --no-print-directory build-release/$(APP_NAME).ipa BUILD_DIR=build-release OPT_FLAGS=-O3
+	+$(MAKE) --no-print-directory -f $(firstword $(MAKEFILE_LIST)) $(BUILD_ROOT)/iOS/release/$(APP_NAME)/$(APP_NAME).ipa BUILD_DIR=$(BUILD_ROOT)/iOS/release/$(APP_NAME) CONFIG=release OPT_FLAGS=-O3
 
 debug: validate
 	@echo "--- Building Phone Debug (-O0) ---"
-	@$(MAKE) --no-print-directory build-debug/$(APP_NAME).ipa BUILD_DIR=build-debug OPT_FLAGS=-O0
+	+$(MAKE) --no-print-directory -f $(firstword $(MAKEFILE_LIST)) $(BUILD_ROOT)/iOS/debug/$(APP_NAME)/$(APP_NAME).ipa BUILD_DIR=$(BUILD_ROOT)/iOS/debug/$(APP_NAME) CONFIG=debug OPT_FLAGS=-O0
 
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -rf build-release build-debug $(ANALYZE_OUTPUT_DIR)
+	$(ALTIVEC_BUILD_TOOL) clean $(call q,$(PROJECT_ROOT)) $(call q,$(BUILD_ROOT)) iOS $(APP_NAME)
+
+clean-all:
+	$(ALTIVEC_BUILD_TOOL) clean $(call q,$(PROJECT_ROOT)) $(call q,$(BUILD_ROOT)) --all
 
 analyze: validate
 	@mkdir -p $(ANALYZE_OUTPUT_DIR)
@@ -216,11 +223,7 @@ validate-sdk:
 
 $(PHONE_IPA): $(APP_BUNDLE)
 	@echo " [4/4] Packaging IPA..."
-	@rm -rf $(INT_DIR)/Payload
-	@mkdir -p $(INT_DIR)/Payload
-	@cp -R $(APP_BUNDLE) $(INT_DIR)/Payload/
-	@cd $(INT_DIR) && zip -rq ../../$@ Payload
-	@rm -rf $(INT_DIR)/Payload
+	$(ALTIVEC_BUILD_TOOL) package --format ipa --input "$(APP_BUNDLE)" --output "$(abspath $@)"
 
 $(APP_BUNDLE): $(INT_DIR)/$(APP_NAME)-bin $(PHONE_BUNDLE_DEPS)
 	@echo " [3/4] Building app package..."

@@ -1,5 +1,5 @@
 # Native offline harnesses use the same dependency graph as cross-products.
-ALTIVEC_PLATFORM := host
+ALTIVEC_PLATFORM := linux
 ARCHS ?= host
 CC_host ?= $(shell command -v $(CC))
 CXX_host ?= $(shell command -v $(CXX))

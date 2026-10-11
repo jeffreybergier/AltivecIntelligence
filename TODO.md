@@ -148,11 +148,11 @@ was not rebuilt; real-device recipes still require hardware validation.
 
 ### One output convention
 
-- [ ] Introduce explicit `PROJECT_ROOT` and `BUILD_ROOT`, resolved from the
+- [x] Introduce explicit `PROJECT_ROOT` and `BUILD_ROOT`, resolved from the
   project's root Makefile or a generated project marker, not the shell's current
   directory or `git rev-parse`. Export the resolved absolute root to child makes.
   Use ENIL's implementation and build-system tests as the starting point.
-- [ ] Default to this structure (a simple app can omit the product level):
+- [x] Default to this structure (a simple app can omit the product level):
 
   ```text
   build/
@@ -165,22 +165,37 @@ was not rebuilt; real-device recipes still require hardware validation.
     release/                       # staged assets and release manifest
   ```
 
-- [ ] Fix public `release`, `debug`, `clean`, and `analyze` recipes to honor the
+- [x] Fix public `release`, `debug`, `clean`, and `analyze` recipes to honor the
   selected root. Fix the phone IPA recipe's `../../$@` assumption with an absolute
   archive destination and isolated staging. ENIL and Retro-DLP should no longer
   need their private IPA workarounds.
-- [ ] Keep build roots collision-free across products, configurations, platform,
+- [x] Keep build roots collision-free across products, configurations, platform,
   architectures, SDKs, and flags. Preserve relative source paths in object names
   so two `main.c` files do not collide. Track headers and resource changes;
   isolate ARC/MRC and generated-source inputs.
-- [ ] Support safe clean scopes: current product/platform and explicit whole-root
+- [x] Support safe clean scopes: current product/platform and explicit whole-root
   cleanup. Reject empty/root/source paths and dangerous symlink resolutions.
   Normalize relative overrides against PROJECT_ROOT. Either support whitespace
   consistently or reject it early with a precise explanation.
-- [ ] Update release manifests, CI globs, `.gitignore`, sample docs, analyzer paths,
+- [x] Update release manifests, CI globs, `.gitignore`, sample docs, analyzer paths,
   and device scripts together. Migrate app outputs before touching prebuilt
   `/altivec/libs/*/build-{mac,phone}` locations, which are an existing consumer
   contract. Eventually consolidate image-build intermediates separately.
+
+Implemented in the shared root/entry modules and product graph, with sibling
+consumer migrations for ENIL, Retro-DLP, Retro-Cloud-Sync, and Strappy-Cocoa.
+Static library directories use a `lib` prefix to avoid case-insensitive collisions
+such as RetroDLP/retrodlp. Explicit `BUILD_VARIANT` directories retain concurrent
+SDK/flag variants; shared host/container locks serialize writes to the same
+output and exclude cleanup. Product/platform cleanup and `clean-all` are separate.
+Prebuilt library locations and image-build intermediates remain unchanged.
+
+Validation includes offline dependency/root/cleanup/analyzer tests, real SDK
+product/signing/package matrices, all four app build and offline suites, release
+staging and 41 release CLI tests. Device coverage on x4-vm and koolphone5 includes
+Retro-DLP UI, Retro-Cloud-Sync UI/service behavior, and Strappy schema/auth probes.
+No image rebuild was needed; validation mounted the changed modules into the
+existing image. Run `make clean` once when upgrading an old flat output tree.
 
 ### Small reusable Make modules
 

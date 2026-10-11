@@ -93,8 +93,9 @@ User apps include one of the common mk fragments from `/altivec/` by absolute pa
 
 ```makefile
 # /repo/user/Makefile
-APP_NAME = MyApp
-SOURCES = main.m AppDelegate.m
+PRODUCTS = MyApp
+MyApp_TYPE = app
+MyApp_SOURCES = main.m AppDelegate.m
 include /altivec/altivec_common_mac.mk   # or altivec_common_phone.mk
 ```
 
@@ -127,7 +128,7 @@ You can run the Clang Static Analyzer on modern targets (X64, ARM64, and iPhone)
 ### 1. Build Logic
 - **Two-Stage Builds:** Slices are compiled into architecture-specific object files in `Intermediates/$(ARCH)/` before linking. This ensures that `dsymutil` can find the symbols on disk.
 - **Mac Linking:** Binary slices are merged using `lipo` into a Quad-Fat universal binary.
-- **iPhone Linking:** Binaries are linked in a single "fat" step (`-arch armv7 -arch arm64`) to satisfy user preferences for simplicity.
+- **iPhone Linking:** Compile and link each architecture separately, then merge the slices.
 
 ### 2. Standardized Reporting
 Logs must use a 1-space indentation increment and the `>` symbol for details:
@@ -141,7 +142,7 @@ Logs must use a 1-space indentation increment and the `>` symbol for details:
 ### 3. Debug Symbols (dSYMs)
 - Status: Fully operational for X64 and ARM64 slices using the system LLVM 21 `dsymutil`. Legacy PPC and i386 symbols are primarily embedded in the binary.
 
-- **Location:** Produced in the root of the build folder (e.g., `SingleWindow.X64.dSYM`).
+- **Location:** Produced beside the product (e.g., `build/macOS/debug/SingleWindow/SingleWindow.x86_64.dSYM`).
 
 ## 🖼 Nibless NSWindowController Pattern
 When creating an `NSWindowController` programmatically without a NIB/XIB file, follow the "Lapcat Pattern" to ensure proper lifecycle and Window Server stability:

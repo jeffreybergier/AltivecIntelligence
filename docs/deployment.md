@@ -13,7 +13,7 @@ they have been retrieved. Package installers own installed files outside staging
 Do not manually copy or delete files in system application directories.
 
 The checked-in SingleWindow/CURLmac samples produce ZIPs containing Mac `.app`
-bundles in their `build-release` or `build-debug` directories. SingleScreen and
+bundles under `build/<platform>/<configuration>/<product>/`. SingleScreen and
 CURLphone produce IPAs there. Declarative product builds instead use
 `build/<platform>/<release|debug>/`; use the actual output reported by Make.
 DEBs require an explicitly configured package product, as described in
@@ -30,7 +30,7 @@ ZIP containing `SingleWindow.app` (substitute `CURLmac` for that sample).
 mac=user@mac-host
 stage=Desktop/Altivec-SingleWindow-run1
 ssh "$mac" "mkdir -p Desktop && mkdir '$stage'"
-scp apps/SingleWindow/build-release/SingleWindow.zip "$mac:$stage/"
+scp apps/SingleWindow/build/macOS/release/SingleWindow/SingleWindow.zip "$mac:$stage/"
 ssh "$mac" "cd '$stage' && unzip -q SingleWindow.zip && open SingleWindow.app"
 ```
 
@@ -64,7 +64,7 @@ is not an installation method for an ordinary non-jailbroken iPhone.
 phone=root@iphone-host
 stage=tmp_altivec/SingleScreen-run1
 ssh "$phone" "mkdir -p tmp_altivec && mkdir '$stage'"
-scp apps/SingleScreen/build-release/SingleScreen.ipa "$phone:$stage/"
+scp apps/SingleScreen/build/iOS/release/SingleScreen/SingleScreen.ipa "$phone:$stage/"
 ssh "$phone" "cd '$stage' && appinst SingleScreen.ipa"
 # If this device uses ipainstaller instead, replace the previous command with:
 # ssh "$phone" "cd '$stage' && ipainstaller SingleScreen.ipa"

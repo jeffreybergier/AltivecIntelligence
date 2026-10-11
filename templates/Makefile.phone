@@ -1,3 +1,6 @@
+ALTIVEC_ROOT ?= /altivec
+include $(ALTIVEC_ROOT)/make/entry.mk
+ifeq ($(_altivec_relocated),)
 # Sources and policy only; Altivec owns compilation and packaging.
 PRODUCTS = MyPhoneApp
 MyPhoneApp_TYPE = app
@@ -10,4 +13,5 @@ MyPhoneApp_LDFLAGS = -framework UIKit -framework Foundation -framework CoreGraph
 # MyPhoneApp_CORE = static
 # MyPhoneApp_COCOA = static
 # ARCHS = armv7
-include /altivec/altivec_common_phone.mk
+include $(ALTIVEC_ROOT)/altivec_common_phone.mk
+endif

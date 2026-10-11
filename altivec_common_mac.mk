@@ -29,9 +29,13 @@ export OSXCROSS_NO_DSYMUTIL=1
 # lastword points at those instead and ALTIVEC_ROOT silently mislocates.
 _altivec_self_dir := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 ALTIVEC_ROOT ?= $(_altivec_self_dir)
+include $(ALTIVEC_ROOT)/make/roots.mk
+CONFIG ?= release
+ALTIVEC_PLATFORM := macOS
+ANALYZE_OUTPUT_DIR ?= $(BUILD_ROOT)/analyze/macOS/$(APP_NAME)
 
 # --- Default Build Settings ---
-BUILD_DIR ?= build-release
+BUILD_DIR ?= $(BUILD_ROOT)/macOS/$(CONFIG)/$(APP_NAME)
 INT_DIR = $(BUILD_DIR)/Intermediates
 OPT_FLAGS ?= -O3
 UNIVERSAL_BIN ?= $(INT_DIR)/$(APP_NAME)-universal
@@ -192,15 +196,18 @@ ARM_OBJS = $(call app_objs,$(INT_DIR)/arm,$(ALL_SOURCES))
 
 release: validate
 	@echo "--- Building Mac Release (-O3) ---"
-	@$(MAKE) --no-print-directory build-release/$(APP_NAME).zip BUILD_DIR=build-release OPT_FLAGS=-O3
+	+$(MAKE) --no-print-directory -f $(firstword $(MAKEFILE_LIST)) $(BUILD_ROOT)/macOS/release/$(APP_NAME)/$(APP_NAME).zip BUILD_DIR=$(BUILD_ROOT)/macOS/release/$(APP_NAME) CONFIG=release OPT_FLAGS=-O3
 
 debug: validate
 	@echo "--- Building Mac Debug (-O0) ---"
-	@$(MAKE) --no-print-directory build-debug/$(APP_NAME).zip BUILD_DIR=build-debug OPT_FLAGS=-O0
+	+$(MAKE) --no-print-directory -f $(firstword $(MAKEFILE_LIST)) $(BUILD_ROOT)/macOS/debug/$(APP_NAME)/$(APP_NAME).zip BUILD_DIR=$(BUILD_ROOT)/macOS/debug/$(APP_NAME) CONFIG=debug OPT_FLAGS=-O0
 
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -rf build-release build-debug $(ANALYZE_OUTPUT_DIR)
+	$(ALTIVEC_BUILD_TOOL) clean $(call q,$(PROJECT_ROOT)) $(call q,$(BUILD_ROOT)) macOS $(APP_NAME)
+
+clean-all:
+	$(ALTIVEC_BUILD_TOOL) clean $(call q,$(PROJECT_ROOT)) $(call q,$(BUILD_ROOT)) --all
 
 analyze: validate
 	@mkdir -p $(ANALYZE_OUTPUT_DIR)

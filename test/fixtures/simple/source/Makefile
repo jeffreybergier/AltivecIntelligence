@@ -1,5 +1,7 @@
-PROJECT_ROOT := $(abspath ..)
 ALTIVEC_ROOT ?= /altivec
+include $(ALTIVEC_ROOT)/make/entry.mk
+ifeq ($(_altivec_relocated),)
+PROJECT_ROOT := $(abspath $(dir $(firstword $(MAKEFILE_LIST)))/..)
 PLATFORM ?= mac
 PRODUCTS = Fixture
 Fixture_TYPE = app
@@ -10,3 +12,4 @@ ifeq ($(PLATFORM),phone)
 Fixture_SIGN = 1
 endif
 include $(ALTIVEC_ROOT)/altivec_common_$(PLATFORM).mk
+endif

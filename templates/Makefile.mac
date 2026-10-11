@@ -1,3 +1,6 @@
+ALTIVEC_ROOT ?= /altivec
+include $(ALTIVEC_ROOT)/make/entry.mk
+ifeq ($(_altivec_relocated),)
 # Sources and policy only; Altivec owns compilation and packaging.
 PRODUCTS = MyMacApp
 MyMacApp_TYPE = app
@@ -8,4 +11,5 @@ MyMacApp_LDFLAGS = -framework AppKit -lobjc
 # MyMacApp_CORE = static
 # MyMacApp_COCOA = static
 # ARCHS = ppc i386
-include /altivec/altivec_common_mac.mk
+include $(ALTIVEC_ROOT)/altivec_common_mac.mk
+endif

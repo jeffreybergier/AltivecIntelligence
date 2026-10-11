@@ -126,7 +126,7 @@
           "shell": "ALTIVEC_ROOT=\"$ALTIVEC_RELEASE_PREBUILT_ROOT\" make release"
         }
       ],
-      "artifact": "apps/SingleWindow/build-release/SingleWindow.zip",
+      "artifact": "apps/SingleWindow/build/macOS/release/SingleWindow/SingleWindow.zip",
       "asset_name": "SingleWindow-{version}.zip"
     },
     {
@@ -140,7 +140,7 @@
           "shell": "ALTIVEC_ROOT=\"$ALTIVEC_RELEASE_PREBUILT_ROOT\" make release"
         }
       ],
-      "artifact": "apps/SingleScreen/build-release/SingleScreen.ipa",
+      "artifact": "apps/SingleScreen/build/iOS/release/SingleScreen/SingleScreen.ipa",
       "asset_name": "SingleScreen-{version}.ipa"
     },
     {
@@ -154,7 +154,7 @@
           "shell": "ALTIVEC_ROOT=\"$ALTIVEC_RELEASE_PREBUILT_ROOT\" make release"
         }
       ],
-      "artifact": "apps/CURLmac/build-release/CURLmac.zip",
+      "artifact": "apps/CURLmac/build/macOS/release/CURLmac/CURLmac.zip",
       "asset_name": "CURLmac-{version}.zip"
     },
     {
@@ -168,7 +168,7 @@
           "shell": "ALTIVEC_ROOT=\"$ALTIVEC_RELEASE_PREBUILT_ROOT\" make release"
         }
       ],
-      "artifact": "apps/CURLphone/build-release/CURLphone.ipa",
+      "artifact": "apps/CURLphone/build/iOS/release/CURLphone/CURLphone.ipa",
       "asset_name": "CURLphone-{version}.ipa"
     },
     {
@@ -184,5 +184,5 @@
     }
   ],
   "schema_version": 1,
-  "stage_dir": "dist"
+  "stage_dir": "build/release/artifacts"
 }

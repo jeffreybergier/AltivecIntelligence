@@ -11,6 +11,7 @@ include $(ALTIVEC_ROOT)/make/resources.mk
 include $(ALTIVEC_ROOT)/make/sign.mk
 include $(ALTIVEC_ROOT)/make/package.mk
 include $(ALTIVEC_ROOT)/make/targets.mk
+include $(ALTIVEC_ROOT)/make/symbols.mk
 .DEFAULT_GOAL := release
 
 .DELETE_ON_ERROR:

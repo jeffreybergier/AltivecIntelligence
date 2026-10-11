@@ -21,7 +21,7 @@ repository_root="$(cd -- "${script_dir}/../.." && pwd -P)"
 readonly repository_root
 prebuilt_root="$(cd -- "$ALTIVEC_RELEASE_PREBUILT_ROOT" && pwd -P)"
 readonly prebuilt_root
-readonly dist_dir="${repository_root}/dist"
+readonly dist_dir="${repository_root}/build/release/artifacts"
 
 [[ "$RELEASE_VERSION" =~ ^[0-9]+([.][0-9]+){0,2}$ ]] ||
   die "invalid release version: ${RELEASE_VERSION}"
@@ -37,7 +37,7 @@ done
 
 unexpected_build="$(
   find "${prebuilt_root}/apps" -type d \
-    \( -name 'build-*' -o -name Intermediates \) -print -quit
+    \( -name 'build-*' -o -name build -o -name Intermediates \) -print -quit
 )"
 [[ -z "$unexpected_build" ]] ||
   die "primary image contains a prebuilt sample directory: ${unexpected_build}"
@@ -58,19 +58,19 @@ done
 cd "$repository_root"
 altivec-release build "${target_args[@]}"
 
-[[ -d apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCore.framework ]] ||
+[[ -d apps/CURLmac/build/macOS/release/CURLmac/CURLmac.app/Contents/Frameworks/AltivecCore.framework ]] ||
   die 'CURLmac did not embed AltivecCore.framework'
-[[ -d apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework ]] ||
+[[ -d apps/CURLmac/build/macOS/release/CURLmac/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework ]] ||
   die 'CURLmac did not embed AltivecCocoa.framework'
-[[ -f apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/FA7-Solid-900.otf ]] ||
+[[ -f apps/CURLmac/build/macOS/release/CURLmac/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/FA7-Solid-900.otf ]] ||
   die 'CURLmac did not stage the AltivecCocoa font'
-[[ -f apps/CURLmac/build-release/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/LICENSE-Font-Awesome.txt ]] ||
+[[ -f apps/CURLmac/build/macOS/release/CURLmac/CURLmac.app/Contents/Frameworks/AltivecCocoa.framework/Resources/Fonts/LICENSE-Font-Awesome.txt ]] ||
   die 'CURLmac did not stage the Font Awesome license'
-[[ -f apps/CURLphone/build-release/CURLphone.app/Fonts/FA7-Solid-900.otf ]] ||
+[[ -f apps/CURLphone/build/iOS/release/CURLphone/CURLphone.app/Fonts/FA7-Solid-900.otf ]] ||
   die 'CURLphone did not stage the AltivecCocoa font'
-[[ -f apps/CURLphone/build-release/CURLphone.app/Fonts/LICENSE-Font-Awesome.txt ]] ||
+[[ -f apps/CURLphone/build/iOS/release/CURLphone/CURLphone.app/Fonts/LICENSE-Font-Awesome.txt ]] ||
   die 'CURLphone did not stage the Font Awesome license'
-[[ ! -d apps/CURLphone/build-release/CURLphone.app/Frameworks ]] ||
+[[ ! -d apps/CURLphone/build/iOS/release/CURLphone/CURLphone.app/Frameworks ]] ||
   die 'CURLphone unexpectedly embedded an iOS framework'
 inaccessible_resource="$(
   find "${prebuilt_root}/libs/cocoa/build-phone/Resources" \
@@ -92,7 +92,7 @@ trap cleanup EXIT
 
 make -C apps/CURLphone -Bn release \
   ALTIVEC_ROOT="$prebuilt_root" \
-  PHONE_SOURCE_FLAGS=-fobjc-arc > "$arc_plan"
+  GROUP_ui_MEMORY=arc > "$arc_plan"
 grep -Fq -- '-fobjc-arc' "$arc_plan" ||
   die 'CURLphone ARC compile plan lost its ARC flag'
 if grep -Fqi arclite "$arc_plan"; then
@@ -100,10 +100,10 @@ if grep -Fqi arclite "$arc_plan"; then
 fi
 
 case "$dist_dir" in
-  "${repository_root}/dist") rm -rf -- "$dist_dir" ;;
+  "${repository_root}/build/release/artifacts") rm -rf -- "$dist_dir" ;;
   *) die "refusing to replace unsafe dist path: ${dist_dir}" ;;
 esac
-altivec-release stage "$RELEASE_VERSION" --dist dist "${target_args[@]}"
+altivec-release stage "$RELEASE_VERSION" --dist build/release/artifacts "${target_args[@]}"
 
 readonly expected_assets=(
   "AltivecCore-${RELEASE_VERSION}-macOS.framework.zip"

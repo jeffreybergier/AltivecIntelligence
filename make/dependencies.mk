@@ -1,6 +1,6 @@
 q ?= '$(subst ','"'"',$(1))'
 # Supported legacy dependency adapters build isolated copies of pinned checkouts.
-DEPENDENCY_ROOT = $(BUILD_ROOT)/dependencies/$(ALTIVEC_PLATFORM)/$(CONFIG)
+DEPENDENCY_ROOT = $(BUILD_ROOT)/dependencies/$(ALTIVEC_PLATFORM)/$(CONFIG)$(if $(BUILD_VARIANT),/variants/$(BUILD_VARIANT))
 LIBICAL_SOURCE ?= $(PROJECT_ROOT)/source/deps/libical
 LIBVC_SOURCE ?= $(PROJECT_ROOT)/source/deps/libvc
 LIBICAL_PREPARED = $(DEPENDENCY_ROOT)/libical-3.0.20

@@ -7,14 +7,14 @@ $(foreach a,$(ARCHS),$(eval CXX_$(a) ?= $(patsubst %clang,%clang++,$(patsubst %g
 compiler = $(if $(filter CXX OBJCXX,$(call lang,$(3))),$(CXX_$(2)),$(CC_$(2)))
 
 define compile_rule
-$(call object,$(1),$(2),$(3)): $(call resolve_source,$(3)) $(call product_inputs,$(1)) $($(1)_COMPILE_INPUTS_$(2)) $(INT_DIR)/$(1)/$(2)/.config | validate
+$(call object,$(1),$(2),$(3)): $(call resolve_source,$(3)) $(call product_inputs,$(1)) $($(1)_COMPILE_INPUTS_$(2)) $(call intermediates,$(1))/$(2)/.config | validate
 	@mkdir -p "$$(dir $$@)"
 	@echo '  > $(1) $(2): $(3)'
 	$(call compiler,$(1),$(2),$(3)) $(call arch_flags,$(2)) $(call compile_flags,$(1),$(2),$(3)) -MMD -MP -MF "$$@.d" -c "$$<" -o "$$@"
 endef
 # Config stamps compare content; command-line flags and removed sources invalidate objects.
 define config_rule
-$(INT_DIR)/$(1)/$(2)/.config: FORCE
+$(call intermediates,$(1))/$(2)/.config: FORCE
 	@$(ALTIVEC_BUILD_TOOL) stamp "$$@" $(call q,$(CC_$(2)) $(AR_$(2)) $(LD64_LLD) $(LDFLAGS) $($(1)_TYPE) $(call arch_flags,$(2)) $(foreach s,$(call sources,$(1),$(2)),$(s) $(call compiler,$(1),$(2),$(s)) $(call compile_flags,$(1),$(2),$(s))) $($(1)_LDFLAGS) $($(1)_LDFLAGS_$(2)) $(call static_libs,$(1),$(2)) $($(1)_DEPS))
 endef
 $(foreach p,$(PRODUCTS),$(foreach a,$(ARCHS),$(eval $(call config_rule,$(p),$(a)))$(foreach s,$(call sources,$(p),$(a)),$(eval $(call compile_rule,$(p),$(a),$(s))))))

@@ -284,7 +284,7 @@ smoke_runtime() {
       >/dev/null
   done
   make -C "$repo_root/apps/SingleScreen" release ALTIVEC_ROOT="$repo_root"
-  binary="$repo_root/apps/SingleScreen/build-release/SingleScreen.app/SingleScreen"
+  binary="$repo_root/apps/SingleScreen/build/iOS/release/SingleScreen/SingleScreen.app/SingleScreen"
   "$modern_target/bin/lipo" "$binary" -verify_arch armv7 arm64
   for arch in armv7:5.0 arm64:7.0; do
     expected="${arch##*:}"

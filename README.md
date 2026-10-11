@@ -248,7 +248,7 @@ container run:
 
 ```bash
 docker compose run --rm altivec \
-  "cd /altivec/apps/CURLmac && make release && cp build-release/CURLmac.zip /repo/user/"
+  "cd /altivec/apps/CURLmac && make release && cp build/macOS/release/CURLmac/CURLmac.zip /repo/user/"
 ```
 
 Swap `CURLmac` for `SingleWindow` to build the simpler, non-networking sample.

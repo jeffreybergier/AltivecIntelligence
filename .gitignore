@@ -10,3 +10,6 @@ build/
 build-*/
 test/fixtures/*/build*/
 __pycache__/
+
+# Shared host/container build locks survive whole-root cleanup.
+.*.altivec-locks/

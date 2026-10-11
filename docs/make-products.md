@@ -32,30 +32,83 @@ excluded. `make <product>` builds a named product without packaging everything.
 
 ## Paths and invocation
 
-Set `PROJECT_ROOT` in child Makefiles, for example `$(abspath ../..)`. Both
-relative and absolute `BUILD_ROOT` overrides resolve from this root, not the
-calling directory. Outputs are `build/<platform>/<debug|release>/`; objects,
-depfiles and stamps live under `Intermediates/<product>/<arch>/`. Full source
-paths and extensions distinguish same-named C, C++, Objective-C and
-Objective-C++ inputs. Debug and release use separate recursive Make contexts:
-`make -j debug release` is supported. Run `validate-package` after those builds,
-rather than concurrently requesting a second release build.
+Every project entry includes `make/entry.mk` before evaluating its declarations,
+then places those declarations inside `ifeq ($(_altivec_relocated),)` / `endif`.
+This lets `make -f /path/to/Makefile` re-enter the Makefile's directory before
+resolving sources, exactly like `make -C /path/to`. Templates show the complete
+wrapper. Child declarations anchor `PROJECT_ROOT` to their Makefile location;
+root orchestration exports absolute `PROJECT_ROOT` and `BUILD_ROOT` to children.
+No Git checkout is needed. Relative `BUILD_ROOT` overrides are relative to the
+project root. Whitespace in roots is rejected explicitly.
 
-A root Makefile can delegate without writing recipes:
+When upgrading an existing checkout, run `make clean` before its first build:
+old flat executable names can occupy the new product-directory locations.
+Existing build caches are disposable; prebuilt image libraries are unaffected.
+
+The default layout is:
+
+```text
+build/<platform>/<debug|release>/<product>/<bundle, executable, archive, dSYMs>
+build/<platform>/<debug|release>/<product>/Intermediates/<architecture>/<source>.o
+build/<platform>/<debug|release>/generated/
+build/analyze/<platform>/<product>/<source>.plist
+build/tests/<platform>/<suite>/
+build/release/                         # staged release assets and manifest
+```
+
+Static library product directories default to `lib<product>`; other types use
+the product name. `<product>_OUTPUT_NAME` overrides this directory component.
+Output names are checked for case-insensitive collisions (for example RetroDLP
+and retrodlp on a Mac filesystem), even when building on Linux.
+
+Platforms are `macOS`, `iOS`, and `linux` (native host builds). Full source paths
+and extensions distinguish same-named C, C++, Objective-C and Objective-C++
+inputs. Modern slice dSYMs stay next to the product; legacy debug information
+stays embedded. `SYMBOLS=0` disables dSYM generation for mock toolchains.
+
+A root Makefile delegates without implementing build recipes:
 
 ```make
-PROJECT_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+ALTIVEC_ROOT ?= /altivec
+include $(ALTIVEC_ROOT)/make/entry.mk
+ifeq ($(_altivec_relocated),)
+PROJECT_ROOT := $(abspath $(dir $(firstword $(MAKEFILE_LIST))))
 PLATFORMS = macOS iOS
 PROJECT_macOS_DIR = source/macOS
 PROJECT_iOS_DIR = source/iOS
-include /altivec/make/projects.mk
+include $(ALTIVEC_ROOT)/make/projects.mk
+endif
 ```
 
-Root `macOS-release` and child `release` select the same files. `clean` removes
-only that platform's output tree. It rejects source/repository directories,
-ancestors of the project, and tracked files; it unlinks platform symlinks
-without traversing them. Dependency build copies remain cached under
-`build/dependencies/<platform>/<configuration>`.
+`make -j debug release` uses independent configurations. Public builds sharing
+a platform/configuration wait on a filesystem lock, so simultaneous SDK, flag,
+and architecture overrides cannot overwrite each other's in-progress products.
+Stamps invalidate sequential changes. For persistent, concurrently usable
+variants use `BUILD_VARIANT=arm64-dev` (letters, digits, `_`, `-`); its outputs
+live under `<platform>/<configuration>/variants/<variant>/<product>`. Use the same variant
+for consumers and validation. Dependency copies follow the variant as well.
+
+`make clean PRODUCT=MyApp` removes only that product across configurations and
+variants on the selected platform; `make macOS-clean` removes macOS outputs,
+analyzer reports, tests, and dependency copies. `make clean-all` explicitly
+removes the entire selected build root, including generated and staged assets.
+Cleanup waits for active public builds. Ignored sibling `.NAME.altivec-locks`
+directories preserve lock identity across whole-root cleanup and across containers.
+Atomic directory locks also coordinate Docker Desktop with the Mac host. After a
+forced process/container kill, inspect `owner.json` and remove only the abandoned
+lock directory once its owner and child builds have stopped. Roots, ancestors, source/metadata paths,
+tracked files, and redirected output ancestors are rejected. Directory symlinks
+are never followed by cleanup. A committed `.altivec-project` identity lets
+output ownership survive different host/container mount paths; legacy absolute
+ownership markers are upgraded when used. Prebuilt `/altivec/libs/*/build-mac`
+and `build-phone` remain unchanged.
+
+Put configuration-dependent generator outputs beneath `$(GENERATED_DIR)`.
+Declare `GEN_<name>_OUTPUT`, `GEN_<name>_INPUTS`, and `GEN_<name>_COMMAND`, and
+add that output to the product's `GENERATED` inputs. Share an output across
+configurations only when its generator and contents are configuration-independent.
+Generators lock their destination and record the command/input identity before
+reusing it. Generated font maps in Strappy now use configuration-specific trees.
 
 ## Architectures, compilers and languages
 
