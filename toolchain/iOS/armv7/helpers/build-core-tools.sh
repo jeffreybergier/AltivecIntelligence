@@ -22,11 +22,14 @@ readonly OPENSSL_ARCHIVE_SHA256="243a86649cf6f23eeb6a2ff2456e09e5d77dd9018a54d3d
 
 readonly ZIP_VERSION="3.0"
 readonly ZIP_DEBIAN_REVISION="15"
+# Pinned Debian revisions can disappear from live mirrors after an update.
+readonly ZIP_DEBIAN_URL="https://snapshot.debian.org/file/f98e04fd7b5cb0162d921f516358ac507814d7c2"
 readonly ZIP_ARCHIVE_SHA256="f0e8bb1f9b7eb0b01285495a2699df3a4b766784c1765a8f1aeedf63c0806369"
 readonly ZIP_DEBIAN_ARCHIVE_SHA256="6dc1711c67640e8d1dee867ff53e84387ddb980c40885bd088ac98c330bffce9"
 
 readonly UNZIP_VERSION="6.0"
 readonly UNZIP_DEBIAN_REVISION="29"
+readonly UNZIP_DEBIAN_URL="https://snapshot.debian.org/file/60d291e40b4cba025591bdd84f1b00779f9c68d6"
 readonly UNZIP_ARCHIVE_SHA256="036d96991646d0449ed0aa952e4fbe21b476ce994abc276e49d30e686708bd37"
 readonly UNZIP_DEBIAN_ARCHIVE_SHA256="14043e5ea351c02b3bc8676e1e6d20d79b9a690b6d7520e8138ac629cc048417"
 
@@ -661,10 +664,10 @@ prepare_sources() {
     "$zip_archive" \
     "https://deb.debian.org/debian/pool/main/z/zip/zip_${ZIP_VERSION}.orig.tar.gz" \
     "$ZIP_ARCHIVE_SHA256" \
-    "https://mirrors.kernel.org/debian/pool/main/z/zip/zip_${ZIP_VERSION}.orig.tar.gz"
+    "https://snapshot.debian.org/file/c9f4099ecf2772b53c2dd4a8e508064ce015d182"
   fetch_archive \
     "$zip_debian_archive" \
-    "https://deb.debian.org/debian/pool/main/z/zip/zip_${ZIP_VERSION}-${ZIP_DEBIAN_REVISION}.debian.tar.xz" \
+    "${ZIP_DEBIAN_URL}" \
     "$ZIP_DEBIAN_ARCHIVE_SHA256" \
     "https://mirrors.kernel.org/debian/pool/main/z/zip/zip_${ZIP_VERSION}-${ZIP_DEBIAN_REVISION}.debian.tar.xz"
   if [[ ! -d "$zip_source" ]]; then
@@ -686,10 +689,10 @@ prepare_sources() {
     "$unzip_archive" \
     "https://deb.debian.org/debian/pool/main/u/unzip/unzip_${UNZIP_VERSION}.orig.tar.gz" \
     "$UNZIP_ARCHIVE_SHA256" \
-    "https://mirrors.kernel.org/debian/pool/main/u/unzip/unzip_${UNZIP_VERSION}.orig.tar.gz"
+    "https://snapshot.debian.org/file/abf7de8a4018a983590ed6f5cbd990d4740f8a22"
   fetch_archive \
     "$unzip_debian_archive" \
-    "https://deb.debian.org/debian/pool/main/u/unzip/unzip_${UNZIP_VERSION}-${UNZIP_DEBIAN_REVISION}.debian.tar.xz" \
+    "${UNZIP_DEBIAN_URL}" \
     "$UNZIP_DEBIAN_ARCHIVE_SHA256" \
     "https://mirrors.kernel.org/debian/pool/main/u/unzip/unzip_${UNZIP_VERSION}-${UNZIP_DEBIAN_REVISION}.debian.tar.xz"
   if [[ ! -d "$unzip_source" ]]; then
@@ -2101,11 +2104,11 @@ write_build_information() {
     printf '%s  %s\n' "$ZIP_ARCHIVE_SHA256" \
       "https://deb.debian.org/debian/pool/main/z/zip/zip_${ZIP_VERSION}.orig.tar.gz"
     printf '%s  %s\n' "$ZIP_DEBIAN_ARCHIVE_SHA256" \
-      "https://deb.debian.org/debian/pool/main/z/zip/zip_${ZIP_VERSION}-${ZIP_DEBIAN_REVISION}.debian.tar.xz"
+      "${ZIP_DEBIAN_URL}"
     printf '%s  %s\n' "$UNZIP_ARCHIVE_SHA256" \
       "https://deb.debian.org/debian/pool/main/u/unzip/unzip_${UNZIP_VERSION}.orig.tar.gz"
     printf '%s  %s\n' "$UNZIP_DEBIAN_ARCHIVE_SHA256" \
-      "https://deb.debian.org/debian/pool/main/u/unzip/unzip_${UNZIP_VERSION}-${UNZIP_DEBIAN_REVISION}.debian.tar.xz"
+      "${UNZIP_DEBIAN_URL}"
     printf '%s  %s\n' "$ZLIB_ARCHIVE_SHA256" \
       "https://zlib.net/zlib-${ZLIB_VERSION}.tar.xz"
     printf '%s  %s\n' "$CURL_ARCHIVE_SHA256" \

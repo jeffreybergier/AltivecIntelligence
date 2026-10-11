@@ -220,10 +220,20 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # 8c. Antigravity CLI (Google's replacement for Gemini CLI)
-RUN curl $CURL_RETRY_FLAGS -o /tmp/antigravity-install.sh \
-      https://antigravity.google/cli/install.sh \
-    && bash /tmp/antigravity-install.sh --dir /usr/local/bin \
-    && rm -f /tmp/antigravity-install.sh
+# Use the bootstrapper's release manifests directly: the install.sh endpoint
+# returned a non-script response in CI. Verify the payload before extracting it.
+RUN set -eu; \
+    curl $CURL_RETRY_FLAGS --compressed -o /tmp/antigravity.json \
+      "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_${TARGETARCH}.json"; \
+    url="$(jq -er '.url | select(startswith("https://"))' /tmp/antigravity.json)"; \
+    checksum="$(jq -er '.sha512 | select(test("^[0-9a-fA-F]{128}$"))' /tmp/antigravity.json)"; \
+    curl $CURL_RETRY_FLAGS -o /tmp/antigravity.tar.gz "$url"; \
+    printf '%s  /tmp/antigravity.tar.gz\n' "$checksum" | sha512sum -c -; \
+    mkdir /tmp/antigravity; \
+    tar -xzf /tmp/antigravity.tar.gz -C /tmp/antigravity antigravity; \
+    install -m 0755 /tmp/antigravity/antigravity /usr/local/bin/agy; \
+    agy --version; \
+    rm -rf /tmp/antigravity /tmp/antigravity.json /tmp/antigravity.tar.gz
 
 # 9a. rcodesign — real Apple code signer (osxcross only ships
 #    codesign_allocate, which reserves space but cannot sign).
