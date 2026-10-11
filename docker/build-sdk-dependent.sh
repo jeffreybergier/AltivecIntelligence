@@ -2,8 +2,8 @@
 
 # All Docker-build work which requires Apple SDK input belongs in this script.
 # The Containerfile invokes it once with the three archives mounted read-only
-# under /altivec-sdk. The script removes every installed SDK before returning,
-# so its single filesystem snapshot contains only toolchains and build outputs.
+# under /altivec-sdk and /altivec-sdk-shared. It removes installed SDKs before
+# returning, so the snapshot contains only toolchains and build outputs.
 
 set -euo pipefail
 
@@ -49,22 +49,7 @@ run_logged() {
 }
 
 archive_path() {
-  local filename="$1"
-  local directory
-
-  if [[ -n "${ALTIVEC_SDK_ARCHIVE_DIR:-}" ]]; then
-    [[ -f "$ALTIVEC_SDK_ARCHIVE_DIR/$filename" ]] ||
-      die "SDK archive not found: ${ALTIVEC_SDK_ARCHIVE_DIR}/${filename}"
-    printf '%s\n' "$ALTIVEC_SDK_ARCHIVE_DIR/$filename"
-    return
-  fi
-  for directory in /altivec-sdk "$repo_root/.altivec-sdk"; do
-    if [[ -f "$directory/$filename" ]]; then
-      printf '%s\n' "$directory/$filename"
-      return
-    fi
-  done
-  die "SDK archive not found: ${filename}"
+  altivec-sdk locate "$1"
 }
 
 checkout_osxcross() {
@@ -158,10 +143,8 @@ build_modern_toolchain() {
   # OSXCross installs the two macOS SDKs itself, outside altivec-sdk's receipt
   # model. Replace those copies so every SDK used by subsequent project builds
   # was extracted by altivec-sdk from a checksum-verified archive.
-  ALTIVEC_SDK_ARCHIVE_DIR="${ALTIVEC_SDK_ARCHIVE_DIR:-/altivec-sdk}" \
-    altivec-sdk uninstall
-  ALTIVEC_SDK_ARCHIVE_DIR="${ALTIVEC_SDK_ARCHIVE_DIR:-/altivec-sdk}" \
-    altivec-sdk install
+  altivec-sdk uninstall
+  altivec-sdk install
 
   local tool tool_path
   for tool in ld ar ranlib lipo libtool nm otool strip install_name_tool; do

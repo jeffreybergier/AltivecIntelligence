@@ -10,7 +10,18 @@ else
   default_catalog=/altivec/share/altivec-sdk/catalog.json
 fi
 readonly default_catalog catalog_path="${ALTIVEC_SDK_CATALOG:-$default_catalog}"
-readonly archive_dir="${ALTIVEC_SDK_ARCHIVE_DIR:-/altivec-sdk}"
+# Compose/image builds map host sources to these configurable container paths.
+# Direct host invocations resolve relative to the current project directory.
+archive_dirs=()
+if [[ -n "${ALTIVEC_SDK_ARCHIVE_DIR:-}" ]]; then
+  archive_dirs+=("$ALTIVEC_SDK_ARCHIVE_DIR")
+elif [[ -n "${ALTIVEC_SDK_HOST_DIR:-}" ]]; then
+  archive_dirs+=("$ALTIVEC_SDK_HOST_DIR")
+else
+  archive_dirs+=("${ALTIVEC_SDK_PROJECT_DIR:-$PWD/.altivec-sdk}")
+  archive_dirs+=("${ALTIVEC_SDK_SHARED_DIR:-$HOME/.altivec-sdk}")
+fi
+readonly archive_dirs
 readonly legacy_sdk_dir="${ALTIVEC_SDK_LEGACY_DIR:-/osxcross/legacy/target/SDK}"
 readonly modern_sdk_dir="${ALTIVEC_SDK_MODERN_DIR:-/osxcross/modern/SDK}"
 
@@ -25,19 +36,24 @@ usage() {
     '  altivec-sdk help' \
     '  altivec-sdk status' \
     '  altivec-sdk preflight' \
+    '  altivec-sdk locate ARCHIVE' \
     '  altivec-sdk install' \
     '  altivec-sdk uninstall' \
     '' \
-    "Archive folder inside the container: ${archive_dir}" \
-    'With Compose, this is the project folder ./.altivec-sdk on the host.' \
+    'Search each archive in project ./.altivec-sdk, then host ~/.altivec-sdk.' \
+    'Compose mounts these at /altivec-sdk and /altivec-sdk-shared, read-only.' \
+    'An existing invalid project archive is an error, not a fallback.' \
     '' \
-    'Place these exact files in that folder:' \
+    'Place these exact files in either folder:' \
     '  MacOSX10.5.sdk.tar.xz' \
     '  MacOSX11.3.sdk.tar.xz' \
     '  iPhoneOS8.4.sdk.tar.gz' \
     '' \
     'This tool never downloads SDKs. It verifies and installs local archives.' \
-    'Set ALTIVEC_SDK_ARCHIVE_DIR to use a different archive folder.' \
+    'ALTIVEC_SDK_ARCHIVE_DIR selects one folder visible to this process.' \
+    'ALTIVEC_SDK_HOST_DIR selects one host folder (Compose mounts it).' \
+    'Explicit overrides disable fallback; ARCHIVE_DIR takes precedence.' \
+    'locate verifies one catalog archive and prints its selected path.' \
     '' \
     'Compliance commands used by release automation:' \
     '  altivec-sdk audit [ROOT]' \
@@ -118,7 +134,34 @@ sdk_parent() {
 }
 
 archive_path() {
-  printf '%s/%s\n' "$archive_dir" "$1"
+  local directory candidate
+  for directory in "${archive_dirs[@]}"; do
+    candidate="$directory/$1"
+    # Include broken symlinks and non-files: validation must reject them,
+    # rather than silently taking a lower-priority archive.
+    if [[ -e "$candidate" || -L "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+  # Keep status able to report missing archives without exiting early.
+  printf '%s/%s\n' "${archive_dirs[0]}" "$1"
+}
+
+print_archive_dirs() {
+  printf 'Archive search order:\n'
+  printf '  %s\n' "${archive_dirs[@]}"
+}
+
+command_locate() {
+  local entry
+  while IFS= read -r entry; do
+    if [[ "$(entry_value "$entry" '.archive')" == "$1" ]]; then
+      verify_entry_archive "$entry"
+      return
+    fi
+  done < <(sdk_entries)
+  die "unknown SDK archive: $1"
 }
 
 receipt_path() {
@@ -212,7 +255,9 @@ verify_entry_archive() {
   archive="$(archive_path "$filename")"
 
   if [[ ! -f "$archive" || -L "$archive" ]]; then
-    printf 'error: required SDK archive is missing: %s\n' "$archive" >&2
+    printf 'error: SDK archive missing or not a regular non-symlink file: %s\n' \
+      "$archive" >&2
+    print_archive_dirs >&2
     return 1
   fi
   actual_bytes="$(file_bytes "$archive")"
@@ -246,7 +291,9 @@ archive_status() {
   else
     actual_bytes="$(file_bytes "$archive")"
     actual="$(hash_file "$archive")"
-    if [[ "$actual_bytes" == "$expected_bytes" && "$actual" == "$expected" ]]; then
+    if [[ "$actual_bytes" == "$expected_bytes" && "$actual" == "$expected" ]] &&
+      validate_archive_paths "$archive" "$(entry_value "$entry" '.format')" \
+        "$(entry_value "$entry" '.directory')"; then
       printf 'available\n'
     else
       printf 'invalid\n'
@@ -271,8 +318,8 @@ installation_status() {
 command_status() {
   local entry directory archive source_state install_state
 
-  require_tools awk grep tr wc
-  printf 'Archive folder: %s\n\n' "$archive_dir"
+  require_tools awk grep tar tr wc
+  print_archive_dirs
   printf '%-16s %-29s %-10s %-12s\n' \
     SDK ARCHIVE SOURCE INSTALLATION
   while IFS= read -r entry; do
@@ -282,6 +329,9 @@ command_status() {
     install_state="$(installation_status "$entry")"
     printf '%-16s %-29s %-10s %-12s\n' \
       "${directory%.sdk}" "$archive" "$source_state" "$install_state"
+    if [[ "$source_state" != missing ]]; then
+      printf '  source: %s\n' "$(archive_path "$archive")"
+    fi
   done < <(sdk_entries)
 }
 
@@ -289,10 +339,11 @@ preflight_entries() {
   local entry archive
   local rc=0
 
-  printf 'Checking SDK archives in %s...\n' "$archive_dir"
+  print_archive_dirs
+  printf 'Checking SDK archives...\n'
   for entry in "$@"; do
     if archive="$(verify_entry_archive "$entry")"; then
-      printf '  available: %s\n' "${archive##*/}"
+      printf '  available: %s\n' "$archive"
     else
       rc=1
     fi
@@ -342,7 +393,7 @@ install_entry() {
   destination="$(entry_value "$entry" '.destination')"
   expected="$(entry_value "$entry" '.sha256')"
   format="$(entry_value "$entry" '.format')"
-  archive="$(archive_path "$(entry_value "$entry" '.archive')")"
+  archive="$(verify_entry_archive "$entry")"
   parent="$(sdk_parent "$destination")"
   sdk_path="$parent/$directory"
   receipt="$(receipt_path "$parent" "$directory")"
@@ -376,7 +427,7 @@ install_entry() {
   rmdir "$staging"
   printf '%s\n' "$expected" > "$receipt.tmp"
   mv "$receipt.tmp" "$receipt"
-  printf 'Installed SDK: %s\n' "$sdk_path"
+  printf 'Installed SDK: %s (from %s)\n' "$sdk_path" "$archive"
   flock -u 9
 }
 
@@ -445,7 +496,8 @@ command_uninstall() {
   while IFS= read -r entry; do
     uninstall_entry "$entry"
   done < <(sdk_entries)
-  printf 'Source archives left untouched in %s.\n' "$archive_dir"
+  printf 'Source archives left untouched.\n'
+  print_archive_dirs
 }
 
 audit_root() {
@@ -650,6 +702,11 @@ case "$command_name" in
   status)
     require_exact_args 1 'status takes no arguments' "$@"
     command_status
+    ;;
+  locate)
+    require_exact_args 2 'locate requires exactly one archive filename' "$@"
+    require_tools awk tar tr wc
+    command_locate "$2"
     ;;
   preflight)
     require_exact_args 1 'preflight takes no arguments' "$@"

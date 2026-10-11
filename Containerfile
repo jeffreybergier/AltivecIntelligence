@@ -361,16 +361,21 @@ COPY altivec_common_phone.mk  /altivec/
 COPY libs/                    /altivec/libs/
 COPY apps/                    /altivec/apps/
 
-RUN mkdir -p /altivec-sdk /build-sdk-dependent \
+ENV ALTIVEC_SDK_PROJECT_DIR=/altivec-sdk \
+    ALTIVEC_SDK_SHARED_DIR=/altivec-sdk-shared
+
+RUN mkdir -p /altivec-sdk /altivec-sdk-shared /build-sdk-dependent \
  && altivec-sdk --help >/dev/null
 
 # This is the only image instruction allowed to see Apple SDK archives. The
-# large, read-only `altivec_sdk` build context is mounted without being copied
+# read-only `altivec_sdk` and `altivec_sdk_shared` contexts are mounted, not copied
 # into a layer. Bind only the five Docker inputs consumed by this step so its
 # dependency boundary stays explicit as more Docker helpers are added. The mega
 # script builds everything and purges installed SDKs before the layer is
 # committed.
+ARG ALTIVEC_SDK_ARCHIVE_DIR=""
 RUN --mount=type=bind,from=altivec_sdk,source=.,target=/altivec-sdk,readonly \
+    --mount=type=bind,from=altivec_sdk_shared,source=.,target=/altivec-sdk-shared,readonly \
     --mount=type=bind,source=docker/build-sdk-dependent.sh,target=/build-sdk-dependent/build-sdk-dependent.sh,readonly \
     --mount=type=bind,source=docker/toolchain-smoke.c,target=/build-sdk-dependent/toolchain-smoke.c,readonly \
     --mount=type=bind,source=docker/osxcross-build-gcc-intel.patch,target=/build-sdk-dependent/osxcross-build-gcc-intel.patch,readonly \
@@ -379,8 +384,7 @@ RUN --mount=type=bind,from=altivec_sdk,source=.,target=/altivec-sdk,readonly \
     --mount=type=cache,id=altivec-libcurl-tarballs,target=/altivec/libs/libcurl/tarballs,sharing=locked \
     --mount=type=cache,id=altivec-sqlite-tarballs,target=/altivec/libs/sqlite/tarballs,sharing=locked \
     --mount=type=cache,id=altivec-fontawesome-files,target=/altivec/libs/cocoa/tarballs,sharing=locked \
-    ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk \
-      /build-sdk-dependent/build-sdk-dependent.sh
+    /build-sdk-dependent/build-sdk-dependent.sh
 
 # The cache mounts above hide the source-tree dependency caches while the mega
 # script runs. Remove their restored image-layer contents and independently

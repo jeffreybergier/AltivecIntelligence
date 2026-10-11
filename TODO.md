@@ -280,7 +280,36 @@ app-plus-daemon, and CLI/library/app fixtures all package under root `build/`.
 packaged, and host-tested without hand-editing paths; its native backend is tested
 on a supported device where claimed; a second generation never overwrites files.
 
-## 5. Make validation useful to agents and humans
+## 5. Add project-first SDK archive discovery with a shared host fallback
+
+Currently, `bin/altivec-sdk` reads archives from a single directory:
+`ALTIVEC_SDK_ARCHIVE_DIR`, defaulting to `/altivec-sdk`. Both Compose files mount
+`ALTIVEC_SDK_HOST_DIR` (default `./.altivec-sdk`) there. The separate
+`docker/build-sdk-dependent.sh` helper checks `/altivec-sdk` and then
+`$ALTIVEC_ROOT/.altivec-sdk` (default `/altivec/.altivec-sdk`) only when
+`ALTIVEC_SDK_ARCHIVE_DIR` is unset; this is not a shared host-home fallback.
+
+- [ ] Add per-archive lookup with this default host search order: the project's
+  `./.altivec-sdk/` first, then `~/.altivec-sdk/`, shared across projects. Use the
+  shared copy when an archive is absent locally, including when the project
+  folder is missing or contains only some of the required archives. The host's
+  `~/.altivec/` is currently mounted as the container's `/root` for settings and
+  credentials; the proposed shared archive directory is `~/.altivec-sdk/`.
+- [ ] Preserve explicit `ALTIVEC_SDK_HOST_DIR` and `ALTIVEC_SDK_ARCHIVE_DIR`
+  overrides and document how they take precedence over default discovery. Keep
+  `status`, `preflight`, and `install` consistent, report the selected archive
+  paths, and retain existing archive validation. Report an invalid project copy
+  rather than silently substituting a shared copy.
+- [ ] Update `compose.yml`, `templates/compose.yml`, and the image-build SDK
+  inputs to expose the required host directories read-only and support the same
+  precedence. Container home paths do not automatically refer to the host's
+  home directory; account for the SDK-only service and BuildKit contexts too.
+- [ ] Update README/AGENTS guidance, CLI help, and Compose examples with the
+  search order, host-to-container paths, overrides, and shared-folder setup.
+  Add coverage for project precedence, shared fallback, split archive sets,
+  missing directories, explicit overrides, and invalid archives.
+
+## 6. Make validation useful to agents and humans
 
 - [ ] Provide layered test recipes: portable C/Linux tests first, cross-build and
   artifact checks next, native integration and UI smoke tests explicitly selected.
@@ -302,7 +331,7 @@ on a supported device where claimed; a second generation never overwrites files.
   dependency-free CLI and Linux harness tests. Reuse existing on-device
   `ios-app-make-check.sh` and `device-ios-app-smoke-test.sh` where appropriate.
 
-## 6. Image and documentation follow-through
+## 7. Image and documentation follow-through
 
 - [ ] Add a lightweight `altivec doctor`/tool index, or consistent per-tool doctor
   commands, for image version, build capabilities, SDK status, and template

@@ -1,11 +1,14 @@
-# Before building this development image, create ./.altivec-sdk and place these
-# exact files in it:
+# SDK archives: project ./.altivec-sdk first, then host ~/.altivec-sdk.
+# Before building, create BOTH context directories (either may be empty):
+#   mkdir -p .altivec-sdk ~/.altivec-sdk
+# Place these exact files in either folder:
 #   MacOSX10.5.sdk.tar.xz
 #   MacOSX11.3.sdk.tar.xz
 #   iPhoneOS8.4.sdk.tar.gz
-# Then verify them with:
-#   ALTIVEC_SDK_CATALOG="$PWD/share/altivec-sdk/catalog.json" \
-#   ALTIVEC_SDK_ARCHIVE_DIR="$PWD/.altivec-sdk" bin/altivec-sdk preflight
+# Verify from this project root: bin/altivec-sdk preflight
+# ALTIVEC_SDK_HOST_DIR selects one existing host folder for both sources.
+# ALTIVEC_SDK_ARCHIVE_DIR selects one container-visible path, without fallback.
+# Runtime mounts create missing host folders; BuildKit contexts must exist.
 services:
   altivec:
     build:
@@ -14,15 +17,21 @@ services:
       target: ghcr-action
       additional_contexts:
         altivec_sdk: ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}
+        altivec_sdk_shared: ${ALTIVEC_SDK_HOST_DIR:-${HOME}/.altivec-sdk}
+      args:
+        ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
     image: ${ALTIVEC_IMAGE:-altivec-intelligence:local}
     working_dir: /repo/altivec
     environment:
-      ALTIVEC_SDK_ARCHIVE_DIR: /altivec-sdk
+      ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
+      ALTIVEC_SDK_PROJECT_DIR: /altivec-sdk
+      ALTIVEC_SDK_SHARED_DIR: /altivec-sdk-shared
     volumes:
       - cache:/cache
       - ~/.altivec:/root
       - .:/repo/altivec
       - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
+      - ${ALTIVEC_SDK_HOST_DIR:-${HOME}/.altivec-sdk}:/altivec-sdk-shared:ro
       - altivec-sdk-legacy:/osxcross/legacy/target/SDK
       - altivec-sdk-modern:/osxcross/modern/SDK
       # Uncomment to add more tools into the container
@@ -35,6 +44,9 @@ services:
       target: ghcr-action
       additional_contexts:
         altivec_sdk: ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}
+        altivec_sdk_shared: ${ALTIVEC_SDK_HOST_DIR:-${HOME}/.altivec-sdk}
+      args:
+        ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
     image: ${ALTIVEC_IMAGE:-altivec-intelligence:local}
     stdin_open: true
     tty: true
@@ -42,13 +54,16 @@ services:
       - IS_SANDBOX=1
       - TERM=xterm-256color
       - COLORTERM=${COLORTERM:-}
-      - ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk
+      - ALTIVEC_SDK_ARCHIVE_DIR=${ALTIVEC_SDK_ARCHIVE_DIR:-}
+      - ALTIVEC_SDK_PROJECT_DIR=/altivec-sdk
+      - ALTIVEC_SDK_SHARED_DIR=/altivec-sdk-shared
     working_dir: /repo/altivec
     volumes:
       - cache:/cache
       - ~/.altivec:/root
       - .:/repo/altivec
       - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
+      - ${ALTIVEC_SDK_HOST_DIR:-${HOME}/.altivec-sdk}:/altivec-sdk-shared:ro
       - altivec-sdk-legacy:/osxcross/legacy/target/SDK
       - altivec-sdk-modern:/osxcross/modern/SDK
       # Uncomment to add more tools into the container

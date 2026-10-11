@@ -41,9 +41,26 @@ deprecation warnings as those will be common when dealing with these old API's.
 
 ## 📦 Provisioned SDKs
 
-The image contains no Apple SDKs. `altivec-sdk install` verifies archives from
-`/altivec-sdk` (or `ALTIVEC_SDK_ARCHIVE_DIR`) and installs them into the Compose
-SDK volumes at these paths:
+The image contains no Apple SDKs. `altivec-sdk install` verifies each archive
+from the project's `./.altivec-sdk` first, then the host's shared `~/.altivec-sdk`.
+Compose mounts these read-only at `/altivec-sdk` and `/altivec-sdk-shared`, also
+for the SDK-only service. An absent project archive falls back; an invalid one
+fails validation. `~/.altivec` is the separate container home/settings folder.
+
+`ALTIVEC_SDK_HOST_DIR` selects a single host archive folder for both runtime
+mounts and build contexts, disabling fallback. `ALTIVEC_SDK_ARCHIVE_DIR` takes
+precedence and selects a single path visible inside the container (or on the
+host for direct CLI use); it does not create a host mount. Direct host CLI use
+defaults to `$PWD/.altivec-sdk`, then `$HOME/.altivec-sdk`. The image sets
+`ALTIVEC_SDK_PROJECT_DIR` and `ALTIVEC_SDK_SHARED_DIR` to its two mount paths.
+`status`, `preflight`, `locate ARCHIVE`, and `install` report selected sources.
+Before a local image build, create both context directories with
+`mkdir -p .altivec-sdk ~/.altivec-sdk`, or set `ALTIVEC_SDK_HOST_DIR` to one
+existing folder; BuildKit cannot mount a missing context. Run offline discovery
+tests with `python3 -m unittest discover -s test -p 'test_sdk_discovery.py' -v`;
+Linux's `flock` is required for installation tests.
+
+Verified SDKs are installed into the Compose SDK volumes at these paths:
 
 1. `/osxcross/legacy/target/SDK/MacOSX10.5.sdk`: PowerPC and 32-bit Intel slices.
 2. `/osxcross/modern/SDK/MacOSX11.3.sdk`: 64-bit Intel and Apple Silicon slices.
