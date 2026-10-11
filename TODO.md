@@ -1,7 +1,7 @@
 # AltivecIntelligence improvement plan
 
-Repository review: 2026-10-10. This is a proposed roadmap, not an implementation
-or a claim that the proposed commands already exist.
+Repository review: 2026-10-10. Unchecked items are proposed work; checked items
+record implemented behavior. The evidence table records the review baseline.
 
 The highest-value change is to turn the working patterns in the newer projects
 into supported build, packaging, and template primitives. Keep Make responsible
@@ -28,13 +28,13 @@ Sibling paths below refer to the accompanying checkouts in `Vibing/`.
 
 ### Behavior and discovery
 
-- [ ] Implement a dependency-free Node CLI, packaged for installation through npm
+- [x] Implement a dependency-free Node CLI, packaged for installation through npm
   on a host as well as inclusion in the image. Pin the packaged version in the
   image; do not download the latest release helper on every invocation.
-- [ ] Make no arguments print useful usage and examples. Support top-level and
+- [x] Make no arguments print useful usage and examples. Support top-level and
   per-command `--help`, `--version`, `--dry-run`, and machine-readable output for
   inspection commands. Help must work outside a project, without SDKs or Git.
-- [ ] Separate file preparation, local Git operations, and publication. Suggested
+- [x] Separate file preparation, local Git operations, and publication. Suggested
   interface:
 
   ```sh
@@ -55,46 +55,46 @@ Sibling paths below refer to the accompanying checkouts in `Vibing/`.
   `commit` verifies that plan and commits only its version files, then creates the
   local tag. `push` is an explicit, separate operation. Retain `set`, `check`,
   `ci-env`, `build`, and `stage` semantics where workflows already depend on them.
-- [ ] Define what happens to old `bump` invocations: migrate documentation and
+- [x] Define what happens to old `bump` invocations: migrate documentation and
   callers, then make it a clearly documented local preparation alias or an
   actionable migration error. Never preserve implicit pushing as a surprise.
-- [ ] `doctor` should distinguish missing checkout, missing identity, detached
+- [x] `doctor` should distinguish missing checkout, missing identity, detached
   HEAD, unrelated dirty files, absent remote, and credentials not checked.
   Ordinary inspection/preparation must not probe the network. An explicit remote
   check should distinguish authentication/network failure from an absent tag.
-- [ ] Print exact next steps for the current environment. Prefer preparing on the
+- [x] Print exact next steps for the current environment. Prefer preparing on the
   mounted checkout inside Docker and committing/pushing from the authenticated
   host. Offer optional SSH-agent forwarding or runtime token injection as
   documented alternatives, without baking secrets into images or copying a
   private key directory. Tokens do not configure Git author identity or SSH.
-- [ ] Read the user's existing Git identity; accept explicit per-invocation
+- [x] Read the user's existing Git identity; accept explicit per-invocation
   identity when needed, without changing global configuration. Recheck version
   files, branch, tag availability, and unrelated staged changes before commit.
   Handle partial commit/tag/push failures with resumable steps, not a second bump.
 
 ### Configuration without npm dependencies
 
-- [ ] Prefer a versioned `.altivec-release.json` schema, parsed with Node built-ins.
+- [x] Prefer a versioned `.altivec-release.json` schema, parsed with Node built-ins.
   Do not implement a partial YAML parser. Provide a one-time YAML-to-JSON
   converter using the existing Python/PyYAML environment during migration; the
   installed new CLI should need no npm libraries or PyYAML for normal operation.
-- [ ] Address plist handling explicitly: Node has no built-in plist parser.
+- [x] Address plist handling explicitly: Node has no built-in plist parser.
   Prefer generating version metadata from one plain version source and checked-in
   plist templates for new projects. For existing XML plists, implement and test
   a narrowly defined updater that validates every requested key and rejects
   unsupported formats before writing anything. Do not silently damage binary
   plists or introduce a hidden runtime dependency.
-- [ ] Preserve named targets, custom workdirs, per-plist key lists, multiple
+- [x] Preserve named targets, custom workdirs, per-plist key lists, multiple
   artifacts, and asset-name substitutions. All four app repositories use these;
   Retro-DLP needs CLI, app, and library assets, while Strappy needs two DEBs.
-- [ ] Preflight all version edits before applying any; use temporary files and
+- [x] Preflight all version edits before applying any; use temporary files and
   recoverable writes. Validate destination paths and duplicate asset names before
   staging. Produce an artifact manifest with version, target, checksum, and
   provenance when available; a source archive must still work without Git.
-- [ ] Support a non-plist version source for CLI/library and website projects.
+- [x] Support a non-plist version source for CLI/library and website projects.
   Keep build actions generic. Prefer executable-plus-argument arrays for new
   configuration, with explicitly marked shell actions for existing pipelines.
-- [ ] Migrate CI together with configuration. Existing workflows call `ci-env`,
+- [x] Migrate CI together with configuration. Existing workflows call `ci-env`,
   `build`, and `stage`, validate `dist/*`, then use `gh release upload`. Retain
   `dist` compatibility or an explicit staging override while moving new defaults
   to `build/release`; do not silently break release globs.
@@ -105,6 +105,15 @@ usable; help explains both workflows; existing release configurations have
 migration fixtures; mocked failures leave recoverable state and never push
 implicitly. Include malformed versions/plists, unrelated staged files, duplicate
 assets, detached HEAD, existing tags, and failed remote checks in CLI tests.
+
+Implemented as `packages/altivec-release` version 1.0.0, with the source-tree
+entry point in `bin/altivec-release`. The image installs the exact local npm
+package offline. Repository configuration/templates and CI staging calls have
+migrated; sibling YAML configurations are covered by migration fixtures and can
+be converted with `altivec-release migrate` without changing those repositories
+here. Validation: 41 Node tests, workflow/template lint, real-config dry-run,
+and installed-package smoke in the local image with Git absent from PATH. The
+full SDK/toolchain image was not rebuilt for this CLI change.
 
 ## 2. Retire altivec-deploy
 

@@ -455,7 +455,7 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/repo/user" \
             -w /repo/user \
             "$BUILD_IMAGE" \
-            -lc 'altivec-release stage "$RELEASE_VERSION" --target AltivecToolchain'
+            -lc 'altivec-release stage "$RELEASE_VERSION" --dist dist --target AltivecToolchain'
           test -s "dist/AltivecToolchain-${RELEASE_VERSION}-iOS-armv7.deb"
 
       - name: Upload toolchain release asset

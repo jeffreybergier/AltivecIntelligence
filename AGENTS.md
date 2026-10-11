@@ -248,3 +248,18 @@ Avoid creating complex `NSView` subclasses for layout. Instead, use a "Controlle
 - **Properties:** Allowed for 10.5+, but **Dot-notation is forbidden**.
 - **Synthesize:** Always use `@synthesize name = name_;` to match the underscore convention.
 - **Private Methods:** Use a category in the `.m` file or a Class Extension (Obj-C 2.0).
+
+## Release preparation
+
+`altivec-release` is a dependency-free Node >=22 CLI, packaged in
+`packages/altivec-release` and installed at a pinned version in the image.
+Use `.altivec-release.json` (`schema_version: 1`); migrate old YAML once with
+`altivec-release migrate --config .altivec-release.yml` inside the image.
+`current`, `prepare`, `set`, `check`, `ci-env`, `build`, and `stage` need no Git
+identity, credentials, remote, or `.git` directory. Missing container Git setup
+is expected; do not configure it merely to prepare a release. Prepare/build/stage
+in the mounted checkout; review and run `commit` on the authenticated host.
+Publication requires an explicit `push`. Legacy `bump` is preparation-only.
+See `packages/altivec-release/README.md` for recovery and migration details.
+Test with `node --test test/altivec-release.test.cjs` (npm for package smoke;
+Python/PyYAML for the one-time migration fixtures).

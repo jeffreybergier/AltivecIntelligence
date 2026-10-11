@@ -1,5 +1,5 @@
 # Copy this file to .github/workflows/release.yml in an app repository.
-# It expects .altivec-release.yml at the repository root.
+# It expects .altivec-release.json at the repository root.
 
 name: Build Release
 
@@ -62,7 +62,7 @@ jobs:
             -v "${{ github.workspace }}:/repo/user" \
             -w /repo/user \
             "$BUILD_IMAGE" \
-            -lc "altivec-release build && altivec-release stage '$RELEASE_VERSION'"
+            -lc "altivec-release build && altivec-release stage '$RELEASE_VERSION' --dist dist"
           ls -lh dist
 
       - name: Create or update GitHub release

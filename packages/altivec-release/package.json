@@ -1,0 +1,10 @@
+{
+  "name": "altivec-release",
+  "version": "1.0.0",
+  "description": "Local-first release preparation, builds and explicit Git publication",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "bin": { "altivec-release": "bin/altivec-release.js" },
+  "files": ["bin", "lib", "README.md", "LICENSE", "example.json"],
+  "scripts": { "test": "node --test ../../test/altivec-release.test.cjs" }
+}

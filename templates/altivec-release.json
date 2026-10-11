@@ -1,0 +1,62 @@
+{
+  "app_name": "MyApp",
+  "tag_prefix": "v",
+  "version": {
+    "source": "source/macOS/Resources/Info.plist",
+    "keys": [
+      "CFBundleShortVersionString",
+      "CFBundleVersion"
+    ],
+    "plists": [
+      "source/macOS/Resources/Info.plist",
+      "source/iOS/Resources/Info.plist"
+    ]
+  },
+  "versioned_files": [],
+  "release": {
+    "commit_message": "chore(release): release {version}"
+  },
+  "targets": [
+    {
+      "name": "macOS",
+      "workdir": "source/macOS",
+      "build": [
+        {
+          "exec": "make",
+          "args": [
+            "clean"
+          ]
+        },
+        {
+          "exec": "make",
+          "args": [
+            "release"
+          ]
+        }
+      ],
+      "artifact": "source/macOS/build-release/MyApp.zip",
+      "asset_name": "MyApp-{version}-macOS.zip"
+    },
+    {
+      "name": "iOS",
+      "workdir": "source/iOS",
+      "build": [
+        {
+          "exec": "make",
+          "args": [
+            "clean"
+          ]
+        },
+        {
+          "exec": "make",
+          "args": [
+            "release"
+          ]
+        }
+      ],
+      "artifact": "source/iOS/build-release/MyApp.ipa",
+      "asset_name": "MyApp-{version}-iOS.ipa"
+    }
+  ],
+  "schema_version": 1
+}

@@ -1,0 +1,63 @@
+app_name: Retro-DLP
+tag_prefix: v
+
+version:
+  source: source/library/shared/Info.plist
+  keys:
+    - CFBundleShortVersionString
+    - CFBundleVersion
+  plists:
+    - source/library/shared/Info.plist
+    - source/gui/macOS/Info.plist
+    - source/gui/iOS/Info.plist
+
+release:
+  commit_message: "chore(release): release {version}"
+
+targets:
+  - name: macOS CLI
+    workdir: .
+    build:
+      - make macOS-clean
+      - make macOS
+    artifact: build/macOS/release/retro-dlp.zip
+    asset_name: Retro-DLP-{version}-macOS-cli.zip
+
+  - name: iOS CLI
+    workdir: .
+    build:
+      - make iOS-clean
+      - make iOS
+    artifact: build/iOS/release/retro-dlp.zip
+    asset_name: Retro-DLP-{version}-iOS-cli.zip
+
+  - name: macOS application
+    workdir: .
+    build:
+      - make app-macOS
+    artifact: build/macOS/release/RetroDLP.zip
+    asset_name: Retro-DLP-{version}-macOS-gui.zip
+
+  - name: iOS application
+    workdir: .
+    build:
+      - make app-iOS
+      - make app-validate
+    artifact: build/iOS/release/RetroDLP.ipa
+    asset_name: Retro-DLP-{version}-iOS-gui.ipa
+
+  - name: macOS Library
+    workdir: .
+    build:
+      - make macOS
+      - make validate-apple-artifacts
+    artifact: build/macOS/release/retro-dlp-library.zip
+    asset_name: Retro-DLP-{version}-macOS-library.zip
+
+  - name: iOS Library
+    workdir: .
+    build:
+      - make iOS
+      - make validate-apple-artifacts
+    artifact: build/iOS/release/retro-dlp-library.zip
+    asset_name: Retro-DLP-{version}-iOS-library.zip

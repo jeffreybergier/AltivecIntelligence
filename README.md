@@ -270,7 +270,7 @@ package is currently built.
 - [`altivec_common_phone.mk`](./altivec_common_phone.mk): A "parent" Makefile with the general rules for compiling Phone apps
 - [`templates`](./templates/): Reusable templates for end users (compose + thin Makefiles for new app projects)
 - [`templates/compose.yml`](./templates/compose.yml): The compose file end users drop into their own app repo (prebuilt GHCR image, app mounted at `/repo/user`). **This is the file most people want.**
-- [`templates/altivec-release.yml`](./templates/altivec-release.yml): Optional release config for version bumps, tags, and staged release assets.
+- [`templates/altivec-release.json`](./templates/altivec-release.json): Optional release config for version bumps, tags, and staged release assets.
 - [`templates/github-release.yml`](./templates/github-release.yml): Optional GitHub Actions workflow that builds and uploads configured release assets.
 - [`toolchain`](./toolchain/): Optional toolchain package sources. The current release-extras workflow builds only `iOS/armv7`; shared iOS helpers live in `iOS/common`.
 - [`compose.yml`](./compose.yml): The **engine-development** compose — clone-and-build the image locally and mount your live checkout at `/repo/altivec`. Only needed if you are customizing the engine itself.
@@ -360,39 +360,60 @@ Bundle resource knobs:
 
 ## Release Helper
 
-`altivec-release` is an optional YAML-driven helper for app repositories that
-want one command to keep `Info.plist` versions, git commits, tags, and staged
-release assets aligned.
+`altivec-release` is a dependency-free Node CLI. Version preparation, builds and
+artifact staging work in Docker without Git identity, SSH keys, tokens, remote
+access, or a `.git` directory. Review and commit/tag on the host; publish only
+with an explicit `push`.
 
-Copy [`templates/altivec-release.yml`](./templates/altivec-release.yml) to
-`.altivec-release.yml` in your app repo and edit the app name, plist paths,
-and target artifact paths. Then run commands from the app repo root:
+Install on the host from this checkout (Node >=22):
 
-```bash
+```sh
+npm pack ./packages/altivec-release
+npm install -g ./altivec-release-1.0.0.tgz
+```
+
+The image installs this pinned package at build time. Copy
+[`templates/altivec-release.json`](./templates/altivec-release.json) to
+`.altivec-release.json` in your project and edit its paths and targets.
+
+```sh
+# Inside Docker, with your project mounted:
+altivec-release doctor
 altivec-release current
-altivec-release check 1.2.3
-altivec-release bump patch --no-push
-altivec-release bump --set 1.3.0 --dry-run
-altivec-release build
-altivec-release stage 1.3.0 --dist dist
+altivec-release prepare patch --dry-run
+altivec-release prepare patch
+altivec-release build --target iOS
+altivec-release stage
+
+# On the host, after reviewing git diff and build/release/plan.json:
+altivec-release commit
+# Only when you explicitly want publication:
+altivec-release push
 ```
 
-For GitHub Actions, a tagged release can validate the tag against the configured
-plist versions and publish environment variables with:
+`commit` reads the host's existing Git identity; `--name` and `--email` provide
+per-invocation overrides without changing global settings. `doctor` reports
+missing identity/credentials without blocking preparation. No ordinary
+inspection or preparation command probes the network.
 
-```bash
-altivec-release ci-env "$GITHUB_REF_NAME" --github-env "$GITHUB_ENV"
-```
+Existing YAML projects should run `altivec-release migrate --config
+.altivec-release.yml` once in the image, then review the JSON. Migration requires
+Python/PyYAML; normal CLI commands do not. `bump` is now a deprecated alias for
+local preparation and **never implicitly commits or pushes**, with or without
+`--no-push`. Retry failed preparation/commit/push commands without bumping again.
 
-The helper supports Mac-only, iPhone-only, and paired Mac/iPhone app layouts.
-It only knows what is in `.altivec-release.yml`; build commands and artifact
-names stay project-specific.
+`set`, `check`, `ci-env`, named build targets, custom workdirs, per-plist keys,
+and multiple artifacts remain supported. New configurations stage artifacts
+under `build/release/artifacts`; migrated configurations keep `dist`. Existing
+CI can explicitly use `stage --dist dist` to preserve `dist/*` upload globs.
+Copy [`templates/github-release.yml`](./templates/github-release.yml) to an app's
+`.github/workflows/release.yml` for tagged release builds.
 
-To publish releases from GitHub, copy
-[`templates/github-release.yml`](./templates/github-release.yml) into
-`.github/workflows/release.yml`. That workflow runs `altivec-release` inside
-the Altivec container, builds the configured targets, stages `dist/*`, and
-uploads those files to the tag's GitHub release.
+See the [release CLI guide](./packages/altivec-release/README.md) for the config
+contract, plain-text version sources, recovery steps, and optional runtime
+SSH-agent/token authentication. Run dependency-free regressions with
+`node --test test/altivec-release.test.cjs`; migration fixtures additionally need
+Python/PyYAML, and the package installation test needs npm.
 
 ## 🔧 Customizing the Container
 

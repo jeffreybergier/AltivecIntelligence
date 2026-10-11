@@ -1,0 +1,31 @@
+name: Release CLI
+on:
+  push:
+    paths:
+      - 'packages/altivec-release/**'
+      - 'bin/altivec-release'
+      - 'test/altivec-release.test.cjs'
+      - 'test/fixtures/release/**'
+      - '.github/workflows/release-cli.yml'
+  pull_request:
+    paths:
+      - 'packages/altivec-release/**'
+      - 'bin/altivec-release'
+      - 'test/altivec-release.test.cjs'
+      - 'test/fixtures/release/**'
+      - '.github/workflows/release-cli.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: sudo apt-get update && sudo apt-get install -y python3-yaml
+      - run: node --test test/altivec-release.test.cjs

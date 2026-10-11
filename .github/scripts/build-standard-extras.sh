@@ -103,7 +103,7 @@ case "$dist_dir" in
   "${repository_root}/dist") rm -rf -- "$dist_dir" ;;
   *) die "refusing to replace unsafe dist path: ${dist_dir}" ;;
 esac
-altivec-release stage "$RELEASE_VERSION" "${target_args[@]}"
+altivec-release stage "$RELEASE_VERSION" --dist dist "${target_args[@]}"
 
 readonly expected_assets=(
   "AltivecCore-${RELEASE_VERSION}-macOS.framework.zip"

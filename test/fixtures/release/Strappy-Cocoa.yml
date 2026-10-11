@@ -1,0 +1,34 @@
+app_name: Strappy
+tag_prefix: v
+
+version:
+  source: source/macOS/Info.plist
+  keys:
+    - CFBundleShortVersionString
+    - CFBundleVersion
+  plists:
+    - source/macOS/Info.plist
+    - source/iOS/Info.plist
+
+release:
+  commit_message: "chore(release): release {version}"
+
+targets:
+  - name: macOS
+    workdir: source/macOS
+    build:
+      - make clean
+      - make release
+    artifact: build/macOS/release/Strappy.zip
+    asset_name: Strappy-{version}-macOS.zip
+
+  - name: iOS
+    workdir: source/iOS
+    build:
+      - make clean
+      - make release
+    artifacts:
+      - path: build/iOS/release/Strappy-rootful.deb
+        asset_name: Strappy-{version}-iOS-rootful.deb
+      - path: build/iOS/release/Strappy-rootless.deb
+        asset_name: Strappy-{version}-iOS-rootless.deb
