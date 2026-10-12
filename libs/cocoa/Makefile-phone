@@ -11,14 +11,14 @@ PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
 PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
 PUBLIC_RESOURCE_DIR=$(BUILD_ROOT)/Resources
 
-COCOA_SOURCES=AICollectionController.m AICollectionSnapshot.m AICollectionTableAdapter.m \
+COCOA_SOURCES=AICollectionOutlineAdapter.m AICollectionTableViewController.m AICollectionController.m AICollectionSnapshot.m AICollectionTableAdapter.m \
               AILocalNotificationCenter.m AILocalNotificationBackend.m \
               AICoalescedCallback.m AIPagedRows.m \
               AIViewController.m \
               AICookieCutterWindowController.m \
               AIWebViewController.m \
               AIFontAwesome.m
-COCOA_HEADERS=AICollectionController.h AICollectionSnapshot.h AICollectionTableAdapter.h \
+COCOA_HEADERS=AICollectionOutlineAdapter.h AICollectionTableViewController.h AICollectionController.h AICollectionSnapshot.h AICollectionTableAdapter.h \
               AILocalNotificationCenter.h \
               AICoalescedCallback.h AIPagedRows.h \
               AltivecCocoa.h \

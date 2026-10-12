@@ -4,6 +4,14 @@
 #include <pthread.h>
 #if TARGET_OS_IPHONE
 #import <UIKit/UIKit.h>
+static BOOL AICollectionContainsFirstResponder(UIView *view)
+{
+  if ([view isFirstResponder]) return YES;
+  NSEnumerator *enumerator = [[view subviews] objectEnumerator]; UIView *child;
+  while ((child = [enumerator nextObject]))
+    if (AICollectionContainsFirstResponder(child)) return YES;
+  return NO;
+}
 #else
 #import <AppKit/AppKit.h>
 /* These signatures are ABI-compatible on legacy SDKs without naming newer
@@ -33,6 +41,15 @@ NSString * const AICollectionReadFailedNotification = @"AICollectionReadFailedNo
         selector:@selector(pageLoaded:) name:AIPagedRowsDidLoadNotification object:nil];
   }
   return self;
+}
+- (void)applyRowCount:(NSUInteger)count identifiers:(NSArray *)identifiers;
+{
+  NSMutableDictionary *section = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+      @"rows", @"id", [NSNumber numberWithUnsignedLong:count], @"count", nil];
+  if (identifiers) [section setObject:identifiers forKey:@"identifiers"];
+  AICollectionSnapshot *snapshot = [[AICollectionSnapshot alloc]
+      initWithSections:[NSArray arrayWithObject:section]];
+  [self applySnapshot:snapshot]; [snapshot release];
 }
 - (AICollectionSnapshot *)snapshot; { return snapshot_; }
 - (NSArray *)visiblePaths;
@@ -112,6 +129,9 @@ NSString * const AICollectionReadFailedNotification = @"AICollectionReadFailedNo
   NSAssert(pthread_main_np(), @"Table adapters require main thread");
   if (invalid_ || applying_) return;
   NSParameterAssert(snapshot != nil);
+#if TARGET_OS_IPHONE
+  CGPoint originalOffset = [table_ contentOffset];
+#endif
   [NSObject cancelPreviousPerformRequestsWithTarget:self];
   [pendingRows_ removeAllObjects];
   NSMutableArray *selection = [NSMutableArray array];
@@ -127,11 +147,14 @@ NSString * const AICollectionReadFailedNotification = @"AICollectionReadFailedNo
   double delta = top ? [self offsetFromPath:top] : 0;
   NSDictionary *changes = [snapshot changesFromSnapshot:snapshot_];
   BOOL reload = !snapshot_ || [[changes objectForKey:@"reload"] boolValue] || ![self matchesOldCounts];
+  BOOL structural = [[changes objectForKey:@"deletedSections"] count] ||
+      [[changes objectForKey:@"insertedSections"] count] ||
+      [[changes objectForKey:@"deletedRows"] count] || [[changes objectForKey:@"insertedRows"] count];
   AICollectionSnapshot *old = snapshot_;
   snapshot_ = [snapshot retain]; applying_ = YES;
 #if TARGET_OS_IPHONE
   if (reload) [table_ reloadData];
-  else {
+  else if (structural) {
     [table_ beginUpdates];
     [table_ deleteSections:[changes objectForKey:@"deletedSections"] withRowAnimation:UITableViewRowAnimationNone];
     [table_ insertSections:[changes objectForKey:@"insertedSections"] withRowAnimation:UITableViewRowAnimationNone];
@@ -194,7 +217,13 @@ NSString * const AICollectionReadFailedNotification = @"AICollectionReadFailedNo
   [table_ selectRowIndexes:selected byExtendingSelection:NO];
 #endif
   path = [snapshot indexPathForIdentity:anchor];
+#if TARGET_OS_IPHONE
+  if (!reload && !structural) [table_ setContentOffset:originalOffset animated:NO];
+  else if (path) [self restoreAnchor:path delta:delta];
+#else
+  (void)structural;
   if (path) [self restoreAnchor:path delta:delta];
+#endif
   [anchor release]; [old release];
 }
 - (void)pageLoaded:(NSNotification *)note;
@@ -244,6 +273,13 @@ NSString * const AICollectionReadFailedNotification = @"AICollectionReadFailedNo
   [pendingRows_ removeAllObjects];
   if (![paths count]) return;
 #if TARGET_OS_IPHONE
+  /* Do not replace an actively edited form cell on a background status/page
+   * refresh. Its controller already owns the current field/control values. */
+  NSInteger index;
+  for (index = (NSInteger)[paths count] - 1; index >= 0; --index)
+    if (AICollectionContainsFirstResponder([table_ cellForRowAtIndexPath:[paths objectAtIndex:(NSUInteger)index]]))
+      [paths removeObjectAtIndex:(NSUInteger)index];
+  if (![paths count]) return;
   NSArray *selected = [[self selectedPaths] copy];
   NSArray *visible = [self visiblePaths];
   NSIndexPath *top = [visible count] ? [visible objectAtIndex:0] : nil;
@@ -265,6 +301,15 @@ NSString * const AICollectionReadFailedNotification = @"AICollectionReadFailedNo
   NSMutableIndexSet *indexes = [NSMutableIndexSet indexSet];
   e = [paths objectEnumerator];
   while ((path = [e nextObject])) [indexes addIndex:[snapshot_ rowForIndexPath:path]];
+  NSArray *visible = [self visiblePaths];
+  NSIndexPath *top = [visible count] ? [visible objectAtIndex:0] : nil;
+  double delta = top ? [self offsetFromPath:top] : 0;
+  SEL heights = @selector(noteHeightOfRowsWithIndexesChanged:);
+  if ([table_ respondsToSelector:heights]) {
+    union { IMP generic; void (*typed)(id,SEL,id); } method;
+    method.generic = [table_ methodForSelector:heights];
+    method.typed(table_,heights,indexes);
+  }
   SEL reload = @selector(reloadDataForRowIndexes:columnIndexes:);
   if ([table_ respondsToSelector:reload]) {
     union { IMP generic; void (*typed)(id,SEL,id,id); } method;
@@ -278,6 +323,7 @@ NSString * const AICollectionReadFailedNotification = @"AICollectionReadFailedNo
     for (row = [indexes firstIndex]; row != NSNotFound; row = [indexes indexGreaterThanIndex:row])
       [table_ setNeedsDisplayInRect:[table_ rectOfRow:(NSInteger)row]];
   }
+  if (top) [self restoreAnchor:top delta:delta];
 #endif
 }
 - (void)invalidate;

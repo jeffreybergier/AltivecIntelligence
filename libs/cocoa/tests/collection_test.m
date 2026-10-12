@@ -1,5 +1,6 @@
 #import "AICollectionController.h"
 #import "AICollectionTableAdapter.h"
+#import "AICollectionOutlineAdapter.h"
 #import "AIPagedRows.h"
 #import <TargetConditionals.h>
 #if TARGET_OS_IPHONE
@@ -164,11 +165,61 @@ static void tableTest(void)
   [adapter invalidate]; [adapter release];
   [table setDataSource:nil]; [source release]; [table release]; [scroll release];
 }
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
+@interface OutlineSource : NSObject <NSOutlineViewDataSource> {
+#else
+@interface OutlineSource : NSObject {
+#endif
+@public NSArray *rows;
+}
+@end
+@implementation OutlineSource
+- (NSInteger)outlineView:(NSOutlineView *)view numberOfChildrenOfItem:(id)item;
+{ (void)view; return item ? ([item isEqual:@"items"] ? [rows count] : 0) : 1; }
+- (id)outlineView:(NSOutlineView *)view child:(NSInteger)index ofItem:(id)item;
+{ (void)view; return item ? [rows objectAtIndex:(NSUInteger)index] : @"items"; }
+- (BOOL)outlineView:(NSOutlineView *)view isItemExpandable:(id)item;
+{ (void)view; return [item isEqual:@"items"]; }
+- (id)outlineView:(NSOutlineView *)view objectValueForTableColumn:(NSTableColumn *)column byItem:(id)item;
+{ (void)view; (void)column; return item; }
+@end
+static void outlineTest(void)
+{
+  NSOutlineView *view = [[NSOutlineView alloc] initWithFrame:NSMakeRect(0,0,300,200)];
+  NSTableColumn *column = [[NSTableColumn alloc] initWithIdentifier:@"value"];
+  [view addTableColumn:column]; [view setOutlineTableColumn:column]; [column release];
+  NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(0,0,300,200)];
+  [scroll setDocumentView:view];
+  OutlineSource *source = [[OutlineSource alloc] init]; [view setDataSource:source];
+  AICollectionOutlineAdapter *adapter = [[AICollectionOutlineAdapter alloc] initWithOutlineView:view];
+  source->rows = [NSArray arrayWithObjects:@"a",@"b",@"c",nil];
+  [adapter applySnapshot:snapshot(source->rows)]; [view expandItem:@"items"];
+  [view selectRowIndexes:[NSIndexSet indexSetWithIndex:2] byExtendingSelection:NO];
+  source->rows = [NSArray arrayWithObjects:@"x",@"a",@"b",@"d",nil];
+  [adapter applySnapshot:snapshot(source->rows)];
+  assert([view isItemExpanded:@"items"] && [view numberOfRows] == 5);
+  assert([[view itemAtRow:[view selectedRow]] isEqual:@"b"]);
+  [view collapseItem:@"items"];
+  source->rows = [NSArray arrayWithObjects:@"b",@"x",nil];
+  [adapter applySnapshot:snapshot(source->rows)];
+  assert(![view isItemExpanded:@"items"] && [view numberOfRows] == 1);
+  [view expandItem:@"items"]; assert([view numberOfRows] == 3);
+  source->rows = [NSArray array]; [adapter applySnapshot:snapshot(source->rows)];
+  assert([view numberOfRows] == 1);
+  [adapter invalidate]; [adapter release]; [view setDataSource:nil];
+  [source release]; [view release]; [scroll release];
+}
 #endif
 int main(void)
 {
   NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
   identityMapTest();
+  AICollectionSnapshot *form = [[[AICollectionSnapshot alloc] initWithSections:
+      [NSArray arrayWithObject:[NSDictionary dictionaryWithObjectsAndKeys:
+          @"form",@"id",[NSNumber numberWithInt:2],@"count",
+          [NSArray arrayWithObjects:@"name",@"password",nil],@"identifiers",nil]]] autorelease];
+  assert([form count] == 2 && [form hasCompleteIdentities]);
   /* Random permutations/additions/deletions reconstruct exactly from the diff. */
   NSUInteger iteration,i;
   srand(42);
@@ -220,7 +271,7 @@ int main(void)
   for(i=0;i<200 && [loader isLoading];++i) spin(0.01);
   [loader release]; [gate release];
 #if !TARGET_OS_IPHONE
-  tableTest();
+  tableTest(); outlineTest();
 #endif
 #if TARGET_OS_IPHONE
   puts("PASS: collection diffs, bounds, cancellation, latest delivery, errors, active teardown");

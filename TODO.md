@@ -574,12 +574,14 @@ restrictions of [commit/rollback hooks](https://www.sqlite.org/c3ref/commit_hook
 
 - [x] Share refresh scheduling, cancellation, generation checks, page-observer
   lifetime, and incremental table application through `AICollectionController`,
-  `AICollectionSnapshot`, and `AICollectionTableAdapter`. Initial consumers:
-  Strappy model preferences on both platforms; Retro-DLP loaders on both and
-  library table adapters on iOS. See [API and limits](libs/cocoa/COLLECTIONS.md).
-- [ ] Extend identity-only projections to Retro-DLP's remaining video/job queries
-  and migrate remaining app lists. Measure legacy-device performance before
-  increasing the bounded diff limits; retain large-list structural fallback.
+  `AICollectionSnapshot`, and `AICollectionTableAdapter`. All shipping native
+  tables across the four apps now use adapters, including forms and the Mac
+  playlist outline. See [inventory and limits](libs/cocoa/COLLECTIONS.md).
+- [x] Extend identity-only projections to Retro-DLP video/job queries and
+  Strappy conversations/database catalogs; migrate remaining native tables.
+- [ ] Continue moving existing synchronous app queries/page reads onto workers.
+  Measure legacy-device performance before increasing bounded diff limits;
+  retain large-list structural fallback.
 
 - [ ] Extract `AIQuerySnapshot` / `AIPagedRows` from Retro-DLP's row collection
   and Strappy's refresh pipeline. Apps provide parameterized count/page/seek

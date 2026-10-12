@@ -17,3 +17,7 @@
 #import "AICoalescedCallback.h"
 
 #endif /* AltivecCocoa_h */
+
+#import "AICollectionTableViewController.h"
+
+#import "AICollectionOutlineAdapter.h"

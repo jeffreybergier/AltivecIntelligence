@@ -1,3 +1,5 @@
+#ifndef AICOLLECTIONCONTROLLER_H
+#define AICOLLECTIONCONTROLLER_H
 // Copyright (c) 2026 Jeffrey Bergier. MIT license; see ../../LICENSE.
 #import <Foundation/Foundation.h>
 
@@ -38,3 +40,5 @@
 /* Subclasses may translate domain errors; called on the worker only. */
 - (id)buildResultForRequest:(NSDictionary *)request;
 @end
+
+#endif

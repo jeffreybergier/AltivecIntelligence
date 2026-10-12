@@ -68,31 +68,68 @@ rows; any group/header rows must be represented by the app itself.
   `AICollectionReadFailedNotification` with the adapter as object. Apps decide
   how to present errors and retain unsaved edits separately.
 
-## Initial consumers and validation
+## Native table rollout
 
-Strappy's model preferences use the shared loader and adapters on both platforms.
-Their SQLite bridge supplies a bounded identity-only projection from the same
-read snapshot. Retro-DLP uses the loader on both platforms; its iOS library
-lists use the adapter. Playlist metadata supports structural diffs; other
-Retro-DLP query types retain structural fallback until they expose an ID-only
-projection. All those iOS lists benefit from targeted page updates.
+Every shipping native table in ENIL, Strappy-Cocoa, Retro-DLP and
+Retro-Cloud-Sync now applies updates through a collection adapter. Web-based
+message/sticker views and text views are not native tables.
+
+| App | iOS | macOS |
+| --- | --- | --- |
+| ENIL | Chats/friends/account, preferences, login client and QR/PIN/recovery tables | Chats/friends/account, About key/value tables |
+| Strappy | Conversations, preferences, accounts/provider picker, providers/manual models/model editor, model and database whitelists, database study, session options, system prompts | Conversations, model/database/database-study preferences, accounts/provider chooser, provider/model editor |
+| Retro-DLP | Library list controller hierarchy and settings | Library/downloads, queue, playlist outline sidebar |
+| rCloud | Status, Mail, Sync, choices and log | No native table or outline screens |
+
+`AICollectionTableViewController` is an optional UIKit owner for small forms.
+Override `collectionIdentifiersForSection:` with domain IDs, or use
+`collectionFixedIdentifiersForSection:` only for fixed row roles. Change the
+model before `refreshCollection`. Its adapter is owned and invalidated by the
+base controller. Count-only snapshots can omit `rows` and provide `count`;
+there is no placeholder payload allocation. Active form cells are excluded
+from deferred content refresh while a descendant is first responder.
+
+`AICollectionOutlineAdapter` handles two-level AppKit outlines: section IDs
+are root items and row IDs are child items. It preserves expansion, selection
+and the visible anchor. Supported runtimes apply child insertions/removals;
+root changes and Tiger structural updates reload safely. Content-only page
+updates refresh visible items without rebuilding the tree.
+
+Strappy conversations, database catalogs and model preferences use the shared
+refresh scheduler. Their readers project bounded IDs from the same SQLite
+snapshot, without materializing display rows. Retro-DLP supplies identity-only
+projections for playlist, entry and job queries, including grouped download
+wrappers. rCloud's bounded log read runs on the shared worker. Existing
+app-specific domain queries, rendering and command handling remain in apps;
+this rollout does not make every pre-existing synchronous query asynchronous.
+Duplicate identities (including repeated log lines), large lists and other
+ambiguous snapshots retain the documented safe reload fallback.
+
+## Validation
 
 `tests/collection_test.m` covers randomized diff reconstruction, metadata bounds,
-latest-request delivery, cancellation, teardown, and a real NSTableView.
+latest-request delivery, cancellation, teardown, and real NSTableView/NSOutlineView selection and expansion.
 Retro-DLP's `ios_collection_test.h` exercises real UITableView row/section
-batches, selection restoration, and page updates in its isolated offline app.
+batches, selection restoration, page updates, form insertion, and active-field
+preservation in its isolated offline app.
 Strappy's model-list C harness verifies bounded ID projection order and that
 collecting IDs does not fetch display payloads.
 
-Validation on 2026-10-12: shared library and regression executables built for
-Mac ppc/i386/x86_64/arm64 and iPhone armv7/arm64. Collection tests passed on the
-host Mac, x4-vm (Tiger), and koolphone5. The complete Retro-DLP offline UIKit
-suite passed on koolphone5, including row/section batches and exact scroll-offset
-preservation for short inset tables. Strappy's offline Linux suite and both
-apps' Apple package checks passed. The optional Strappy GNUstep model-row
-harness was unavailable in the container (missing GNUstep/Objective-C compiler).
-The shared Mac build retains the existing AIWebViewController function-pointer
-cast warning; no new collection or consumer warnings were emitted.
+Rollout validation on 2026-10-12: shared libraries built for Mac
+ppc/i386/x86_64/arm64 and iPhone armv7/arm64; collection tests passed on the
+host Mac and x4-vm (Tiger). Retro-DLP's full isolated AppKit suite passed on
+x4-vm, including outline groups, queue selection and lifecycle. Retro-DLP's
+full isolated UIKit suite passed on koolphone5, including native row/section
+batches, active form fields, explicit Reveal selection, and unchanged-snapshot
+scroll preservation for short inset tables. All four
+apps' affected platforms cross-built; Strappy and ENIL used clean builds.
+Strappy's offline Linux suite, Retro-DLP's store/service suite, ENIL's host
+suite, and Strappy/Retro-DLP package checks passed. rCloud's isolated UIKit
+harness built, but its native runner timed out without a report; retry on an
+accessible phone. Strappy's optional GNUstep Foundation harness remains
+unavailable in this container. The shared Mac build retains the existing
+AIWebViewController function-pointer cast warning; no new collection or
+consumer warnings remain.
 
 The identity map uses nested section/row dictionaries, avoiding composite-array
 hash collisions. See [snapshot benchmarks](tests/BENCHMARKS.md) for measured

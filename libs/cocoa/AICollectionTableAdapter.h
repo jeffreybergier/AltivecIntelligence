@@ -1,3 +1,5 @@
+#ifndef AICOLLECTIONTABLEADAPTER_H
+#define AICOLLECTIONTABLEADAPTER_H
 #import "AICollectionSnapshot.h"
 
 /* Posted by an adapter when one of its current page sources reports an error.
@@ -20,6 +22,8 @@ extern NSString * const AICollectionReadFailedNotification;
  * bounded identity deltas, then refreshes visible content and restores state.
  * Initial/ambiguous changes reload; legacy AppKit uses structural reloads. */
 - (void)applySnapshot:(AICollectionSnapshot *)snapshot;
+/* Single-section count-only table; identifiers may be nil for safe fallback. */
+- (void)applyRowCount:(NSUInteger)count identifiers:(NSArray *)identifiers;
 /* Current immutable snapshot, borrowed. */
 - (AICollectionSnapshot *)snapshot;
 /* Coalesced content refresh for visible rows; never reloads the whole list on
@@ -28,3 +32,5 @@ extern NSString * const AICollectionReadFailedNotification;
 /* Clears page observers and delayed work; drops snapshot and borrowed table. */
 - (void)invalidate;
 @end
+
+#endif

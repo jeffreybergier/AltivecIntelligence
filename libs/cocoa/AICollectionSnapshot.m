@@ -52,7 +52,7 @@ static NSSet *AIKept(NSArray *old, NSArray *next)
       NSUInteger offset = [[section objectForKey:@"offset"] unsignedLongValue];
       NSUInteger count = [section objectForKey:@"count"] ?
           [[section objectForKey:@"count"] unsignedLongValue] : [rows count];
-      if (offset > [rows count] || count > [rows count] - offset) {
+      if (rows && (offset > [rows count] || count > [rows count] - offset)) {
         [self release];
         [NSException raise:NSInvalidArgumentException format:@"Invalid collection range"];
         return nil;

@@ -1,3 +1,5 @@
+#ifndef AICOLLECTIONSNAPSHOT_H
+#define AICOLLECTIONSNAPSHOT_H
 #import <Foundation/Foundation.h>
 
 /* Maximum identity metadata per snapshot for bounded diff work. Large sources
@@ -9,6 +11,7 @@
  * and count (range within rows), optional identifiers (one stable unique key per
  * displayed row). Optional pageSource/pageOffset map wrapped row arrays onto
  * their AIPagedRows publisher. title is optional presentation metadata.
+ * Count-only forms may omit rows and provide an explicit count.
  * A table owner must update its data source BEFORE applying this snapshot.
  * Each owner has its own sources; do not mutate a published snapshot's rows. */
 @interface AICollectionSnapshot : NSObject {
@@ -39,3 +42,5 @@
  * Missing/duplicate IDs or excessive edits request a full reload. */
 - (NSDictionary *)changesFromSnapshot:(AICollectionSnapshot *)previous;
 @end
+
+#endif

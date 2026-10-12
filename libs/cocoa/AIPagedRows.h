@@ -1,3 +1,5 @@
+#ifndef AIPAGEDROWS_H
+#define AIPAGEDROWS_H
 #import <Foundation/Foundation.h>
 extern NSString * const AIPagedRowsDidLoadNotification;
 /* Schema-independent, bounded NSArray presentation. Subclasses implement count
@@ -27,3 +29,5 @@ extern NSString * const AIPagedRowsDidLoadNotification;
 /* Subclasses may translate this into an app-specific error notification. */
 - (void)recordReadError:(NSError *)error;
 @end
+
+#endif

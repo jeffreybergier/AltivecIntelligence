@@ -11,14 +11,14 @@ PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
 PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
 PUBLIC_RESOURCE_DIR=$(BUILD_ROOT)/Resources
 
-COCOA_SOURCES=AICollectionController.m AICollectionSnapshot.m AICollectionTableAdapter.m \
+COCOA_SOURCES=AICollectionOutlineAdapter.m AICollectionTableViewController.m AICollectionController.m AICollectionSnapshot.m AICollectionTableAdapter.m \
               AILocalNotificationCenter.m AILocalNotificationBackend.m \
               AICoalescedCallback.m AIPagedRows.m \
               AIViewController.m \
               AICookieCutterWindowController.m \
               AIWebViewController.m \
               AIFontAwesome.m
-COCOA_HEADERS=AICollectionController.h AICollectionSnapshot.h AICollectionTableAdapter.h \
+COCOA_HEADERS=AICollectionOutlineAdapter.h AICollectionTableViewController.h AICollectionController.h AICollectionSnapshot.h AICollectionTableAdapter.h \
               AILocalNotificationCenter.h \
               AICoalescedCallback.h AIPagedRows.h \
               AltivecCocoa.h \
@@ -179,6 +179,7 @@ verify-static: $(PUBLIC_LIB)
 $(INTERMEDIATE)/exports-legacy.txt: Makefile-mac
 	mkdir -p $(INTERMEDIATE)
 	printf '%s\n' \
+	  '.objc_class_name_AICollectionOutlineAdapter' \
 	  '.objc_class_name_AICollectionController' \
 	  '.objc_class_name_AICollectionSnapshot' \
 	  '.objc_class_name_AICollectionTableAdapter' \
@@ -195,6 +196,8 @@ $(INTERMEDIATE)/exports-legacy.txt: Makefile-mac
 $(INTERMEDIATE)/exports-modern.txt: Makefile-mac
 	mkdir -p $(INTERMEDIATE)
 	printf '%s\n' \
+	  '_OBJC_CLASS_$$_AICollectionOutlineAdapter' \
+	  '_OBJC_METACLASS_$$_AICollectionOutlineAdapter' \
 	  '_OBJC_CLASS_$$_AICollectionController' \
 	  '_OBJC_METACLASS_$$_AICollectionController' \
 	  '_OBJC_CLASS_$$_AICollectionSnapshot' \
