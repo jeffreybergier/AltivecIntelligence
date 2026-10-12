@@ -11,11 +11,13 @@ PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
 PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
 PUBLIC_RESOURCE_DIR=$(BUILD_ROOT)/Resources
 
-COCOA_SOURCES=AIViewController.m \
+COCOA_SOURCES=AICoalescedCallback.m AIPagedRows.m \
+              AIViewController.m \
               AICookieCutterWindowController.m \
               AIWebViewController.m \
               AIFontAwesome.m
-COCOA_HEADERS=AltivecCocoa.h \
+COCOA_HEADERS=AICoalescedCallback.h AIPagedRows.h \
+              AltivecCocoa.h \
               AIViewController.h \
               AICookieCutterWindowController.h \
               AIWebViewController.h \
@@ -90,9 +92,10 @@ $(PUBLIC_LIB): $(PREFIX)/armv7/lib/libAltivecCocoa.a \
 	mkdir -p $(PUBLIC_LIB_DIR)
 	$(LIPO_MODERN) -create $^ -output $@
 
-$(PUBLIC_INCLUDE_DIR)/.stamp: $(COCOA_HEADERS)
+$(PUBLIC_INCLUDE_DIR)/.stamp: $(COCOA_HEADERS) ../../LICENSE
 	mkdir -p $(PUBLIC_INCLUDE_DIR)/AltivecCocoa
 	cp $(COCOA_HEADERS) $(PUBLIC_INCLUDE_DIR)/
+	cp ../../LICENSE $(PUBLIC_INCLUDE_DIR)/LICENSE
 	cp $(COCOA_HEADERS) $(PUBLIC_INCLUDE_DIR)/AltivecCocoa/
 	touch $@
 

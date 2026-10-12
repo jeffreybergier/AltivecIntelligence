@@ -30,7 +30,9 @@ for path in \
   libs/core/build-mac/lib/AltivecCore.framework \
   libs/core/build-phone/lib/libAltivecCore.a \
   libs/cocoa/build-mac/lib/AltivecCocoa.framework \
-  libs/cocoa/build-phone/lib/libAltivecCocoa.a; do
+  libs/cocoa/build-phone/lib/libAltivecCocoa.a \
+  libs/cocoa-sqlite/build-mac/lib/libAltivecCocoaSQLite.a \
+  libs/cocoa-sqlite/build-phone/lib/libAltivecCocoaSQLite.a; do
   [[ -e "${prebuilt_root}/${path}" ]] ||
     die "prebuilt image output is missing: ${prebuilt_root}/${path}"
 done
@@ -45,6 +47,7 @@ unexpected_build="$(
 readonly targets=(
   AltivecCore
   AltivecCocoa
+  AltivecCocoaSQLite
   SingleWindow
   SingleScreen
   CURLmac
@@ -110,6 +113,8 @@ readonly expected_assets=(
   "AltivecCore-${RELEASE_VERSION}-iOS-static.zip"
   "AltivecCocoa-${RELEASE_VERSION}-macOS.framework.zip"
   "AltivecCocoa-${RELEASE_VERSION}-iOS-static.zip"
+  "AltivecCocoaSQLite-${RELEASE_VERSION}-macOS-static.zip"
+  "AltivecCocoaSQLite-${RELEASE_VERSION}-iOS-static.zip"
   "SingleWindow-${RELEASE_VERSION}.zip"
   "SingleScreen-${RELEASE_VERSION}.ipa"
   "CURLmac-${RELEASE_VERSION}.zip"

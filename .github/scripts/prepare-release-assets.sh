@@ -34,6 +34,8 @@ readonly expected_assets=(
   "AltivecCore-${release_version}-iOS-static.zip"
   "AltivecCocoa-${release_version}-macOS.framework.zip"
   "AltivecCocoa-${release_version}-iOS-static.zip"
+  "AltivecCocoaSQLite-${release_version}-macOS-static.zip"
+  "AltivecCocoaSQLite-${release_version}-iOS-static.zip"
   "SingleWindow-${release_version}.zip"
   "SingleScreen-${release_version}.ipa"
   "CURLmac-${release_version}.zip"

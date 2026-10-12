@@ -116,6 +116,25 @@
       ]
     },
     {
+      "name": "AltivecCocoaSQLite",
+      "workdir": "libs/cocoa-sqlite",
+      "build": [
+        {
+          "shell": "python3 tools/package.py"
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "libs/cocoa-sqlite/build-release/AltivecCocoaSQLite-macOS-static.zip",
+          "asset_name": "AltivecCocoaSQLite-{version}-macOS-static.zip"
+        },
+        {
+          "path": "libs/cocoa-sqlite/build-release/AltivecCocoaSQLite-iOS-static.zip",
+          "asset_name": "AltivecCocoaSQLite-{version}-iOS-static.zip"
+        }
+      ]
+    },
+    {
       "name": "SingleWindow",
       "workdir": "apps/SingleWindow",
       "build": [

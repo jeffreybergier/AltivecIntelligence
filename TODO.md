@@ -514,6 +514,14 @@ API reference: [Apple User Notifications](https://developer.apple.com/documentat
 
 ### Committed SQLite changes from C to Objective-C
 
+Implementation update (2026-10-12): the optional `AltivecCocoaSQLite` target,
+portable revision feed/owned writer/snapshot reader, `AIStoreObserver`, and
+schema-independent `AIPagedRows` are implemented. Strappy and Retro-DLP now
+consume these instead of their private journals/caches; ENIL uses the shared
+bounded debounce. See [the migration contract](docs/sqlite.md) for delivered
+coverage and the remaining full background-paging/table-adapter work. The
+composite checklist items below remain open where rollout or coverage is partial.
+
 - [ ] Add a small C change-feed contract and `AIStoreObserver` adapter carrying
   store identity, topic/table, stable record IDs, generation, and a full-refresh
   flag. Support both explicit application mutation notifications and an optional

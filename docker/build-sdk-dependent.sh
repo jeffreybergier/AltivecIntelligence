@@ -254,6 +254,9 @@ build_altivec_libraries() {
     "$repo_root/libs/sqlite/build-mac" \
     "$repo_root/libs/sqlite/build-phone"
 
+  section 'Building AltivecCocoaSQLite'
+  ( cd "$repo_root/libs/cocoa-sqlite"; make all )
+
   section 'Building AltivecCocoa'
   (
     cd "$repo_root/libs/cocoa"
@@ -267,6 +270,8 @@ smoke_runtime() {
   [[ -f "$repo_root/libs/core/build-mac/lib/libAltivecCore.a" ]]
   [[ -f "$repo_root/libs/core/build-phone/lib/libAltivecCore.a" ]]
   [[ -f "$repo_root/libs/cocoa/build-phone/lib/libAltivecCocoa.a" ]]
+  [[ -f "$repo_root/libs/cocoa-sqlite/build-phone/lib/libAltivecCocoaSQLite.a" ]]
+  [[ -f "$repo_root/libs/cocoa-sqlite/build-mac/lib/libAltivecCocoaSQLite.a" ]]
   [[ -f "$repo_root/apps/CURLmac/AICURLConnection.m" ]]
   [[ -f "$repo_root/apps/CURLphone/AICURLConnection.m" ]]
   [[ ! -e "$repo_root/libs/core/build-mac/lib/libAICURLConnection.a" ]]

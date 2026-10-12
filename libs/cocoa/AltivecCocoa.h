@@ -9,4 +9,7 @@
 #import "AIWebViewController.h"
 #import "AIFontAwesome.h"
 
+#import "AIPagedRows.h"
+#import "AICoalescedCallback.h"
+
 #endif /* AltivecCocoa_h */

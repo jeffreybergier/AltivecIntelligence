@@ -327,6 +327,10 @@ Optional AltivecCore knobs:
 For iPhone apps, AltivecCore is static-only because embedded frameworks require
 iOS 8+ at runtime and break the iOS 5-7 compatibility target.
 
+Shared SQLite change feeds, read snapshots and bounded row collections are
+documented in [SQLite infrastructure](docs/sqlite.md). Database consumers opt
+in with `<Product>_SQLITE = 1` and explicit CORE/COCOA linkage.
+
 Optional AltivecCocoa knobs:
 - `ALTIVECCOCOA_REQUIRED=1`: enforce required Cocoa artifacts at validate time.
 - `ALTIVECCOCOA_LINKAGE=dynamic|static`: choose `AltivecCocoa.framework` or
