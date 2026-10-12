@@ -93,3 +93,8 @@ apps' Apple package checks passed. The optional Strappy GNUstep model-row
 harness was unavailable in the container (missing GNUstep/Objective-C compiler).
 The shared Mac build retains the existing AIWebViewController function-pointer
 cast warning; no new collection or consumer warnings were emitted.
+
+The identity map uses nested section/row dictionaries, avoiding composite-array
+hash collisions. See [snapshot benchmarks](tests/BENCHMARKS.md) for measured
+construction/diff costs on the host Mac and x4-vm, remaining main-thread limits,
+and reproduction commands.

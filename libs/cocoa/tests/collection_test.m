@@ -31,6 +31,54 @@ static AICollectionSnapshot *snapshot(NSArray *ids)
   return [[[AICollectionSnapshot alloc] initWithSections:[NSArray arrayWithObject:
     [NSDictionary dictionaryWithObjectsAndKeys:@"items",@"id",ids,@"rows",ids,@"identifiers",nil]]] autorelease];
 }
+/* Count equality work instead of asserting machine-dependent wall times. */
+static NSUInteger identityComparisons;
+@interface IdentityKey : NSObject <NSCopying> { NSUInteger value_; }
+- (id)initWithValue:(NSUInteger)value;
+@end
+@implementation IdentityKey
+- (id)initWithValue:(NSUInteger)value;
+{ self=[super init]; if(self) value_=value; return self; }
+- (NSUInteger)hash; { return value_; }
+- (BOOL)isEqual:(id)other;
+{ ++identityComparisons; return [other isKindOfClass:[IdentityKey class]] && value_==((IdentityKey *)other)->value_; }
+- (id)copyWithZone:(NSZone *)zone; { (void)zone; return [self retain]; }
+@end
+static void identityMapTest(void)
+{
+  NSMutableArray *ids=[NSMutableArray array];
+  NSUInteger i, count=1000;
+  for(i=0;i<count;++i)
+    [ids addObject:[[[IdentityKey alloc] initWithValue:i] autorelease]];
+  identityComparisons=0;
+  AICollectionSnapshot *list=snapshot(ids);
+  for(i=0;i<count;++i) {
+    IdentityKey *equal=[[[IdentityKey alloc] initWithValue:i] autorelease];
+    NSIndexPath *path=[list indexPathForIdentity:
+      [NSArray arrayWithObjects:@"items",equal,nil]];
+    assert([path length]==2 && [path indexAtPosition:1]==i);
+  }
+  assert(identityComparisons<count*20);
+  NSDictionary *unchanged=[list changesFromSnapshot:list];
+  assert(![[unchanged objectForKey:@"reload"] boolValue] &&
+      [[unchanged objectForKey:@"deletedRows"] count]==0 &&
+      [[unchanged objectForKey:@"insertedRows"] count]==0);
+  AICollectionSnapshot *reverse=snapshot([[ids reverseObjectEnumerator] allObjects]);
+  assert([[[reverse changesFromSnapshot:list] objectForKey:@"reload"] boolValue]);
+  NSArray *shared=[NSArray arrayWithObject:@"same-row-id"];
+  NSDictionary *a=[NSDictionary dictionaryWithObjectsAndKeys:@"a",@"id",shared,@"rows",shared,@"identifiers",nil];
+  NSDictionary *b=[NSDictionary dictionaryWithObjectsAndKeys:@"b",@"id",shared,@"rows",shared,@"identifiers",nil];
+  list=[[[AICollectionSnapshot alloc] initWithSections:[NSArray arrayWithObjects:a,b,nil]] autorelease];
+  assert([list hasCompleteIdentities]);
+  for(i=0;i<2;++i) {
+    NSIndexPath *path=[list indexPathForRow:i];
+    assert([[list indexPathForIdentity:[list identityAtIndexPath:path]] isEqual:path]);
+  }
+  assert((![list indexPathForIdentity:[NSArray arrayWithObjects:@"missing",@"same-row-id",nil]]));
+  assert((![list indexPathForIdentity:[NSArray arrayWithObjects:@"a",@"missing",nil]]));
+  list=[[[AICollectionSnapshot alloc] initWithSections:[NSArray arrayWithObjects:a,a,nil]] autorelease];
+  assert(![list hasCompleteIdentities]);
+}
 @interface Recipient : NSObject { @public NSMutableArray *results; }
 @end
 @implementation Recipient
@@ -120,6 +168,7 @@ static void tableTest(void)
 int main(void)
 {
   NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
+  identityMapTest();
   /* Random permutations/additions/deletions reconstruct exactly from the diff. */
   NSUInteger iteration,i;
   srand(42);

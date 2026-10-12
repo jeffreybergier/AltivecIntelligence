@@ -68,12 +68,17 @@ static NSSet *AIKept(NSArray *old, NSArray *next)
         complete_ = NO;
       if (ids && total <= AICollectionIdentityLimit && [ids count] <= AICollectionIdentityLimit) {
         [item setObject:[[ids copy] autorelease] forKey:@"identifiers"];
+        /* Hash IDs directly. NSArray's hash can be only its count, so using
+         * [sectionID,rowID] as a dictionary key makes all rows collide. */
+        NSMutableDictionary *rowPositions = [NSMutableDictionary dictionary];
         NSUInteger r;
         for (r = 0; sectionID && r < [ids count]; ++r) {
-          id key = [NSArray arrayWithObjects:sectionID,[ids objectAtIndex:r],nil];
-          if ([positions objectForKey:key]) complete_ = NO;
-          [positions setObject:AIPath(s,r) forKey:key];
+          id key = [ids objectAtIndex:r];
+          if ([rowPositions objectForKey:key]) complete_ = NO;
+          [rowPositions setObject:AIPath(s,r) forKey:key];
         }
+        if (sectionID) [positions setObject:[[rowPositions copy] autorelease]
+                                    forKey:sectionID];
       } else [item removeObjectForKey:@"identifiers"];
       [copy addObject:[[item copy] autorelease]];
     }
@@ -102,7 +107,12 @@ static NSSet *AIKept(NSArray *old, NSArray *next)
       [[section objectForKey:@"identifiers"] objectAtIndex:r],nil];
 }
 - (NSIndexPath *)indexPathForIdentity:(id)identity;
-{ return identity ? [positions_ objectForKey:identity] : nil; }
+{
+  if (![identity isKindOfClass:[NSArray class]] || [identity count] != 2)
+    return nil;
+  return [[positions_ objectForKey:[identity objectAtIndex:0]]
+      objectForKey:[identity objectAtIndex:1]];
+}
 - (NSIndexPath *)indexPathForRow:(NSUInteger)row;
 {
   NSUInteger s;
@@ -135,23 +145,31 @@ static NSSet *AIKept(NSArray *old, NSArray *next)
   NSUInteger s, r;
   for (s = 0; s < [old count]; ++s)
     if (![kept containsObject:[oldIDs objectAtIndex:s]]) [deleted addIndex:s];
+  NSUInteger edits = [deleted count];
+  if (edits > 512) return fallback;
   for (s = 0; s < [sections_ count]; ++s) {
     id sectionID = [newIDs objectAtIndex:s];
-    if (![kept containsObject:sectionID]) { [inserted addIndex:s]; continue; }
+    if (![kept containsObject:sectionID]) {
+      if (++edits > 512) return fallback;
+      [inserted addIndex:s]; continue;
+    }
     NSUInteger oldSection = [oldIDs indexOfObject:sectionID];
     NSDictionary *before = [old objectAtIndex:oldSection];
     NSDictionary *after = [sections_ objectAtIndex:s];
     id oldTitle = [before objectForKey:@"title"], newTitle = [after objectForKey:@"title"];
     if (oldTitle != newTitle && ![oldTitle isEqual:newTitle]) return fallback;
     NSArray *a = [before objectForKey:@"identifiers"], *b = [after objectForKey:@"identifiers"];
+    /* Content refresh is handled by the adapter, even with unchanged IDs. */
+    if ([a isEqualToArray:b]) continue;
     NSSet *rows = AIKept(a,b);
+    edits += [a count] + [b count] - 2 * [rows count];
+    /* Reject large reorders before allocating thousands of index paths. */
+    if (edits > 512) return fallback;
     for (r = 0; r < [a count]; ++r)
       if (![rows containsObject:[a objectAtIndex:r]]) [deletedRows addObject:AIPath(oldSection,r)];
     for (r = 0; r < [b count]; ++r)
       if (![rows containsObject:[b objectAtIndex:r]]) [insertedRows addObject:AIPath(s,r)];
   }
-  if ([deletedRows count] + [insertedRows count] + [deleted count] + [inserted count] > 512)
-    return fallback;
   return [NSDictionary dictionaryWithObjectsAndKeys:
       deleted,@"deletedSections",inserted,@"insertedSections",
       deletedRows,@"deletedRows",insertedRows,@"insertedRows",nil];
