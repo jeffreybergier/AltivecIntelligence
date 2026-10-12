@@ -11,12 +11,14 @@ PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
 PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
 PUBLIC_RESOURCE_DIR=$(BUILD_ROOT)/Resources
 
-COCOA_SOURCES=AICoalescedCallback.m AIPagedRows.m \
+COCOA_SOURCES=AILocalNotificationCenter.m AILocalNotificationBackend.m \
+              AICoalescedCallback.m AIPagedRows.m \
               AIViewController.m \
               AICookieCutterWindowController.m \
               AIWebViewController.m \
               AIFontAwesome.m
-COCOA_HEADERS=AICoalescedCallback.h AIPagedRows.h \
+COCOA_HEADERS=AILocalNotificationCenter.h \
+              AICoalescedCallback.h AIPagedRows.h \
               AltivecCocoa.h \
               AIViewController.h \
               AICookieCutterWindowController.h \
@@ -175,6 +177,7 @@ verify-static: $(PUBLIC_LIB)
 $(INTERMEDIATE)/exports-legacy.txt: Makefile-mac
 	mkdir -p $(INTERMEDIATE)
 	printf '%s\n' \
+	  '.objc_class_name_AILocalNotificationCenter' \
 	  '.objc_class_name_AICoalescedCallback' \
 	  '.objc_class_name_AIPagedRows' \
 	  '_AIPagedRowsDidLoadNotification' \
@@ -186,6 +189,8 @@ $(INTERMEDIATE)/exports-legacy.txt: Makefile-mac
 $(INTERMEDIATE)/exports-modern.txt: Makefile-mac
 	mkdir -p $(INTERMEDIATE)
 	printf '%s\n' \
+	  '_OBJC_CLASS_$$_AILocalNotificationCenter' \
+	  '_OBJC_METACLASS_$$_AILocalNotificationCenter' \
 	  '_OBJC_CLASS_$$_AICoalescedCallback' \
 	  '_OBJC_METACLASS_$$_AICoalescedCallback' \
 	  '_OBJC_CLASS_$$_AIPagedRows' \

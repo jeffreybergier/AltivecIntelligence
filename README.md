@@ -331,6 +331,9 @@ Shared SQLite change feeds, read snapshots and bounded row collections are
 documented in [SQLite infrastructure](docs/sqlite.md). Database consumers opt
 in with `<Product>_SQLITE = 1` and explicit CORE/COCOA linkage.
 
+Shared [local notifications](docs/notifications.md) provide one Mac/iOS API
+for background-only alerts, permission requests, badges, and foreground cleanup.
+
 Optional AltivecCocoa knobs:
 - `ALTIVECCOCOA_REQUIRED=1`: enforce required Cocoa artifacts at validate time.
 - `ALTIVECCOCOA_LINKAGE=dynamic|static`: choose `AltivecCocoa.framework` or

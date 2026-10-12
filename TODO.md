@@ -488,6 +488,24 @@ Paths are relative to the sibling repositories named in the first column.
 
 ### Local notifications and notification activation
 
+Implementation update (2026-10-12): `AILocalNotificationCenter` now provides
+one Foundation API for the legacy AppKit/UIKit backends. ENIL (Mac/iOS) and
+Retro-DLP (iOS) use it for immediate background-only alerts, explicit permission
+requests, badges, and automatic foreground cleanup. ENIL's cancel-then-badge-zero
+sequence is retained; Retro-DLP also requests badge permission and supplies a
+nonzero notification badge. See [the notification contract](docs/notifications.md).
+
+- [x] Extract immediate local alerts, authorization reporting, automatic
+  lifecycle handling, and activation forwarding into AltivecCocoa; migrate
+  ENIL and Retro-DLP and remove their private notification implementations.
+- [x] Add an injectable backend and deterministic native lifecycle/permission/
+  activation/teardown regressions, plus Retro-DLP production-delegate coverage.
+- [ ] Verify real notification-tray clearing and permission combinations on the
+  supported iOS versions; recording-backend tests do not establish OS delivery.
+
+The broader checklist below remains open for scheduling, stable IDs,
+replacement, configurable policies, modern backends, and further native evidence.
+
 - [ ] Add `AILocalNotificationCenter`: authorization/capability reporting,
   explicit permission requests, immediate or scheduled requests with stable IDs,
   replacement/cancellation, badge updates, and activation callbacks with small

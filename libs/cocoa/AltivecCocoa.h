@@ -9,6 +9,7 @@
 #import "AIWebViewController.h"
 #import "AIFontAwesome.h"
 
+#import "AILocalNotificationCenter.h"
 #import "AIPagedRows.h"
 #import "AICoalescedCallback.h"
 
