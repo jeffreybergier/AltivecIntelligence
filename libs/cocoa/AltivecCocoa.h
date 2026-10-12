@@ -10,6 +10,9 @@
 #import "AIFontAwesome.h"
 
 #import "AILocalNotificationCenter.h"
+#import "AICollectionController.h"
+#import "AICollectionSnapshot.h"
+#import "AICollectionTableAdapter.h"
 #import "AIPagedRows.h"
 #import "AICoalescedCallback.h"
 

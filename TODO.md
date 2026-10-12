@@ -572,6 +572,15 @@ restrictions of [commit/rollback hooks](https://www.sqlite.org/c3ref/commit_hook
 
 ### Efficient SQLite-backed NSTableView and UITableView data sources
 
+- [x] Share refresh scheduling, cancellation, generation checks, page-observer
+  lifetime, and incremental table application through `AICollectionController`,
+  `AICollectionSnapshot`, and `AICollectionTableAdapter`. Initial consumers:
+  Strappy model preferences on both platforms; Retro-DLP loaders on both and
+  library table adapters on iOS. See [API and limits](libs/cocoa/COLLECTIONS.md).
+- [ ] Extend identity-only projections to Retro-DLP's remaining video/job queries
+  and migrate remaining app lists. Measure legacy-device performance before
+  increasing the bounded diff limits; retain large-list structural fallback.
+
 - [ ] Extract `AIQuerySnapshot` / `AIPagedRows` from Retro-DLP's row collection
   and Strappy's refresh pipeline. Apps provide parameterized count/page/seek
   queries, identity mapping, and section definitions. The library owns reader
@@ -587,7 +596,7 @@ restrictions of [commit/rollback hooks](https://www.sqlite.org/c3ref/commit_hook
   Avoid one SQL query per cell and loading every row as an NSDictionary.
   Release old snapshots promptly to limit WAL retention; keep migrations and
   writes off UI reader connections. Surface read errors instead of empty data.
-- [ ] Add thin AppKit/UIKit adapters that preserve selection and scroll anchors
+- [x] Add thin AppKit/UIKit adapters that preserve selection and scroll anchors
   by identity. Apply safe insert/delete/reload batches where supported and a
   coalesced reload fallback on older systems. Discard results for obsolete
   filters/generations and keep pending edits independent of fetched snapshots.

@@ -11,13 +11,15 @@ PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
 PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
 PUBLIC_RESOURCE_DIR=$(BUILD_ROOT)/Resources
 
-COCOA_SOURCES=AILocalNotificationCenter.m AILocalNotificationBackend.m \
+COCOA_SOURCES=AICollectionController.m AICollectionSnapshot.m AICollectionTableAdapter.m \
+              AILocalNotificationCenter.m AILocalNotificationBackend.m \
               AICoalescedCallback.m AIPagedRows.m \
               AIViewController.m \
               AICookieCutterWindowController.m \
               AIWebViewController.m \
               AIFontAwesome.m
-COCOA_HEADERS=AILocalNotificationCenter.h \
+COCOA_HEADERS=AICollectionController.h AICollectionSnapshot.h AICollectionTableAdapter.h \
+              AILocalNotificationCenter.h \
               AICoalescedCallback.h AIPagedRows.h \
               AltivecCocoa.h \
               AIViewController.h \
@@ -177,6 +179,10 @@ verify-static: $(PUBLIC_LIB)
 $(INTERMEDIATE)/exports-legacy.txt: Makefile-mac
 	mkdir -p $(INTERMEDIATE)
 	printf '%s\n' \
+	  '.objc_class_name_AICollectionController' \
+	  '.objc_class_name_AICollectionSnapshot' \
+	  '.objc_class_name_AICollectionTableAdapter' \
+	  '_AICollectionReadFailedNotification' \
 	  '.objc_class_name_AILocalNotificationCenter' \
 	  '.objc_class_name_AICoalescedCallback' \
 	  '.objc_class_name_AIPagedRows' \
@@ -189,6 +195,13 @@ $(INTERMEDIATE)/exports-legacy.txt: Makefile-mac
 $(INTERMEDIATE)/exports-modern.txt: Makefile-mac
 	mkdir -p $(INTERMEDIATE)
 	printf '%s\n' \
+	  '_OBJC_CLASS_$$_AICollectionController' \
+	  '_OBJC_METACLASS_$$_AICollectionController' \
+	  '_OBJC_CLASS_$$_AICollectionSnapshot' \
+	  '_OBJC_METACLASS_$$_AICollectionSnapshot' \
+	  '_OBJC_CLASS_$$_AICollectionTableAdapter' \
+	  '_OBJC_METACLASS_$$_AICollectionTableAdapter' \
+	  '_AICollectionReadFailedNotification' \
 	  '_OBJC_CLASS_$$_AILocalNotificationCenter' \
 	  '_OBJC_METACLASS_$$_AILocalNotificationCenter' \
 	  '_OBJC_CLASS_$$_AICoalescedCallback' \
