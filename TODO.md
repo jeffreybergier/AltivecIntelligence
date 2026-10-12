@@ -519,7 +519,9 @@ portable revision feed/owned writer/snapshot reader, `AIStoreObserver`, and
 schema-independent `AIPagedRows` are implemented. Strappy and Retro-DLP now
 consume these instead of their private journals/caches; ENIL uses the shared
 bounded debounce. See [the migration contract](docs/sqlite.md) for delivered
-coverage and the remaining full background-paging/table-adapter work. The
+coverage and the remaining shared table-adapter/benchmark work. Retro-DLP now
+builds counts/sections on a worker and renders asynchronous presentation pages
+with identity restoration and obsolete-request cancellation. The
 composite checklist items below remain open where rollout or coverage is partial.
 
 - [ ] Add a small C change-feed contract and `AIStoreObserver` adapter carrying

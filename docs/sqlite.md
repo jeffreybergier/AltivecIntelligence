@@ -84,13 +84,20 @@ mutating one still displayed. Identity/selection and editing policy stay with
 the table's app adapter.
 
 Strappy's model tables use asynchronous page requests; its model and database
-catalog rows both use the shared cache. Retro-DLP uses the shared cache and
-snapshot reader, including indexed 32-row seek pages and offset random access;
-its current compatibility callers still fetch synchronously. App-specific
-indexes, section queries, representative-download policy and selection mapping
-remain in the app. Full Retro-DLP background count/presentation migration and
-shared identity/scroll table adapters are still follow-on work; this rollout
-does not claim completion of every paging/performance item in TODO.md.
+catalog rows both use the shared cache. Retro-DLP now builds list snapshots,
+counts, date sections and identity mappings on a coalescing background loader.
+Its AppKit/UIKit table callbacks request bounded presentation pages through
+`AIPagedRows` and return cached rows or non-actionable placeholders. Indexed
+32-row seek pages and offset random access remain app-specific. Obsolete
+requests are cancelled, old pages invalidated, and selection/scroll anchors
+restored by identity. Explicit domain actions and bulk operations retain their
+synchronous APIs; the UI reader connections are separate from writes.
+
+Retro-DLP's shared UIKit lifecycle adapter and AppKit integration remain in the
+app, along with indexes, section queries and representative-download policy.
+Extracting reusable cross-app identity/scroll adapters and completing the full
+query-plan/WAL/scroll benchmark matrix remain follow-on work. This rollout does
+not claim completion of every paging/performance item in TODO.md.
 
 `AICoalescedCallback` is a main-thread idle/max-wait debounce with a borrowed
 target and explicit invalidation. ENIL uses it for committed SSE UI batches,
