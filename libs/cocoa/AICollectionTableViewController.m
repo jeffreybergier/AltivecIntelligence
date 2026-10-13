@@ -51,8 +51,6 @@
   [[self collectionTableAdapter] applySnapshot:snapshot];
   [snapshot release];
 }
-- (void)viewWillAppear:(BOOL)animated;
-{ [super viewWillAppear:animated]; [self refreshCollection]; }
 - (void)viewDidUnload;
 {
   [collectionTableAdapter_ invalidate];

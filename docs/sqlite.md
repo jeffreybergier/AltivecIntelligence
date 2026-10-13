@@ -74,8 +74,8 @@ keep their existing source implementation (as Strappy does).
 and 32-row `pageAtOffset:error:` implementation. It keeps four pages (128 rows),
 reuses sequential pages, and permits arbitrary index access. A nil/short page
 inconsistent with the count is an error, not empty data. `objectAtIndex:` is the
-synchronous compatibility/bulk API. Table rendering uses
-`requestObjectAtIndex:placeholder:` and observes `AIPagedRowsDidLoadNotification`.
+synchronous compatibility/bulk API. Apps that opt into placeholder rendering use
+`requestObjectAtIndex:placeholder:` and observe `AIPagedRowsDidLoadNotification`.
 Missing pages run on a serialized worker, with four pending requests and at most
 one pending main-thread delivery. `invalidatePages` discards queued requests and
 stale results. Build expensive source counts/sections on a worker before
@@ -84,20 +84,19 @@ mutating one still displayed. Identity/selection and editing policy stay with
 the table's app adapter.
 
 Strappy's model tables use asynchronous page requests; its model and database
-catalog rows both use the shared cache. Retro-DLP now builds list snapshots,
-counts, date sections and identity mappings on a coalescing background loader.
-Its AppKit/UIKit table callbacks request bounded presentation pages through
-`AIPagedRows` and return cached rows or non-actionable placeholders. Indexed
-32-row seek pages and offset random access remain app-specific. Obsolete
-requests are cancelled, old pages invalidated, and selection/scroll anchors
-restored by identity. Explicit domain actions and bulk operations retain their
-synchronous APIs; the UI reader connections are separate from writes.
+catalog rows both use the shared cache. Retro-DLP uses bounded database pages
+to prepare complete presentation snapshots before exposing rows to AppKit/UIKit.
+Its first load is synchronous and retains all display text; cell callbacks do
+not request pages or show placeholders. Appearance does not reload content.
+Actual changes and explicit refreshes prepare replacements on a coalescing
+background loader while old rows remain visible. Obsolete requests are cancelled
+and selection/scroll anchors are restored by identity. Explicit domain actions
+recheck records/files through synchronous APIs; UI readers are separate from writes.
 
-Retro-DLP's shared UIKit lifecycle adapter and AppKit integration remain in the
-app, along with indexes, section queries and representative-download policy.
-Extracting reusable cross-app identity/scroll adapters and completing the full
-query-plan/WAL/scroll benchmark matrix remain follow-on work. This rollout does
-not claim completion of every paging/performance item in TODO.md.
+Retro-DLP's lifecycle, eager presentation policy, indexes, section queries and
+representative-download policy remain app-owned. The shared collection adapters
+support both ready snapshots and opt-in placeholder paging. Full query-plan,
+WAL, memory and scrolling benchmarks remain separate from the native regressions.
 
 `AICoalescedCallback` is a main-thread idle/max-wait debounce with a borrowed
 target and explicit invalidation. ENIL uses it for committed SSE UI batches,

@@ -187,7 +187,8 @@ NSString * const AICollectionReadFailedNotification = @"AICollectionReadFailedNo
     enumerator = [[changes objectForKey:@"insertedRows"] objectEnumerator];
     while ((path = [enumerator nextObject])) [inserts addIndex:[snapshot rowForIndexPath:path]];
   }
-  if (reload || (!native && ([deletes count] || [inserts count]))) [table_ reloadData];
+  reload = reload || (!native && ([deletes count] || [inserts count]));
+  if (reload) [table_ reloadData];
   else if ([deletes count] || [inserts count]) {
     AITableVoid(table_,@selector(beginUpdates));
     AITableIndexes(table_,@selector(removeRowsAtIndexes:withAnimation:),deletes);
@@ -198,7 +199,7 @@ NSString * const AICollectionReadFailedNotification = @"AICollectionReadFailedNo
   /* Reload content AFTER structural changes: coordinates are now unambiguous.
    * This also updates rows whose IDs survived but whose display fields changed. */
   applying_ = NO;
-  [self refreshVisibleRows];
+  if (!reload) [self refreshVisibleRows];
 #if TARGET_OS_IPHONE
   enumerator = [[self selectedPaths] objectEnumerator];
   while ((path = [enumerator nextObject])) [table_ deselectRowAtIndexPath:path animated:NO];

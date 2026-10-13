@@ -12,7 +12,8 @@
 }
 /* Borrowed adapter, created lazily after the table has loaded. */
 - (AICollectionTableAdapter *)collectionTableAdapter;
-/* Apply after changing the data source. Also called on appearance. */
+/* Apply explicitly after preparing or changing the data source.
+ * Appearance never loads or refreshes collection content. */
 - (void)refreshCollection;
 /* Override for paged sources or worker-built metadata. Default uses only the
  * data source's section/row counts and the identity hooks below. */

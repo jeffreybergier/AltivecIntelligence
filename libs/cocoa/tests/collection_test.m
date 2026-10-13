@@ -150,6 +150,7 @@ static void tableTest(void)
   AICollectionTableAdapter *adapter=[[AICollectionTableAdapter alloc] initWithTableView:table];
   source->rows=[NSArray arrayWithObjects:@"a",@"b",@"c",nil];
   [adapter applySnapshot:snapshot(source->rows)]; spin(0.03);
+  assert(table->partial==0); /* Initial reload must not enqueue a second redraw. */
   [table selectRowIndexes:[NSIndexSet indexSetWithIndex:1] byExtendingSelection:NO];
   NSUInteger before=table->full;
   source->rows=[NSArray arrayWithObjects:@"x",@"a",@"b",@"d",nil];

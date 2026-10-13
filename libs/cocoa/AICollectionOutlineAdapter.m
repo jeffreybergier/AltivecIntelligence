@@ -71,7 +71,8 @@ static void AIOutlineChange(id view, SEL selector, NSIndexSet *indexes, id paren
     [clip scrollToPoint:[clip constrainScrollPoint:point]];
     [[outline_ enclosingScrollView] reflectScrolledClipView:clip];
   }
-  [anchor release]; [self refreshVisibleRows];
+  [anchor release];
+  if (!reload && !(structural && !native)) [self refreshVisibleRows];
 }
 - (void)refreshVisibleRows;
 {

@@ -84,7 +84,9 @@ message/sticker views and text views are not native tables.
 `AICollectionTableViewController` is an optional UIKit owner for small forms.
 Override `collectionIdentifiersForSection:` with domain IDs, or use
 `collectionFixedIdentifiersForSection:` only for fixed row roles. Change the
-model before `refreshCollection`. Its adapter is owned and invalidated by the
+model before explicitly calling `refreshCollection`, including initial setup.
+Appearance callbacks never refresh the table. A full reload does not schedule
+a redundant deferred content refresh. Its adapter is owned and invalidated by the
 base controller. Count-only snapshots can omit `rows` and provide `count`;
 there is no placeholder payload allocation. Active form cells are excluded
 from deferred content refresh while a descendant is first responder.
