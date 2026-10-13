@@ -281,7 +281,7 @@ smoke_runtime() {
   [[ -f "$repo_root/libs/cocoa/build-phone/Resources/Fonts/LICENSE-Font-Awesome.txt" ]]
   [[ ! -d "$repo_root/libs/core/build-phone/lib/AltivecCore.framework" ]]
   [[ ! -d "$repo_root/libs/cocoa/build-phone/lib/AltivecCocoa.framework" ]]
-  [[ -z "$(find "$repo_root/apps" -type d -name 'build-*' -print -quit)" ]]
+  assert_no_sample_outputs
 
   local app binary thin arch expected actual
   for app in SingleWindow SingleScreen CURLmac CURLphone; do
@@ -305,19 +305,28 @@ smoke_runtime() {
       die "${arch} application minimum is ${actual}; expected ${expected}"
     rm -f "$thin"
   done
-  make -C "$repo_root/apps/SingleScreen" clean ALTIVEC_ROOT="$repo_root"
-  [[ -z "$(find "$repo_root/apps/SingleScreen" -type d -name 'build-*' -print -quit)" ]]
-
   local arc_plan
   arc_plan="$(mktemp /tmp/altivec-arc-plan.XXXXXX)"
   make -C "$repo_root/apps/CURLphone" -Bn release \
-    ALTIVEC_ROOT="$repo_root" PHONE_SOURCE_FLAGS=-fobjc-arc > "$arc_plan"
+    ALTIVEC_ROOT="$repo_root" GROUP_ui_MEMORY=arc > "$arc_plan"
   grep -Fq -- '-fobjc-arc' "$arc_plan" ||
     die 'CURLphone ARC compile plan lost its ARC flag'
   if grep -Fqi arclite "$arc_plan"; then
     die 'CURLphone ARC build plan unexpectedly references ARCLite'
   fi
   rm -f "$arc_plan"
+  # Recursive dry runs also create guarded build roots.
+  for app in SingleWindow SingleScreen CURLmac CURLphone; do
+    make -C "$repo_root/apps/$app" clean-all ALTIVEC_ROOT="$repo_root"
+  done
+  assert_no_sample_outputs
+}
+
+assert_no_sample_outputs() {
+  local unexpected
+  unexpected="$(find "$repo_root/apps" -type d \
+    \( -name 'build-*' -o -name build -o -name Intermediates \) -print -quit)"
+  [[ -z "$unexpected" ]] || die "sample build directory remains: ${unexpected}"
 }
 
 remove_sdk_inputs() {

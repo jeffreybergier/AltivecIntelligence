@@ -67,6 +67,9 @@ jobs:
       - name: Test SDK archive discovery
         run: python3 -m unittest discover -s test -p 'test_sdk_discovery.py' -v
 
+      - name: Check container build inputs before building toolchains
+        run: python3 -m unittest discover -s test -p 'test_container_inputs.py' -v
+
       - name: Audit repository history for Apple build inputs
         env:
           ALTIVEC_SDK_CATALOG: ${{ github.workspace }}/share/altivec-sdk/catalog.json
