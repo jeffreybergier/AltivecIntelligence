@@ -85,15 +85,16 @@ the table's app adapter.
 
 Strappy's model tables use asynchronous page requests; its model and database
 catalog rows both use the shared cache. Retro-DLP uses bounded database pages
-to prepare complete presentation snapshots before exposing rows to AppKit/UIKit.
-Its first load is synchronous and retains all display text; cell callbacks do
-not request pages or show placeholders. Appearance does not reload content.
+to resolve complete row text synchronously when AppKit/UIKit requests a cell.
+Its first load installs row sources and counts without materializing all display
+text. Both query and display caches remain bounded; cell callbacks do not show
+placeholders or schedule later text updates. Appearance does not reload content.
 Actual changes and explicit refreshes prepare replacements on a coalescing
 background loader while old rows remain visible. Obsolete requests are cancelled
 and selection/scroll anchors are restored by identity. Explicit domain actions
 recheck records/files through synchronous APIs; UI readers are separate from writes.
 
-Retro-DLP's lifecycle, eager presentation policy, indexes, section queries and
+Retro-DLP's lifecycle, synchronous cell-text policy, indexes, section queries and
 representative-download policy remain app-owned. The shared collection adapters
 support both ready snapshots and opt-in placeholder paging. Full query-plan,
 WAL, memory and scrolling benchmarks remain separate from the native regressions.
