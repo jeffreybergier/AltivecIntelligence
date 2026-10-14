@@ -422,6 +422,24 @@ shared Make contract suite (17 passing tests).
 
 ## 7. Image and documentation follow-through
 
+- [ ] Launch Codex from `bin/altivec-chooser` with `--no-daemon`, so it does
+  not use the shared background server even if one is already running. The
+  current local config sets `features.daemon_auto_start = false`; disabling
+  automatic startup alone is not the same as forcing a daemon-free launch.
+- [ ] Launch Codex with `--no-alt-screen` for inline terminal output and preserved
+  scrollback, rather than full-screen alternate-screen mode. The current local
+  config uses `tui.alternate_screen = "never"`. Both launch flags were confirmed
+  in the installed `codex --help`; verify support in the image's Codex version
+  when implementing these chooser defaults.
+- [ ] Review and update the root `AGENTS.md` for use as the default guidance
+  copied into a user's app working directory, including current generated-project
+  workflows, paths, compatibility rules, and validation expectations.
+- [ ] Before launching the selected agent, have `bin/altivec-chooser` copy the
+  image's `/altivec/AGENTS.md` into `process.cwd()/AGENTS.md` only when no entry
+  already exists there. Preserve existing files and symlinks, never overwrite
+  project guidance, and handle missing source/unwritable destinations clearly.
+  Cover absent/existing destinations and no-overwrite behavior in chooser tests.
+
 - [ ] Document tool discovery through existing command help, `altivec-app
   templates`, and `altivec-sdk status`. The generator environment-doctor command
   was removed by request; do not add a replacement container doctor. Website
