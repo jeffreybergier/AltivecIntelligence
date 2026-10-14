@@ -48,11 +48,41 @@ metadata and retains row sources; it never reads row payloads. `offset`/`count`
 can describe a section's range within a shared row source. A wrapper may supply
 `pageSource`/`pageOffset` to identify the underlying AIPagedRows publisher.
 
-In the main-thread result callback, **replace the app's table data-source model
-first**, then call `[adapter applySnapshot:snapshot]`. The adapter does not
-replace the data source or delegate. The snapshot must describe exactly the
-section/row counts that the data source now reports. AppKit concatenates section
-rows; any group/header rows must be represented by the app itself.
+Receive results on the main thread and prepare their diffs **before replacing
+the app's data-source model**:
+
+```objc
+- (void)rowsLoaded:(NSDictionary *)result;
+{
+  if ([loader prepareResult:result snapshotKey:@"collection"
+      previousSnapshot:[adapter snapshot]]) return;
+  // Publish the result's model here, then commit the table update synchronously.
+  [adapter applySnapshot:[result objectForKey:@"collection"]];
+}
+```
+
+`prepareResult:` returns YES while comparison is pending. The controller sends
+only snapshot comparison to its existing serialized worker, then redelivers the
+result to the same main-thread selector. The second call returns NO when the
+prepared diff matches the adapter's exact previous snapshot. If that baseline
+changed, it prepares again. Requests/cancellation/invalidation supersede pending
+comparisons and deliveries using the same generation checks as list loading.
+Use `prepareResult:previousSnapshots:` for a result with multiple snapshot keys,
+as in Retro-DLP's Mac list/queue/outline update.
+
+Initial snapshots with no previous model need no comparison. They publish and
+reload immediately. The displayed model remains intact during later comparison;
+model publication and table application happen together on the main thread,
+without yielding between them. Do not pump the run loop or wait for a worker.
+Selection and scroll state are captured at application time on the main thread.
+The adapter does not replace the data source or delegate; AppKit concatenates
+section rows, so app-owned header rows must be represented in the snapshot.
+
+`applySnapshot:` never computes a diff. It consumes prepared changes only when
+the previous snapshot identity matches; otherwise it safely reloads. Immediate
+form mutations and `applyRowCount:` retain this synchronous fallback. Use the
+preparation API for incremental lists. Diff caches retain an opaque previous
+identity token, not the previous snapshot or its database row sources.
 
 ## Incremental updates and limits
 
@@ -65,7 +95,7 @@ rows; any group/header rows must be represented by the app itself.
   affected cell-row rectangles. Page arrivals never cause a full list reload.
 - Complete snapshots preserve selected IDs and the top visible row's offset.
   Identity is section-scoped; moving an item between sections is a new identity.
-- Diff metadata is capped at 4,096 rows and 4,096 sections. More than 512 edits,
+- Worker diff metadata is capped at 4,096 rows and 4,096 sections. More than 512 edits,
   missing/duplicate IDs, changed section titles, or inconsistent old table counts
   request a full reload. Apps can resolve selected/anchor IDs on their query
   worker for large-list fallback. These are safety bounds, not measured optimal
@@ -122,7 +152,9 @@ documented safe reload fallback.
 
 ## Validation
 
-`tests/collection_test.m` covers randomized diff reconstruction, metadata bounds,
+`tests/collection_test.m` covers worker-only comparison, main-thread receipt/
+publication, superseding requests, baseline changes, exceptions, teardown,
+unprepared/mismatched fallback, randomized diff reconstruction, metadata bounds,
 latest-request delivery, cancellation, teardown, and real NSTableView/NSOutlineView selection and expansion.
 Retro-DLP's `ios_collection_test.h` exercises real UITableView row/section
 batches, selection restoration, page updates, form insertion, and active-field
@@ -154,3 +186,18 @@ The identity map uses nested section/row dictionaries, avoiding composite-array
 hash collisions. See [snapshot benchmarks](tests/BENCHMARKS.md) for measured
 construction/diff costs on the host Mac and x4-vm, remaining main-thread limits,
 and reproduction commands.
+
+Worker-diff validation (2026-10-14): the shared regression harness passed on
+this Mac and x4-vm (Tiger PowerPC), including worker-thread comparison,
+main-thread delivery, superseding requests, baseline replacement, comparison
+errors, teardown, and native table/outline updates. Libraries and harnesses
+cross-built for Mac ppc/i386/x86_64/arm64 and iOS armv7/arm64. ENIL and Strappy
+clean debug/release builds and package checks passed; rCloud's unchanged iOS
+settings callers also built. Retro-DLP's clean app builds, package checks, and
+Mac/iOS UI harness builds passed; its full offline AppKit suite passed on Tiger,
+including selection, queue updates, sidebar outlines, and lifecycle behavior.
+The iOS test phone was unreachable, so the updated
+UIKit regression is cross-build evidence only. The existing WebView cast and
+Retro-DLP vendor warnings remain; the changed code has no new warnings.
+Rebuild the shared library and migrated apps together; older image libraries
+do not provide the preparation API. No image or release publication is implied.

@@ -14,8 +14,12 @@
 /* Does not replace the outline's data source or delegate. */
 - (id)initWithOutlineView:(NSOutlineView *)outline;
 /* Apply after publishing the matching tree model. Preserves expanded roots,
- * selected items and the top visible item when those items survive. */
+ * selected items and the top visible item when those items survive. Uses only
+ * matching worker-prepared changes; unprepared/mismatched snapshots reload.
+ * Prepare before publishing with AICollectionController, as for tables. */
 - (void)applySnapshot:(AICollectionSnapshot *)snapshot;
+/* Current immutable snapshot, borrowed. */
+- (AICollectionSnapshot *)snapshot;
 /* Content-only refresh of currently visible items. */
 - (void)refreshVisibleRows;
 /* Drop borrowed view and snapshot before releasing the outline. */

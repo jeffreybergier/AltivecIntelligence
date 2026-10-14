@@ -47,12 +47,14 @@ simpler one-section metadata wrapper; it is not a paired statistical trial.
 | 4,096 / numeric | 79.254 / 155.027 | 5.015 / 11.587 | 28.935 / 31.496 | 20.088 / 31.712 |
 | 4,096 / strings | 31.917 / 76.426 | 1.424 / 1.847 | 35.923 / 68.478 | 2.845 / 3.116 |
 
-Construction runs on the collection worker. Diffing currently runs on the UI
-thread: 1,000-row small edits are within a 16.7 ms frame interval in these
+In this 2026-10-12 baseline, construction ran on the collection worker and
+diffing ran on the UI thread: 1,000-row small edits are within a 16.7 ms frame interval in these
 samples, but 4,096-row edits can cause a visible hitch on x4-vm even before table
 rendering. Unchanged-list checks are considerably cheaper. This is not evidence
-that every supported machine or workload is always fast. Moving diff computation
-off the UI thread would be a separate improvement for frequent large updates.
+that every supported machine or workload is always fast. As of 2026-10-14, list controllers can prepare comparison on the worker after
+main-thread receipt; table/outline adapters consume matching prepared changes
+without computing a diff. Immediate unprepared updates reload safely. These
+historical CPU timings do not measure the new scheduling or total UI latency.
 
 Before the two diff fast paths were added, this VM's 4,096-row numeric reversal
 took 160.866 ms median (288.167 ms p95). Early fallback reduces that to 20.088 ms

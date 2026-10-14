@@ -18,9 +18,12 @@ extern NSString * const AICollectionReadFailedNotification;
 }
 /* table is UITableView on iOS, NSTableView on Mac (not NSOutlineView). */
 - (id)initWithTableView:(id)table;
-/* Call immediately after replacing the table data source's model. Applies
- * bounded identity deltas, then refreshes visible content and restores state.
- * Initial/ambiguous changes reload; legacy AppKit uses structural reloads. */
+/* Main-thread commit immediately after replacing the data source's model.
+ * Uses only worker-prepared changes matching the exact currently applied
+ * snapshot. Initial/unprepared/mismatched changes reload synchronously; this
+ * method NEVER computes a diff or waits for a worker. Prepare before publishing
+ * the model with AICollectionController's prepareResult:previousSnapshots:.
+ * Restores selection/anchor; legacy AppKit uses structural reloads. */
 - (void)applySnapshot:(AICollectionSnapshot *)snapshot;
 /* Single-section count-only table; identifiers may be nil for safe fallback. */
 - (void)applyRowCount:(NSUInteger)count identifiers:(NSArray *)identifiers;

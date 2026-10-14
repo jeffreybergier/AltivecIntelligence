@@ -105,18 +105,131 @@ static BOOL cancelled;
 }
 @end
 
+/* The first receipt and publication are main-thread; only comparison leaves it. */
+static NSConditionLock *diffGate;
+static NSUInteger workerDiffs;
+@interface WorkerSnapshot : AICollectionSnapshot { @public BOOL pause, fail; }
+@end
+@implementation WorkerSnapshot
+- (NSDictionary *)changesFromSnapshot:(AICollectionSnapshot *)previous;
+{
+  assert(!pthread_main_np()); ++workerDiffs;
+  if (pause) {
+    [diffGate lock]; [diffGate unlockWithCondition:1];
+    [diffGate lockWhenCondition:2]; [diffGate unlock];
+  }
+  if (fail) [NSException raise:@"DiffFailure" format:@"Expected diff failure"];
+  return [super changesFromSnapshot:previous];
+}
+@end
+static WorkerSnapshot *workerSnapshot(NSArray *ids)
+{
+  return [[[WorkerSnapshot alloc] initWithSections:[snapshot(ids) sections]] autorelease];
+}
+@interface DiffBuilder : NSObject <AICollectionBuilder>
+@end
+@implementation DiffBuilder
++ (id)buildList:(NSDictionary *)request;
+{ assert(!pthread_main_np()); return request; }
+@end
+@interface DiffRecipient : NSObject {
+@public AICollectionController *loader; AICollectionSnapshot *current;
+  NSUInteger publications, receipts, errors;
+}
+- (void)receive:(NSDictionary *)result;
+@end
+@implementation DiffRecipient
+- (id)init;
+{
+  self=[super init];
+  if(self) loader=[[AICollectionController alloc] initWithTarget:self
+      selector:@selector(receive:) builder:[DiffBuilder class]];
+  return self;
+}
+- (void)receive:(NSDictionary *)result;
+{
+  assert(pthread_main_np()); ++receipts;
+  if([result objectForKey:@"error"]) { ++errors; return; }
+  if([loader prepareResult:result snapshotKey:@"snapshot" previousSnapshot:current]) return;
+  AICollectionSnapshot *next=[result objectForKey:@"snapshot"];
+  if(current) assert([next preparedChangesFromSnapshot:current]);
+  [current release]; current=[next retain]; ++publications;
+}
+- (void)dealloc;
+{ [loader invalidate]; [loader release]; [current release]; [super dealloc]; }
+@end
+static NSDictionary *diffResult(AICollectionSnapshot *value)
+{ return [NSDictionary dictionaryWithObject:value forKey:@"snapshot"]; }
+static void awaitDiff(AICollectionController *loader)
+{
+  NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:5];
+  while([loader isLoading] && [deadline timeIntervalSinceNow]>0) spin(0.005);
+  assert(![loader isLoading]);
+}
+#if !TARGET_OS_IPHONE
+static void prepare(AICollectionSnapshot *next, AICollectionSnapshot *previous)
+{
+  DiffRecipient *recipient=[[DiffRecipient alloc] init];
+  recipient->current=[previous retain];
+  [recipient receive:diffResult(next)]; awaitDiff(recipient->loader);
+  assert(recipient->publications==1); [recipient release];
+}
+#endif
+static void diffPipelineTest(void)
+{
+  DiffRecipient *recipient=[[DiffRecipient alloc] init];
+  AICollectionSnapshot *initial=snapshot([NSArray arrayWithObject:@"a"]);
+  [recipient receive:diffResult(initial)]; assert(recipient->publications==1);
+  WorkerSnapshot *slow=workerSnapshot([NSArray arrayWithObject:@"old"]);
+  slow->pause=YES; diffGate=[[NSConditionLock alloc] initWithCondition:0];
+  [recipient receive:diffResult(slow)]; spin(0.02);
+  assert([diffGate lockWhenCondition:1 beforeDate:[NSDate dateWithTimeIntervalSinceNow:5]]);
+  assert(recipient->current==initial && recipient->publications==1);
+  /* A later receipt supersedes the in-flight comparison without publishing it. */
+  WorkerSnapshot *latest=workerSnapshot([NSArray arrayWithObjects:@"a",@"new",nil]);
+  [recipient->loader request:diffResult(latest)];
+  [diffGate unlockWithCondition:2]; awaitDiff(recipient->loader);
+  assert(recipient->current==latest && recipient->publications==2);
+  assert([latest preparedChangesFromSnapshot:initial]);
+  assert(![latest preparedChangesFromSnapshot:snapshot([NSArray arrayWithObject:@"a"])]);
+  [diffGate release];
+  /* A baseline changed during comparison must be compared again, never applied. */
+  diffGate=[[NSConditionLock alloc] initWithCondition:0];
+  WorkerSnapshot *rebased=workerSnapshot([NSArray arrayWithObject:@"rebase"]);
+  rebased->pause=YES; [recipient receive:diffResult(rebased)]; spin(0.02);
+  assert([diffGate lockWhenCondition:1 beforeDate:[NSDate dateWithTimeIntervalSinceNow:5]]);
+  AICollectionSnapshot *replacement=snapshot([NSArray arrayWithObject:@"replacement"]);
+  [recipient->current release]; recipient->current=[replacement retain];
+  rebased->pause=NO; [diffGate unlockWithCondition:2]; awaitDiff(recipient->loader);
+  assert([rebased preparedChangesFromSnapshot:replacement]);
+  assert(recipient->current==rebased && recipient->publications==3);
+  [diffGate release];
+  WorkerSnapshot *bad=workerSnapshot([NSArray arrayWithObject:@"error"]); bad->fail=YES;
+  [recipient receive:diffResult(bad)]; awaitDiff(recipient->loader);
+  assert(recipient->errors==1 && recipient->current==rebased);
+  /* Teardown detaches the borrowed target while comparison is still blocked. */
+  diffGate=[[NSConditionLock alloc] initWithCondition:0];
+  WorkerSnapshot *disposed=workerSnapshot([NSArray arrayWithObject:@"disposed"]); disposed->pause=YES;
+  [recipient receive:diffResult(disposed)]; spin(0.02);
+  assert([diffGate lockWhenCondition:1 beforeDate:[NSDate dateWithTimeIntervalSinceNow:5]]);
+  AICollectionController *loader=[recipient->loader retain];
+  [recipient release]; [diffGate unlockWithCondition:2]; awaitDiff(loader);
+  [loader release]; [diffGate release]; diffGate=nil;
+  assert(workerDiffs>=6);
+}
+
 #if !TARGET_OS_IPHONE
 @interface Table : NSTableView { @public NSUInteger full, partial, inserted, removed; }
 @end
 @implementation Table
-- (void)reloadData; { ++full; [super reloadData]; }
+- (void)reloadData; { assert(pthread_main_np()); ++full; [super reloadData]; }
 /* New methods are only exercised on systems advertising them. */
 - (void)reloadDataForRowIndexes:(NSIndexSet *)rows columnIndexes:(NSIndexSet *)columns;
 { ++partial; [super reloadDataForRowIndexes:rows columnIndexes:columns]; }
 - (void)insertRowsAtIndexes:(NSIndexSet *)rows withAnimation:(NSTableViewAnimationOptions)animation;
-{ inserted+=[rows count]; [super insertRowsAtIndexes:rows withAnimation:animation]; }
+{ assert(pthread_main_np()); inserted+=[rows count]; [super insertRowsAtIndexes:rows withAnimation:animation]; }
 - (void)removeRowsAtIndexes:(NSIndexSet *)rows withAnimation:(NSTableViewAnimationOptions)animation;
-{ removed+=[rows count]; [super removeRowsAtIndexes:rows withAnimation:animation]; }
+{ assert(pthread_main_np()); removed+=[rows count]; [super removeRowsAtIndexes:rows withAnimation:animation]; }
 - (BOOL)respondsToSelector:(SEL)selector;
 {
   if(selector==@selector(beginUpdates) || selector==@selector(endUpdates) ||
@@ -148,13 +261,17 @@ static void tableTest(void)
   [table addTableColumn:column]; [column release];
   Source *source=[[Source alloc] init]; [table setDataSource:source];
   AICollectionTableAdapter *adapter=[[AICollectionTableAdapter alloc] initWithTableView:table];
-  source->rows=[NSArray arrayWithObjects:@"a",@"b",@"c",nil];
-  [adapter applySnapshot:snapshot(source->rows)]; spin(0.03);
+  NSArray *nextRows = [NSArray arrayWithObjects:@"a",@"b",@"c",nil];
+  AICollectionSnapshot *next = snapshot(nextRows);
+  prepare(next,[adapter snapshot]); source->rows = nextRows;
+  [adapter applySnapshot:next]; spin(0.03);
   assert(table->partial==0); /* Initial reload must not enqueue a second redraw. */
   [table selectRowIndexes:[NSIndexSet indexSetWithIndex:1] byExtendingSelection:NO];
   NSUInteger before=table->full;
-  source->rows=[NSArray arrayWithObjects:@"x",@"a",@"b",@"d",nil];
-  [adapter applySnapshot:snapshot(source->rows)]; spin(0.03);
+  nextRows = [NSArray arrayWithObjects:@"x",@"a",@"b",@"d",nil];
+  next = snapshot(nextRows);
+  prepare(next,[adapter snapshot]); source->rows = nextRows;
+  [adapter applySnapshot:next]; spin(0.03);
   assert([table numberOfRows]==4 && [table selectedRow]==2);
   if([NSTableView instancesRespondToSelector:@selector(beginUpdates)])
     assert(table->full==before && table->inserted==2 && table->removed==1);
@@ -163,6 +280,17 @@ static void tableTest(void)
   [[NSNotificationCenter defaultCenter] postNotificationName:AIPagedRowsDidLoadNotification
     object:source->rows userInfo:[NSDictionary dictionaryWithObject:[NSNumber numberWithInt:0] forKey:@"offset"]];
   spin(0.03); assert(table->full==before && [table selectedRow]==2);
+  /* An immediate caller or a mismatched baseline reloads without computing. */
+  nextRows = [NSArray arrayWithObject:@"fallback"];
+  WorkerSnapshot *unprepared = workerSnapshot(nextRows);
+  before=table->full; source->rows=nextRows;
+  [adapter applySnapshot:unprepared];
+  assert(table->full==before+1 && [table numberOfRows]==1);
+  WorkerSnapshot *mismatch = workerSnapshot([NSArray arrayWithObject:@"mismatch"]);
+  prepare(mismatch,snapshot([NSArray arrayWithObject:@"unrelated"]));
+  before=table->full; source->rows=[NSArray arrayWithObject:@"mismatch"];
+  [adapter applySnapshot:mismatch];
+  assert(table->full==before+1 && [table numberOfRows]==1);
   [adapter invalidate]; [adapter release];
   [table setDataSource:nil]; [source release]; [table release]; [scroll release];
 }
@@ -194,19 +322,28 @@ static void outlineTest(void)
   [scroll setDocumentView:view];
   OutlineSource *source = [[OutlineSource alloc] init]; [view setDataSource:source];
   AICollectionOutlineAdapter *adapter = [[AICollectionOutlineAdapter alloc] initWithOutlineView:view];
-  source->rows = [NSArray arrayWithObjects:@"a",@"b",@"c",nil];
-  [adapter applySnapshot:snapshot(source->rows)]; [view expandItem:@"items"];
+  NSArray *nextRows = [NSArray arrayWithObjects:@"a",@"b",@"c",nil];
+  AICollectionSnapshot *next = snapshot(nextRows);
+  prepare(next,[adapter snapshot]); source->rows = nextRows;
+  [adapter applySnapshot:next]; [view expandItem:@"items"];
   [view selectRowIndexes:[NSIndexSet indexSetWithIndex:2] byExtendingSelection:NO];
-  source->rows = [NSArray arrayWithObjects:@"x",@"a",@"b",@"d",nil];
-  [adapter applySnapshot:snapshot(source->rows)];
+  nextRows = [NSArray arrayWithObjects:@"x",@"a",@"b",@"d",nil];
+  next = snapshot(nextRows);
+  prepare(next,[adapter snapshot]); source->rows = nextRows;
+  [adapter applySnapshot:next];
   assert([view isItemExpanded:@"items"] && [view numberOfRows] == 5);
   assert([[view itemAtRow:[view selectedRow]] isEqual:@"b"]);
   [view collapseItem:@"items"];
-  source->rows = [NSArray arrayWithObjects:@"b",@"x",nil];
-  [adapter applySnapshot:snapshot(source->rows)];
+  nextRows = [NSArray arrayWithObjects:@"b",@"x",nil];
+  next = snapshot(nextRows);
+  prepare(next,[adapter snapshot]); source->rows = nextRows;
+  [adapter applySnapshot:next];
   assert(![view isItemExpanded:@"items"] && [view numberOfRows] == 1);
   [view expandItem:@"items"]; assert([view numberOfRows] == 3);
-  source->rows = [NSArray array]; [adapter applySnapshot:snapshot(source->rows)];
+  nextRows = [NSArray array];
+  next = snapshot(nextRows);
+  prepare(next,[adapter snapshot]); source->rows = nextRows;
+  [adapter applySnapshot:next];
   assert([view numberOfRows] == 1);
   [adapter invalidate]; [adapter release]; [view setDataSource:nil];
   [source release]; [view release]; [scroll release];
@@ -215,7 +352,7 @@ static void outlineTest(void)
 int main(void)
 {
   NSAutoreleasePool *pool=[[NSAutoreleasePool alloc] init];
-  identityMapTest();
+  identityMapTest(); diffPipelineTest();
   AICollectionSnapshot *form = [[[AICollectionSnapshot alloc] initWithSections:
       [NSArray arrayWithObject:[NSDictionary dictionaryWithObjectsAndKeys:
           @"form",@"id",[NSNumber numberWithInt:2],@"count",

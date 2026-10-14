@@ -598,10 +598,11 @@ read snapshots and observation. Domain transactions and IPC remain app-owned.
   snapshot construction/diff costs on the host Mac and Tiger VM; fix identity-hash
   collisions and add unchanged/large-diff fast paths. See
   [benchmark scope and results](libs/cocoa/tests/BENCHMARKS.md).
-- [ ] Move expensive collection diff computation off the UI thread, preserving
-  stale-result rejection and native table application on the main thread. Tiger
-  VM measurements still show 4,096-row small-edit diffs taking about 29–36 ms
-  median before rendering; retain bounded large-list fallback.
+- [x] Move collection comparison onto the serialized worker after main-thread
+  receipt, then publish the model/apply table changes on the main thread.
+  Prepared diffs require the exact previous snapshot; stale work is discarded.
+  Migrate list callers in ENIL, Strappy, and Retro-DLP. Immediate form mutations
+  reload safely without diff work. Retain bounded large-list fallback.
 - [ ] Measure end-to-end initial display, scrolling, random jumps, sorting/filtering,
   and concurrent writes on legacy devices. Record query plans/counts, memory/cache
   bounds, UI stalls, and retained WAL; establish budgets before changing limits
@@ -713,8 +714,8 @@ remaining module proposals and native evidence are tracked separately.
 Sections 1–6 are implemented in source, with the explicitly recorded native-evidence
 gaps still open. The next sequence is:
 
-1. Address measured UI-thread collection diff costs and establish end-to-end
-   legacy-device budgets while preserving bounded synchronous cell-text behavior.
+1. Establish end-to-end legacy-device budgets for worker-prepared diffs and
+   native table updates while preserving bounded synchronous cell-text behavior.
 2. Close native evidence gaps for collections/settings/logs and notifications;
    extend template icon/launch coverage to iOS 5 and Leopard when available.
 3. Finish section 7: generated-project onboarding, accurate deployment floors,

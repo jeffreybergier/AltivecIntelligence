@@ -15,6 +15,7 @@ static void AIOutlineChange(id view, SEL selector, NSIndexSet *indexes, id paren
 @implementation AICollectionOutlineAdapter
 - (id)initWithOutlineView:(NSOutlineView *)outline;
 { self = [super init]; if (self) outline_ = outline; return self; }
+- (AICollectionSnapshot *)snapshot; { return snapshot_; }
 - (void)applySnapshot:(AICollectionSnapshot *)snapshot;
 {
   NSAssert(pthread_main_np(), @"Outline adapters require main thread");
@@ -32,8 +33,8 @@ static void AIOutlineChange(id view, SEL selector, NSIndexSet *indexes, id paren
   NSRange visible = [outline_ rowsInRect:[outline_ visibleRect]];
   id anchor = visible.length ? [[outline_ itemAtRow:(NSInteger)visible.location] retain] : nil;
   CGFloat delta = anchor ? [outline_ visibleRect].origin.y - [outline_ rectOfRow:(NSInteger)visible.location].origin.y : 0;
-  NSDictionary *changes = [snapshot changesFromSnapshot:snapshot_];
-  BOOL reload = !snapshot_ || [[changes objectForKey:@"reload"] boolValue] ||
+  NSDictionary *changes = [snapshot preparedChangesFromSnapshot:snapshot_];
+  BOOL reload = !changes || !snapshot_ || [[changes objectForKey:@"reload"] boolValue] ||
       [[changes objectForKey:@"deletedSections"] count] || [[changes objectForKey:@"insertedSections"] count];
   BOOL native = [outline_ respondsToSelector:@selector(beginUpdates)] &&
       [outline_ respondsToSelector:@selector(endUpdates)] &&

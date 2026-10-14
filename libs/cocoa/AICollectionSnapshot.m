@@ -1,5 +1,6 @@
 #import "AICollectionSnapshot.h"
 #include <stdlib.h>
+#include <pthread.h>
 static NSIndexPath *AIPath(NSUInteger section, NSUInteger row)
 {
   NSUInteger indexes[2]; indexes[0] = section; indexes[1] = row;
@@ -41,6 +42,8 @@ static NSSet *AIKept(NSArray *old, NSArray *next)
 {
   self = [super init];
   if (self) {
+    identity_ = [[NSObject alloc] init];
+    changesLock_ = [[NSLock alloc] init];
     NSMutableArray *copy = [NSMutableArray array];
     NSMutableDictionary *positions = [NSMutableDictionary dictionary];
     NSMutableSet *sectionIDs = [NSMutableSet set];
@@ -174,6 +177,28 @@ static NSSet *AIKept(NSArray *old, NSArray *next)
       deleted,@"deletedSections",inserted,@"insertedSections",
       deletedRows,@"deletedRows",insertedRows,@"insertedRows",nil];
 }
+- (void)prepareChangesFromSnapshot:(AICollectionSnapshot *)previous;
+{
+  NSAssert(!pthread_main_np(), @"Prepare collection diffs on a worker");
+  NSDictionary *changes = [[self changesFromSnapshot:previous] copy];
+  [changesLock_ lock];
+  [preparedChanges_ release]; preparedChanges_ = changes;
+  [previousIdentity_ release];
+  previousIdentity_ = [(previous ? previous->identity_ : nil) retain];
+  [changesLock_ unlock];
+}
+- (NSDictionary *)preparedChangesFromSnapshot:(AICollectionSnapshot *)previous;
+{
+  if (!previous) return nil;
+  [changesLock_ lock];
+  NSDictionary *changes = previousIdentity_ == previous->identity_ ?
+      [preparedChanges_ retain] : nil;
+  [changesLock_ unlock]; return [changes autorelease];
+}
 - (void)dealloc;
-{ [sections_ release]; [positions_ release]; [super dealloc]; }
+{
+  [sections_ release]; [positions_ release]; [identity_ release];
+  [changesLock_ release]; [previousIdentity_ release]; [preparedChanges_ release];
+  [super dealloc];
+}
 @end

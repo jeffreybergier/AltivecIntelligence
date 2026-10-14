@@ -13,6 +13,9 @@
 /* Borrowed adapter, created lazily after the table has loaded. */
 - (AICollectionTableAdapter *)collectionTableAdapter;
 /* Apply explicitly after preparing or changing the data source.
+ * Immediate mutations use synchronous reload fallback without diff work.
+ * For incremental lists, prepare the future snapshot before publishing the
+ * model, then apply it directly through collectionTableAdapter.
  * Appearance never loads or refreshes collection content. */
 - (void)refreshCollection;
 /* Override for paged sources or worker-built metadata. Default uses only the

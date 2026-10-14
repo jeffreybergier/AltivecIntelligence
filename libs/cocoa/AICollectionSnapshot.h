@@ -6,7 +6,7 @@
  * stay paged and use structural reload fallback; no payloads are enumerated. */
 #define AICollectionIdentityLimit 4096U
 
-/* Immutable table shape, constructed on a worker. Each section dictionary has:
+/* Immutable table shape, constructed before publication. Each section has:
  * id (unique immutable key), rows (NSArray, often AIPagedRows), optional offset
  * and count (range within rows), optional identifiers (one stable unique key per
  * displayed row). Optional pageSource/pageOffset map wrapped row arrays onto
@@ -18,6 +18,10 @@
   NSArray *sections_;
   NSDictionary *positions_;
   BOOL complete_;
+  NSObject *identity_;
+  NSLock *changesLock_;
+  id previousIdentity_;
+  NSDictionary *preparedChanges_;
 }
 /* Copies metadata, retains row sources; never reads row payloads or executes SQL. */
 - (id)initWithSections:(NSArray *)sections;
@@ -41,6 +45,12 @@
  * delete+insert; deletions use old coordinates, insertions use new coordinates.
  * Missing/duplicate IDs or excessive edits request a full reload. */
 - (NSDictionary *)changesFromSnapshot:(AICollectionSnapshot *)previous;
+/* Worker-only preparation. Reads immutable metadata, never row payloads/UI.
+ * Keeps only the previous identity token, not a chain of old row sources. */
+- (void)prepareChangesFromSnapshot:(AICollectionSnapshot *)previous;
+/* Returns a prepared diff only for this exact previous snapshot, otherwise nil.
+ * Thread-safe, bounded lookup; adapters use reload fallback when absent. */
+- (NSDictionary *)preparedChangesFromSnapshot:(AICollectionSnapshot *)previous;
 @end
 
 #endif

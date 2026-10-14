@@ -145,8 +145,8 @@ NSString * const AICollectionReadFailedNotification = @"AICollectionReadFailedNo
   NSIndexPath *top = [visible count] ? [visible objectAtIndex:0] : nil;
   id anchor = [[snapshot_ identityAtIndexPath:top] retain];
   double delta = top ? [self offsetFromPath:top] : 0;
-  NSDictionary *changes = [snapshot changesFromSnapshot:snapshot_];
-  BOOL reload = !snapshot_ || [[changes objectForKey:@"reload"] boolValue] || ![self matchesOldCounts];
+  NSDictionary *changes = [snapshot preparedChangesFromSnapshot:snapshot_];
+  BOOL reload = !changes || !snapshot_ || [[changes objectForKey:@"reload"] boolValue] || ![self matchesOldCounts];
   BOOL structural = [[changes objectForKey:@"deletedSections"] count] ||
       [[changes objectForKey:@"insertedSections"] count] ||
       [[changes objectForKey:@"deletedRows"] count] || [[changes objectForKey:@"insertedRows"] count];
