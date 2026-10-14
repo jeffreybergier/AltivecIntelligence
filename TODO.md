@@ -1,7 +1,13 @@
 # AltivecIntelligence improvement plan
 
-Repository review: 2026-10-10. Unchecked items are proposed work; checked items
-record implemented behavior. The evidence table records the review baseline.
+Initial repository review: 2026-10-10. Reconciled on 2026-10-14 against local
+source and commits through 2026-10-13 in this repository and the four sibling
+apps. Checked items record implemented behavior; unchecked items identify
+remaining work or evidence gaps. Validation notes describe earlier runs, not
+tests rerun during this documentation review.
+
+The evidence table below preserves the original review baseline; its descriptions
+of old release/build behavior are historical. Current status follows by section.
 
 The highest-value change is to turn the working patterns in the newer projects
 into supported build, packaging, and template primitives. Keep Make responsible
@@ -109,10 +115,11 @@ assets, detached HEAD, existing tags, and failed remote checks in CLI tests.
 Implemented as `packages/altivec-release` version 1.0.0, with the source-tree
 entry point in `bin/altivec-release`. The image installs the exact local npm
 package offline. Repository configuration/templates and CI staging calls have
-migrated; sibling YAML configurations are covered by migration fixtures and can
-be converted with `altivec-release migrate` without changing those repositories
-here. Validation: 41 Node tests, workflow/template lint, real-config dry-run,
-and installed-package smoke in the local image with Git absent from PATH. The
+migrated. As of the 2026-10-14 review, ENIL, Retro-Cloud-Sync, Strappy-Cocoa,
+and Retro-DLP also have `.altivec-release.json`; YAML migration fixtures remain
+for older consumers. Original validation: 41 Node tests, workflow/template lint,
+real-config dry-run, and installed-package smoke in the local image with Git
+absent from PATH. The
 full SDK/toolchain image was not rebuilt for this CLI change.
 
 ## 2. Retire altivec-deploy
@@ -424,9 +431,12 @@ shared Make contract suite (17 passing tests).
 - [ ] Keep the current Jekyll/Ruby, Node, Python, and browser tooling usable while
   removing obsolete deployment machinery. Add a small website smoke check so
   Apple-focused refactors do not break the shared development image.
-- [ ] Bundle installed CLI code, templates, and Make fragments from the same
-  release. Check package contents and executable entry points in image smoke
-  tests. Share tiny helpers only when multiple tools actually need them.
+- [x] Install the pinned, checked-in release/generator packages offline alongside
+  templates and Make fragments from the same source checkout. The Containerfile
+  checks package versions, CLI help, and template discovery.
+- [ ] Extend final-image smoke coverage to verify packaged contents and generated
+  project/module compatibility together; existing recipe and package checks do
+  not establish that every published image passed this complete check.
 - [ ] Rewrite README/AGENTS examples around generated projects and root commands.
   Reconcile documented deployment floors with actual compiler flags and device
   evidence: sibling guides mention iOS 4.3 while the container/device template
@@ -438,15 +448,19 @@ shared Make contract suite (17 passing tests).
 
 ## 8. Extract shared application capabilities into AltivecCocoa
 
-Capability review: 2026-10-12. These are new proposals, not implemented APIs.
-The goal is smaller app facades and controllers: apps supply domain queries,
-row presentation, notification content, and job policy; Altivec owns reusable
+Capability review: 2026-10-12; implementation reconciliation: 2026-10-14.
+Notifications, change feeds, paged rows, and collection adapters are implemented.
+Background/service adapters, capability profiles, and a common native test
+support target remain proposals. The goal is smaller app facades and controllers:
+apps supply domain queries, row presentation, notification content, and job policy;
+Altivec owns reusable
 lifecycle, threading, compatibility, and delivery mechanics. Not every app
-needs every module. Names below are provisional.
+needs every module. Names of unimplemented modules remain provisional.
 
 ### Evidence and first consumers
 
-Paths are relative to the sibling repositories named in the first column.
+This table records the original extraction sources, including wrappers since
+removed. Paths are relative to the sibling repositories in the first column.
 
 | Consumer | Reviewed implementation | Extraction opportunity |
 | --- | --- | --- |
@@ -459,158 +473,146 @@ Paths are relative to the sibling repositories named in the first column.
 | Retro-DLP / Retro-Cloud-Sync | `source/gui/iOS/tests/ios_ui_test.m`, `source/gui/macOS/tests/` / `source/tests/iOS/run-ui.py`, `source/tests/macOS/app/AppGUITestRunner.m` | Synthetic native UI fixtures, real controls, run-loop coordination, screenshots, and isolated test apps. |
 | Strappy-Cocoa / ENIL | `source/daemon/tests/async_ui_device_probe.m`, `source/daemon/tests/async_ui_mac_probe.mk` / `source/tests/test_native_transport.py` | Async UI probes and offline transport fixtures that can support shared regression suites. |
 
+### Recent consumer evidence
+
+The following commits were reviewed against current source. Release commits are
+checkout context, not proof of published artifacts or device validation.
+
+| Repository / reviewed HEAD | Relevant commits and current behavior |
+| --- | --- |
+| AltivecIntelligence `972de49` | `7ea3ae1` adds SQLite infrastructure; `48f2ac9` adds notifications; `5c4ae77` / `34967f9` add collections, forms and outlines. `72c3412` fixes identity hashing; `55b8259` makes refresh explicit; `259902e` documents Retro-DLP's bounded synchronous reads. |
+| ENIL `2917e94` | `6e8e3e0`, `36f71d0`, and `0a14655` adopt debounce, notifications, and table adapters. `db60f0b` adds bounded SQLite roster pages and data-change refreshes; settings load before their initial snapshot (`d0368e8`). |
+| Retro-Cloud-Sync `7ac0a14` | `2ee6898` adopts collection forms. `40f5f96` initializes settings early and replaces the log table with `RCLogViewController`, a scrolling text view with a bounded 1 MiB tail; initial loading is synchronous and later refreshes use the shared worker. |
+| Strappy-Cocoa `706adac` | `b58bad2`, `9fb0272`, and `7618a34` adopt shared observers, caches, and collections. `4a0e232` prepares initial sources synchronously and resolves cell text through bounded synchronous reads. `76a89dc` removes loading states around inline control commands; later credential/catalog fixes remain app behavior. |
+| Retro-DLP `8eee459` | `9aa7587`, `70403bb`, and `467d144` adopt SQLite and collection helpers. `5521ecd` prepares sources before presentation; `c360772` restores bounded synchronous cell-text reads, superseding the earlier placeholder rollout. `1059d9e` caches Mac status icons. `2baa42a` / `8eee459` fix release asset provisioning and attribution. |
+
 ### Library boundaries and compatibility contract
 
-- [ ] Extend the existing `libs/cocoa/AltivecCocoa.h` surface incrementally;
-  preserve its view/window/web/font helpers. Add opt-in Foundation services and
-  separate AppKit/UIKit adapters. Keep reusable C mechanisms independently
-  host-testable, with an explicit AltivecCore dependency for SQLite consumers.
-  Do not require database, network, or daemon initialization for basic UI use.
-- [ ] Make database support a separate optional `AltivecCocoaSQLite` library
-  target. Keep UI helpers and generic event/table interfaces in `AltivecCocoa`;
-  put SQLite-backed queries and change observation in `AltivecCocoaSQLite`,
-  which links normally against AltivecCore for SQLite. Database consumers opt
-  into both Cocoa targets and AltivecCore at build time; basic Cocoa consumers
-  require no AltivecCore linkage. Use separate targets rather than weak linking
-  for this dependency, preserving static-library support on legacy iOS. Keep
-  generic interfaces usable with app-provided data sources and expose the
-  optional module through its own header and explicit Make dependency.
-- [ ] Publish a capability matrix covering compile SDK, deployment floor,
-  runtime backend, permission/signing requirements, and fallback behavior.
-  Preserve Tiger MRC and the current iOS 5 library floor; reconcile sibling
-  iOS 4.3 claims before migration. Shared headers must not require blocks, ARC,
-  modern Objective-C syntax, or unavailable framework symbols on legacy slices.
-  Isolate newer implementations behind build guards and runtime dispatch.
-- [ ] Specify ownership and shutdown for every callback/context, observer, and
-  worker. Give subscriptions explicit invalidation, copy borrowed C payloads,
-  deliver Cocoa events on the main thread, and discard stale generations after
-  account changes or teardown. Never block the UI waiting for a worker to stop.
+- [x] Extend `libs/cocoa/AltivecCocoa.h` with opt-in Foundation services and
+  AppKit/UIKit adapters while preserving view/window/web/font helpers. Basic
+  Cocoa use requires no database, network, or daemon initialization.
+- [x] Ship the independent static `AltivecCocoaSQLite` target, umbrella header,
+  packaging, and explicit `<Product>_SQLITE` Make dependency. Consumers specify
+  CORE linkage; Objective-C collection/paging consumers also select COCOA.
+  C-only consumers can omit COCOA. Generic row/table interfaces remain in
+  AltivecCocoa without an AltivecCore dependency; no weak linkage is required.
+- [x] Document implemented backend/floor/fallback matrices in
+  [notifications](docs/notifications.md) and [SQLite](docs/sqlite.md). Shared
+  APIs retain Tiger MRC and iOS 5 armv7 / iOS 7 arm64 floors, with runtime-gated
+  platform behavior and no blocks/ARC requirement.
+- [ ] Reconcile stale iOS 4.3 claims in sibling guides with their current iOS 5
+  build floor. Extend capability documentation when new backends or signing
+  profiles land; do not infer native coverage from cross-builds.
+- [x] Document borrowed targets, copied payloads, explicit invalidation, main-thread
+  delivery, cancellation, and stale-generation suppression for the implemented
+  observers/workers. See the module headers and
+  [collection lifetime contract](libs/cocoa/COLLECTIONS.md).
+- [ ] Apply the same ownership/shutdown contract to future background and service
+  adapters, including nonblocking teardown and expiration races.
 
 ### Local notifications and notification activation
 
-Implementation update (2026-10-12): `AILocalNotificationCenter` now provides
-one Foundation API for the legacy AppKit/UIKit backends. ENIL (Mac/iOS) and
-Retro-DLP (iOS) use it for immediate background-only alerts, explicit permission
-requests, badges, and automatic foreground cleanup. ENIL's cancel-then-badge-zero
-sequence is retained; Retro-DLP also requests badge permission and supplies a
-nonzero notification badge. See [the notification contract](docs/notifications.md).
+Implemented in `48f2ac9`; see [the notification contract](docs/notifications.md).
+ENIL (Mac/iOS) and Retro-DLP (iOS) use immediate background-only alerts.
 
-- [x] Extract immediate local alerts, authorization reporting, automatic
-  lifecycle handling, and activation forwarding into AltivecCocoa; migrate
-  ENIL and Retro-DLP and remove their private notification implementations.
-- [x] Add an injectable backend and deterministic native lifecycle/permission/
-  activation/teardown regressions, plus Retro-DLP production-delegate coverage.
-- [ ] Verify real notification-tray clearing and permission combinations on the
-  supported iOS versions; recording-backend tests do not establish OS delivery.
-
-The broader checklist below remains open for scheduling, stable IDs,
-replacement, configurable policies, modern backends, and further native evidence.
-
-- [ ] Add `AILocalNotificationCenter`: authorization/capability reporting,
-  explicit permission requests, immediate or scheduled requests with stable IDs,
-  replacement/cancellation, badge updates, and activation callbacks with small
-  app-owned routing payloads. Keep foreground presentation, message privacy,
-  account selection, and notification wording as app policy.
-- [ ] Start with ENIL and Retro-DLP's legacy wrappers; evaluate a modern
-  UserNotifications backend separately from `UILocalNotification` and
-  `NSUserNotification` paths. Declare which features each backend supports;
-  report unsupported/unknown separately from denied. On systems without native
-  notifications, offer an explicit in-app/delegate fallback without pretending
-  a system banner was delivered. Verify SDK/link compatibility before promising
-  a modern backend with the currently provisioned phone SDK.
-- [ ] Distinguish local presentation from remote push transport. An SSE event
-  that triggers a local alert is not APNs registration or a guarantee of delivery
-  while suspended. Keep APNs credentials/server delivery and ENIL's transport
-  outside this module. Distinguish scheduled cancellation from delivered-alert
-  removal; do not promise reliable clearing based only on resetting a badge.
-- [ ] Inject a recording backend for offline tests: verify permission denial,
-  duplicate completion, scheduled cancellation, foreground suppression, badge
-  changes, and activation after cold launch. Separately test real OS delivery
-  and authorization on supported native targets.
-
-API reference: [Apple User Notifications](https://developer.apple.com/documentation/usernotifications).
+- [x] Provide `AILocalNotificationCenter` authorization/capability reporting,
+  explicit permission requests, immediate alerts, badges, activation routing,
+  foreground suppression, and automatic app-wide foreground cleanup. Remove
+  the consumers' private notification implementations.
+- [x] Implement legacy AppKit/UIKit backends with distinct unsupported, unknown,
+  denied, suppressed, failed, and submitted outcomes. Document that submission
+  does not prove display and local alerts do not provide APNs or suspended SSE
+  delivery. Preserve ENIL's cancel-then-badge-zero sequence and Retro-DLP's
+  nonzero alert badge; scheduled cancellation is not delivered-alert removal.
+- [x] Add an injectable recording backend and deterministic native permission,
+  lifecycle, cleanup-order, badge, cold-launch activation, error, and invalidation
+  regressions, plus Retro-DLP production-delegate coverage.
+- [ ] Verify actual notification-tray clearing and permission combinations across
+  supported iOS versions. ENIL has a user-observed clearing result, but recording
+  tests and that observation do not establish the full OS/permission matrix.
+- [ ] Add scheduling, stable request IDs, replacement/per-notification removal,
+  and configurable presentation policies, with cancellation and duplicate/racing
+  completion regressions for those new APIs. Keep wording/privacy/routing in apps.
+- [ ] Evaluate a modern UserNotifications backend against the provisioned SDKs;
+  add an explicit app/delegate presentation fallback where native alerts are
+  unsupported. The current backend reports Unsupported without fake success.
 
 ### Committed SQLite changes from C to Objective-C
 
-Implementation update (2026-10-12): the optional `AltivecCocoaSQLite` target,
-portable revision feed/owned writer/snapshot reader, `AIStoreObserver`, and
-schema-independent `AIPagedRows` are implemented. Strappy and Retro-DLP now
-consume these instead of their private journals/caches; ENIL uses the shared
-bounded debounce. See [the migration contract](docs/sqlite.md) for delivered
-coverage and the remaining shared table-adapter/benchmark work. Retro-DLP now
-builds counts/sections on a worker and renders asynchronous presentation pages
-with identity restoration and obsolete-request cancellation. The
-composite checklist items below remain open where rollout or coverage is partial.
+Implemented in `7ea3ae1`; see [the migration contract](docs/sqlite.md).
+Strappy uses the shared revision journal and observer; Retro-DLP uses shared
+read snapshots and observation. Domain transactions and IPC remain app-owned.
 
-- [ ] Add a small C change-feed contract and `AIStoreObserver` adapter carrying
-  store identity, topic/table, stable record IDs, generation, and a full-refresh
-  flag. Support both explicit application mutation notifications and an optional
-  SQLite hook adapter; apps should only map their domain changes into this feed.
-- [ ] Publish only after a successful transaction completes. Buffer/coalesce
-  candidate changes; discard rolled-back changes, including savepoint rollback.
-  Do not run SQL or Objective-C observers inside SQLite hooks, and do not treat
-  a commit-hook invocation as proof that COMMIT succeeded. Make connection/hook
-  ownership explicit so installation cannot silently replace another consumer.
-- [ ] Treat update hooks as incomplete invalidation hints, not a universal row
-  audit log: account for WITHOUT ROWID tables, REPLACE/delete behavior, and
-  writes from other connections/processes. Use explicit post-commit reporting
-  where exact coverage is required; fall back to query invalidation otherwise.
-- [ ] Extract Strappy's bounded revision/cursor pattern for daemon consumers.
-  Use an IPC adapter for wakeups and authoritative rereads of committed data;
-  reconnect, missing scope, or journal overflow must cause full resync. Each
-  observer advances its own cursor only after applying its result. Coalesce
-  bursts without losing changes that arrive during a read; SQLite hooks alone
-  cannot implement cross-process delivery.
-- [ ] Port regression scenarios for rollback, savepoints, concurrent readers,
-  two independent windows, daemon restart, overflow, observer disposal, and
-  queued callbacks after account closure. Assert no notification exposes an
-  uncommitted row and no subscriber depends on another subscriber's cursor.
-
-SQLite documents the connection-local scope and omissions of
-[update hooks](https://www.sqlite.org/c3ref/update_hook.html), and the reentrancy
-restrictions of [commit/rollback hooks](https://www.sqlite.org/c3ref/commit_hook.html).
+- [x] Provide the portable `ai_store_feed` bounded revision journal with store
+  identity, topics, numeric/copied text keys, generation, and full-resync hints.
+  `AIStoreObserver` coalesces topic/scope invalidations on the main thread; exact
+  record details remain in the C feed/authoritative reread.
+- [x] Provide `ai_store_writer` with explicit connection/hook ownership and
+  transaction/savepoint operations. Publish only after successful COMMIT;
+  rollback, failed commits, and rolled-back savepoint candidates do not publish.
+  Existing writers can explicitly publish after their own successful commit.
+- [x] Treat optional update hooks as incomplete dirty hints, outside observer/SQL
+  execution. Document WITHOUT ROWID, REPLACE/delete omissions and connection-local
+  scope; use explicit domain reporting for exact coverage.
+- [x] Extract Strappy's bounded cursor mechanism: independent consumer cursors,
+  capture-before-read/acknowledge-after-apply ordering, and full resync for reset,
+  overflow, or missing coverage. Strappy retains IPC wakeups/reconnect handling;
+  SQLite hooks are not a cross-process transport.
+- [x] Add portable regressions for rollback/savepoints, rejected commits,
+  snapshot isolation, independent cursors, reset/overflow, racing publication,
+  text identities, statement reuse, and WAL release. Native Foundation coverage
+  checks observer invalidation, stale generations, and bounded debounce;
+  ENIL consumes `AICoalescedCallback` for committed UI events.
+- [ ] Complete app-level native evidence for two independent windows across daemon
+  restart/reconnect and account teardown with callbacks in flight. Portable
+  cursor/reset tests do not by themselves establish those full UI/IPC scenarios.
 
 ### Efficient SQLite-backed NSTableView and UITableView data sources
 
+- [x] Extract the C `ai_query_snapshot` reader and schema-independent `AIPagedRows`.
+  Readers pin committed data, reuse up to eight statements, support interruption,
+  and release WAL snapshots on close. Apps own SQL, ordering/indexes, sections,
+  identity mapping, and snapshot replacement; this is not an ORM.
+- [x] Bound `AIPagedRows` to four 32-row pages, with random access, synchronous
+  `objectAtIndex:`, and optional asynchronous placeholder requests. Async requests
+  and deliveries are bounded, cancellable, and generation-checked. Invalid/short
+  pages surface errors. Placeholder paging is an opt-in library capability.
 - [x] Share refresh scheduling, cancellation, generation checks, page-observer
-  lifetime, and incremental table application through `AICollectionController`,
-  `AICollectionSnapshot`, and `AICollectionTableAdapter`. All shipping native
-  tables across the four apps now use adapters, including forms and the Mac
-  playlist outline. See [inventory and limits](libs/cocoa/COLLECTIONS.md).
-- [x] Extend identity-only projections to Retro-DLP video/job queries and
-  Strappy conversations/database catalogs; migrate remaining native tables.
-- [ ] Continue moving existing synchronous app queries/page reads onto workers.
-  Measure legacy-device performance before increasing bounded diff limits;
-  retain large-list structural fallback.
-
-- [ ] Extract `AIQuerySnapshot` / `AIPagedRows` from Retro-DLP's row collection
-  and Strappy's refresh pipeline. Apps provide parameterized count/page/seek
-  queries, identity mapping, and section definitions. The library owns reader
-  lifetime, statement reuse, bounded caches, cancellation, and generation checks;
-  it should not become an ORM or assume a particular schema.
-- [ ] Keep count, sections, and pages consistent within a read snapshot. Use
-  stable sort keys with a unique tie-breaker, matching indexes, and seek paging
-  for sequential scrolling. Support arbitrary table row access via measured
-  offset queries or sparse anchors, rather than assuming scrolling is always
-  sequential. Test NULLs, duplicate sort values, descending order, and deletes.
-- [ ] Fetch missing pages and expensive counts off the main thread; table
-  callbacks return cached rows/placeholders and schedule bounded prefetch.
-  Avoid one SQL query per cell and loading every row as an NSDictionary.
-  Release old snapshots promptly to limit WAL retention; keep migrations and
-  writes off UI reader connections. Surface read errors instead of empty data.
-- [x] Add thin AppKit/UIKit adapters that preserve selection and scroll anchors
-  by identity. Apply safe insert/delete/reload batches where supported and a
-  coalesced reload fallback on older systems. Discard results for obsolete
-  filters/generations and keep pending edits independent of fetched snapshots.
-- [ ] Add deterministic large fixtures and benchmarks for initial display,
-  sequential scroll, random jumps, sorting/filtering, and concurrent writes.
-  Record query counts/plans, cache bounds, UI stalls, and retained WAL size;
-  establish budgets on a legacy device before declaring a performance win.
-  Keep app-specific indexes and query-plan assertions in the consuming app.
-
-See SQLite's [scrolling-window queries](https://www.sqlite.org/rowvalue.html#scrolling_window_queries)
-for the cost of deep OFFSET scans and the seek-paging alternative; select SQL
-syntax supported by the actual bundled SQLite version.
+  lifetime, and table application through `AICollectionController`,
+  `AICollectionSnapshot`, and AppKit/UIKit table/outline adapters. All shipping
+  native tables across the four apps use adapters, including forms and the Mac
+  playlist outline. rCloud's log is now a text view, not a table.
+- [x] Add identity-only projections for Retro-DLP video/job queries, Strappy
+  conversations/database catalogs, and ENIL rosters. Preserve selection and
+  scroll anchors by identity, with incremental batches or safe reload fallback.
+  Keep pending edits independent of snapshots and refresh forms explicitly.
+- [x] Prepare initial consumer row sources before presentation and preserve them
+  across navigation. Retro-DLP, Strappy, and ENIL resolve complete cell text
+  synchronously through bounded pages; they do not require loading placeholders
+  or later text patches. Data changes/explicit refreshes can build replacement
+  sources on workers while current content stays visible. Appearance alone does
+  not request a list reload. Retro-DLP retains its 128-row query cache and
+  separate four-page display cache; action-time identity/file checks stay in apps.
+- [x] Add 100,000-row portable/Foundation fixtures for query counts, random access,
+  cache bounds, cancellation, snapshot isolation, and WAL release. Measure shared
+  snapshot construction/diff costs on the host Mac and Tiger VM; fix identity-hash
+  collisions and add unchanged/large-diff fast paths. See
+  [benchmark scope and results](libs/cocoa/tests/BENCHMARKS.md).
+- [ ] Move expensive collection diff computation off the UI thread, preserving
+  stale-result rejection and native table application on the main thread. Tiger
+  VM measurements still show 4,096-row small-edit diffs taking about 29–36 ms
+  median before rendering; retain bounded large-list fallback.
+- [ ] Measure end-to-end initial display, scrolling, random jumps, sorting/filtering,
+  and concurrent writes on legacy devices. Record query plans/counts, memory/cache
+  bounds, UI stalls, and retained WAL; establish budgets before changing limits
+  or the consumers' deliberate synchronous cell-text policy. Existing microbenchmarks
+  exclude SQL and native table rendering.
+- [ ] Audit consumer query coverage for NULLs, duplicate sort values, descending
+  order, deletes, and stable tie-breakers; retain app-specific index/query-plan
+  assertions. The generic cache/reader tests do not prove every domain query.
+- [ ] Close recorded native gaps: rerun rCloud's isolated UIKit suite after the
+  runner timeout and establish coverage for its new text-log/settings behavior;
+  distinguish unavailable optional GNUstep coverage from native Apple results.
 
 ### Background work, progress, and service lifecycle
 
@@ -687,35 +689,43 @@ Reference: [Apple's finite background execution guidance](https://developer.appl
   Retro-DLP's thumbnail consumers: cancellation on row reuse, deduplicated
   requests, byte limits, atomic cache writes, and main-thread publication.
   Extract only after a second consumer validates the same contract.
-- [ ] Deliver in small slices: notification service plus recording tests first;
-  committed-change feed next; paged rows/table adapters next; background/service
-  adapters and capability profiles afterward. Build offline test support with
-  each slice rather than postponing it to a final infrastructure project.
-- [ ] For each module, migrate one pilot app, then a second independent consumer,
-  recording removed wrappers/lines and the remaining app configuration. Audit
-  licenses before moving source. Keep compatibility wrappers until migration is
-  verified; update public headers, library packaging, docs, and optional
-  `cocoa-shared`/`cocoa-daemon` examples together.
+- [x] Deliver notifications with recording tests, the committed-change feed, and
+  paged rows/table adapters as separate slices with consumer migrations.
+- [ ] Continue with background/service adapters and capability profiles, adding
+  offline regression support with each slice.
+- [x] Migrate notifications to ENIL/Retro-DLP, SQLite infrastructure to
+  Strappy/Retro-DLP, and collection adapters to all four apps. Public headers,
+  library packaging, and module contracts accompany the implemented slices.
+- [ ] For future modules, validate a pilot and second independent consumer,
+  audit source licenses, and record removed wrappers/remaining app configuration.
+  Add optional shared-module examples to `cocoa-shared`/`cocoa-daemon`; the basic
+  generated templates do not yet teach all of the new capabilities.
 
 **Done when:** at least two consumers use each promoted module without copied
 threading/compatibility machinery; relevant portable, cross-build, and offline
 native regressions pass; capability fallbacks are documented and exercised;
 and individual apps visibly delete infrastructure code while retaining their
-own business behavior. No sibling migrations or runtime changes are part of
-this planning-only update.
+own business behavior. Completed migrations above satisfy parts of this gate;
+remaining module proposals and native evidence are tracked separately.
 
-## Suggested delivery order
+## Suggested delivery order for remaining work
 
-1. Release CLI/help and migration fixtures; separate preparation from Git and
-   publication. This removes the immediate credential friction.
-2. Root-output fixes in the existing common Makefiles, including IPA packaging;
-   validate ENIL and Retro-DLP workarounds can be retired in follow-up app changes.
-3. Remove altivec-deploy and update docs/image dependencies.
-4. Extract product/package modules and generate basic Mac/iOS/shared-core apps.
-5. Add daemon, rootful/rootless, CLI/library templates and artifact validators.
-6. Expand native test evidence, migrate sibling projects individually, then
-   consolidate remaining sample/library/toolchain output paths.
+Sections 1–6 are implemented in source, with the explicitly recorded native-evidence
+gaps still open. The next sequence is:
 
-For each step, keep existing consumers working through documented compatibility
-entry points or a coordinated migration. This TODO changes only the plan; sibling
-repositories, releases, device installations, and the container remain unchanged.
+1. Address measured UI-thread collection diff costs and establish end-to-end
+   legacy-device budgets while preserving bounded synchronous cell-text behavior.
+2. Close native evidence gaps for collections/settings/logs and notifications;
+   extend template icon/launch coverage to iOS 5 and Leopard when available.
+3. Finish section 7: generated-project onboarding, accurate deployment floors,
+   tool discovery, final-image integration checks, and a website smoke test.
+4. Extract background-work coordination with ENIL and Retro-DLP pilots, then
+   service adapters and capability profiles. Add tests with each module.
+5. Extend generated examples and consolidate remaining library/toolchain outputs
+   only through an explicit consumer migration; prebuilt library paths remain
+   an existing contract.
+
+Keep existing consumers working through documented compatibility entry points
+or coordinated migrations. This reconciliation changes documentation only;
+validation, device installation, image rebuilding, and publication are separate
+work and are not implied by the commit review.

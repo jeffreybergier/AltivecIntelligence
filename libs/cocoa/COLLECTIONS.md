@@ -17,9 +17,15 @@ query is debounced. Builders can check `[[AICollectionController
 currentController] isCancelled]` or connect that to their database progress
 handler. Cancellation is cooperative; it never joins a worker on the UI thread.
 
-The result selector runs on the main thread. A thrown builder exception becomes
-a result dictionary containing an NSError under `error`; domain-specific
-builders should return their own errors. Neither a controller nor a table
+`buildResultForRequest:` runs the same builder synchronously on the calling
+thread, for consumers that prepare the initial source before presentation.
+Later `request:` calls use the worker. Builders used through both entry points
+must support both paths. The synchronous entry point returns directly; it does
+not invoke the result selector or catch builder exceptions.
+
+The result selector for `request:` runs on the main thread. A thrown worker
+builder exception becomes a result dictionary containing an NSError under
+`error`; domain-specific builders should return their own errors. Neither a controller nor a table
 adapter retains its target/table. Call `invalidate` before destroying that
 owner. The adapter removes its page observers and delayed work. The app must
 invalidate its old paged sources and release its own snapshot references.
@@ -79,7 +85,7 @@ message/sticker views and text views are not native tables.
 | ENIL | Chats/friends/account, preferences, login client and QR/PIN/recovery tables | Chats/friends/account, About key/value tables |
 | Strappy | Conversations, preferences, accounts/provider picker, providers/manual models/model editor, model and database whitelists, database study, session options, system prompts | Conversations, model/database/database-study preferences, accounts/provider chooser, provider/model editor |
 | Retro-DLP | Library list controller hierarchy and settings | Library/downloads, queue, playlist outline sidebar |
-| rCloud | Status, Mail, Sync, choices and log | No native table or outline screens |
+| rCloud | Status, Mail, Sync and choices | No native table or outline screens |
 
 `AICollectionTableViewController` is an optional UIKit owner for small forms.
 Override `collectionIdentifiersForSection:` with domain IDs, or use
@@ -97,15 +103,22 @@ and the visible anchor. Supported runtimes apply child insertions/removals;
 root changes and Tiger structural updates reload safely. Content-only page
 updates refresh visible items without rebuilding the tree.
 
+Consumer inventory reviewed on 2026-10-14 against the 2026-10-13 follow-up
+commits. Initial sources are prepared before presentation; data changes and
+explicit refreshes request replacements while existing content stays visible.
 Strappy conversations, database catalogs and model preferences use the shared
 refresh scheduler. Their readers project bounded IDs from the same SQLite
 snapshot, without materializing display rows. Retro-DLP supplies identity-only
 projections for playlist, entry and job queries, including grouped download
-wrappers. rCloud's bounded log read runs on the shared worker. Existing
-app-specific domain queries, rendering and command handling remain in apps;
-this rollout does not make every pre-existing synchronous query asynchronous.
-Duplicate identities (including repeated log lines), large lists and other
-ambiguous snapshots retain the documented safe reload fallback.
+wrappers. ENIL's chats/contacts use bounded SQLite roster pages. Retro-DLP,
+Strappy and ENIL resolve cell text synchronously from bounded pages; the shared
+placeholder API remains optional. rCloud's log is now `RCLogViewController`, a
+scrolling text view, rather than a collection table. It reads a bounded 1 MiB
+tail synchronously on initial load and uses the shared worker for subsequent
+refreshes, preserving text selection and scroll position when possible.
+App-specific domain queries, rendering and command handling remain in apps.
+Duplicate identities, large lists and other ambiguous snapshots retain the
+documented safe reload fallback.
 
 ## Validation
 
@@ -116,6 +129,10 @@ batches, selection restoration, page updates, form insertion, and active-field
 preservation in its isolated offline app.
 Strappy's model-list C harness verifies bounded ID projection order and that
 collecting IDs does not fetch display payloads.
+
+The following records the earlier rollout validation; the 2026-10-14 source/
+commit review did not rerun native suites or establish coverage for every later
+consumer fix.
 
 Rollout validation on 2026-10-12: shared libraries built for Mac
 ppc/i386/x86_64/arm64 and iPhone armv7/arm64; collection tests passed on the

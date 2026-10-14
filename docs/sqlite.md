@@ -83,11 +83,17 @@ publishing the source. Filters should produce replacement snapshots rather than
 mutating one still displayed. Identity/selection and editing policy stay with
 the table's app adapter.
 
-Strappy's model tables use asynchronous page requests; its model and database
-catalog rows both use the shared cache. Retro-DLP uses bounded database pages
-to resolve complete row text synchronously when AppKit/UIKit requests a cell.
-Its first load installs row sources and counts without materializing all display
-text. Both query and display caches remain bounded; cell callbacks do not show
+Consumer loading policy (reviewed 2026-10-14): Strappy's model and database
+catalog rows use the shared cache and synchronous cell-text reads; `4a0e232`
+replaced model-table placeholder requests and prepares initial sources before
+presentation. ENIL's `db60f0b` adds `ENILRosterRows`, backed by bounded SQLite
+pages for chats/contacts, with data-change refreshes. The library's asynchronous
+placeholder API remains available to consumers that explicitly choose it.
+
+Retro-DLP uses bounded database pages to resolve complete row text synchronously
+when AppKit/UIKit requests a cell (`c360772`, superseding the earlier async-page
+rollout). Its first load installs row sources and counts without materializing
+all display text. Both query and display caches remain bounded; cell callbacks do not show
 placeholders or schedule later text updates. Appearance does not reload content.
 Actual changes and explicit refreshes prepare replacements on a coalescing
 background loader while old rows remain visible. Obsolete requests are cancelled
