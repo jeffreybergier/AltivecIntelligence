@@ -501,6 +501,62 @@ removed. Paths are relative to the sibling repositories in the first column.
 | Retro-DLP / Retro-Cloud-Sync | `source/gui/iOS/tests/ios_ui_test.m`, `source/gui/macOS/tests/` / `source/tests/iOS/run-ui.py`, `source/tests/macOS/app/AppGUITestRunner.m` | Synthetic native UI fixtures, real controls, run-loop coordination, screenshots, and isolated test apps. |
 | Strappy-Cocoa / ENIL | `source/daemon/tests/async_ui_device_probe.m`, `source/daemon/tests/async_ui_mac_probe.mk` / `source/tests/test_native_transport.py` | Async UI probes and offline transport fixtures that can support shared regression suites. |
 
+### Abstraction priority by existing repetition — 2026-10-14 audit
+
+Reviewed ENIL `ab049f4`, Retro-DLP `2f80433`, Strappy-Cocoa `8d1ee2d`, and
+Retro-Cloud-Sync `7ac0a14`. This ranking supersedes the earlier feature-led
+extraction order. It ranks likely removable repeated infrastructure, not feature
+importance. Counts below are physical source lines, including whitespace and
+comments, in the inspected implementation regions; they are **not** promised
+net deletions. Formatting differs substantially across the apps. No extraction
+prototype or native tests were run for this source audit. Positions 2–3 are
+provisional: notification migration has the clearer, lower-cost deletion case.
+
+| Rank | Candidate | Current evidence | Extraction decision |
+| --- | --- | --- | --- |
+| 1 | Keychain backend | ENIL: 279 lines in `source/shared/XPFoundation.m` (275–553); Strappy: 950 in `source/daemon/XPKeychain.m`; rCloud: 213 in `source/shared/RCICloudCredentials.c` plus 65 in `source/iOS-daemon/RCIOSCredentials.c`. Total inspected backend scope: 1,507 lines across three apps. No direct Keychain backend found in Retro-DLP's first-party source. | Strongest new-module candidate. ENIL/Strappy repeat internet-password lookup/delete/save, URL attributes and Tiger/iOS branches. Strappy/rCloud repeat generic-password read/update/add/delete and native memory/error handling. Share backend mechanics, not credential schemas or login policy. |
+| 2 | Narrow Mac service/launchd helpers | Strappy's `source/macOS/StrappyServiceController.m`: 195 lines; rCloud's `source/macOS-app/RCServiceController.m`: 426; Strappy's launchd compatibility helpers: 17. Total scope: 638 lines. | Medium-confidence opportunity: task execution, launchd compatibility, directory/resource staging, plist writing and lifecycle mechanics repeat. Start with common helpers. The full 638 lines are not duplicates; lock-based stop acknowledgement, process polling, resource lists and configuration differ. This does not justify a broad shared IPC client. |
+| 3 | Finish notification adoption in Strappy | `XPUserNotificationCenter` remains in Strappy's `source/macOS/XPAppKit.m` (629–687, 59 lines) and `source/iOS/XPUIKit.m` (653–755, 103 lines): 162 lines, plus declarations/helpers. ENIL and Retro-DLP already use `AILocalNotificationCenter`. | High-confidence deletion opportunity using an existing module, with little new shared code expected. Preserve app-owned text and foreground policy. Strappy explicitly records a system-app notification-display limitation; migration must not claim to fix that OS behavior. Prioritize this over adding scheduling or modern backends. |
+| 4 | Finite UIKit background-task lifetime | ENIL `source/iOS/AppDelegate.m` (198–232): 35 lines; Retro-DLP `source/gui/iOS/RDLPAppDelegate.m` (84–111): 28; Strappy `source/iOS/AppDelegate.m` (337–412): 76. Total core scope: 139 lines. rCloud runs a separate daemon. | Small opportunity, not the next major framework. Share only task ownership, begin/end and expiration races if a pilot yields worthwhile net deletion. SSE residency, media suspension/checkpoints, daemon work, activity indicators and operation policy remain app-owned. |
+| 5 | Small native-test helpers | Repeated waits/assertions/results in Strappy's `async_ui_device_probe.m` and `session_options_device_probe.m`, Retro-DLP's Mac/UIKit UI tests, ENIL's `settings_ui_test.m`, and rCloud's `AppGUITestRunner.m`/`RCIOSUITests.m`. | Reuse bounded waits, screenshot/report helpers only after measuring a pilot. Most large test files are distinct scenarios; rCloud's substantial Accessibility traversal is not duplicated by the controller-based tests. A few-line screenshot function alone does not justify a large test framework. Keep any shared support outside release products. |
+
+Source evidence for the leading candidates:
+[ENIL platform helpers](../ENIL/source/shared/XPFoundation.m),
+[Strappy Keychain backend](../Strappy-Cocoa/source/daemon/XPKeychain.m),
+[rCloud Mac credentials](../Retro-Cloud-Sync/source/shared/RCICloudCredentials.c),
+[rCloud iOS credentials](../Retro-Cloud-Sync/source/iOS-daemon/RCIOSCredentials.c),
+[Strappy service](../Strappy-Cocoa/source/macOS/StrappyServiceController.m),
+[rCloud service](../Retro-Cloud-Sync/source/macOS-app/RCServiceController.m).
+
+Do not promote these remaining proposals on duplication grounds yet:
+
+- **General progress/operation adapter or service client:** Strappy's
+  `StrappyAsync` has command, query and credential queues; the other apps have
+  different worker/transport contracts. Existing collection/coalescing helpers
+  already cover some delivery mechanics. Identify matching removable code in
+  two consumers before designing another API.
+- **Asset/thumbnail cache:** ENIL's 60-line `enil_asset_cache.c` repairs
+  sticker/sticon database paths; rCloud's 156-line `RCContactPhotoCache.m` pins
+  contact photos to resource versions. Retro-DLP's inspected native caches
+  render status/control icons; stored thumbnail URLs are not evidence of a
+  second equivalent asynchronous image loader. These are different contracts.
+- **Notification scheduling/modern backend:** primarily new functionality,
+  rather than deletion of existing repeated implementations.
+- **Capability/signing profiles:** build-system work belongs in the existing
+  Make/signing modules, not a new AltivecCocoa signer.
+- **Query audits, performance measurements, device coverage, templates and
+  chooser/docs work:** useful independent tasks, not reasons to add abstractions.
+
+- [ ] For each proposed extraction, record app implementation lines removed,
+  shared implementation lines added, and remaining adapter/configuration lines
+  using comparable formatting; report tests separately. Require substantial
+  repeated mechanics removed across at least two real consumers. Moving unique
+  app code into a library, or adding an unused general framework, does not pass.
+- [ ] Start with a Keychain pilot in ENIL and Strappy, then evaluate rCloud's
+  access-policy requirements. Compare the resulting net deletion before
+  committing to the remaining proposed modules. Implement no abstraction solely
+  because it appears on this roadmap.
+
 ### Recent consumer evidence
 
 The following commits were reviewed against current source. Release commits are
@@ -538,10 +594,39 @@ checkout context, not proof of published artifacts or device validation.
 - [ ] Apply the same ownership/shutdown contract to future background and service
   adapters, including nonblocking teardown and expiration races.
 
+### Shared Keychain storage — first extraction candidate
+
+Keychain was previously listed only as a follow-on; the repetition audit above
+promotes it. ENIL's 98-line `ENILKeychain.m` and Strappy's 727-line
+`StrappyKeychain.m` are app facades, not additional backend-duplication counts.
+Their environment overrides, account formats, OAuth serialization, migrations,
+cache invalidation and provider locking mostly remain in the apps.
+
+- [ ] Extract the repeated internet/generic password storage mechanics behind
+  a narrow optional API, retaining Tiger `SecKeychain*` and iOS `SecItem*`
+  backends. Preserve existing stored-item lookup identity and return native
+  status/error distinctions; do not silently migrate or rename secrets.
+- [ ] Pilot ENIL and Strappy migrations that remove their private low-level
+  backends while keeping credential schema, login flows and migration policy in
+  app facades. Provide an injectable in-memory store for offline app tests.
+- [ ] Evaluate rCloud as the third consumer, retaining its C-facing API and
+  explicit GUI/daemon access policy. Its Mac trusted-application ACL and iOS
+  access group/after-first-unlock policy differ from Strappy's defaults; expose
+  reviewed options rather than flattening those differences. Preserve Strappy's
+  background no-dialog behavior and duplicate-add/update recovery.
+- [ ] Verify native read/save/update/delete and existing credential compatibility
+  on the supported Mac/iOS targets using isolated test identities; measure net
+  source deletion and adapter costs before widening the API.
+
 ### Local notifications and notification activation
 
 Implemented in `48f2ac9`; see [the notification contract](docs/notifications.md).
 ENIL (Mac/iOS) and Retro-DLP (iOS) use immediate background-only alerts.
+
+- [ ] Migrate Strappy's private Mac/iOS `XPUserNotificationCenter` to the existing
+  shared notification API and delete the duplicated backends. Keep permission
+  mapping, foreground behavior and completion text explicit; test its current
+  unsandboxed/system-app limitation separately from successful submission.
 
 - [x] Provide `AILocalNotificationCenter` authorization/capability reporting,
   explicit permission requests, immediate alerts, badges, activation routing,
@@ -645,7 +730,8 @@ read snapshots and observation. Domain transactions and IPC remain app-owned.
 
 ### Background work, progress, and service lifecycle
 
-- [ ] Add `AIBackgroundWorkCoordinator` with explicit work tokens, operation
+- [ ] After a deletion-positive finite-task pilot, consider
+  `AIBackgroundWorkCoordinator` with explicit work tokens, operation
   counts, cancellation, checkpoint/resume delegates, and exactly-once finish.
   Start with Retro-DLP's finite iOS allowance and ENIL's assertion cleanup.
   Handle expiration, rejected allowances, foreground return, and completion
@@ -659,7 +745,9 @@ read snapshots and observation. Domain transactions and IPC remain app-owned.
   bounded main-thread updates, stable operation IDs, terminal results, and
   cancellation that prevents late UI updates. Leave retry/idempotency decisions
   with the app; interrupted mutations may have an unknown outcome.
-- [ ] Pilot `AIServiceClient` status/control adapters in Strappy and rCloud:
+- [ ] First evaluate the repeated Mac launchd helpers identified above. Pilot
+  broader `AIServiceClient` status/control adapters only after demonstrating
+  matching removable transport/lifecycle code in Strappy and rCloud:
   readiness, timeout, reconnect, stop acknowledgement, and bounded log tails.
   Keep service installation and privilege decisions in the existing package
   tooling. Test with isolated fake services and restart/failure injection.
@@ -710,10 +798,8 @@ Reference: [Apple's finite background execution guidance](https://developer.appl
 
 ### Follow-on candidates and delivery gates
 
-- [ ] Audit ENIL's `ENILKeychain` and Strappy's `XPKeychain` for a narrow shared
-  credential-store API with explicit namespaces, update/delete behavior, and
-  native error reporting. Keep account formats, login flows, access groups, and
-  secret migration policy in apps; inject a memory store for offline UI tests.
+Keychain work is promoted to the dedicated section above.
+
 - [ ] Evaluate bounded asset loading/caching using ENIL's `enil_asset_cache` and
   Retro-DLP's thumbnail consumers: cancellation on row reuse, deduplicated
   requests, byte limits, atomic cache writes, and main-thread publication.
@@ -739,20 +825,21 @@ remaining module proposals and native evidence are tracked separately.
 
 ## Suggested delivery order for remaining work
 
-Sections 1–6 are implemented in source, with the explicitly recorded native-evidence
-gaps still open. The next sequence is:
+Keep operational work separate from optional library expansion:
 
-1. Establish end-to-end legacy-device budgets for worker-prepared diffs and
-   native table updates while preserving bounded synchronous cell-text behavior.
-2. Close native evidence gaps for collections/settings/logs and notifications;
-   extend template icon/launch coverage to iOS 5 and Leopard when available.
-3. Finish section 7: generated-project onboarding, accurate deployment floors,
-   tool discovery, final-image integration checks, and a website smoke test.
-4. Extract background-work coordination with ENIL and Retro-DLP pilots, then
-   service adapters and capability profiles. Add tests with each module.
-5. Extend generated examples and consolidate remaining library/toolchain outputs
-   only through an explicit consumer migration; prebuilt library paths remain
-   an existing contract.
+1. Complete the requested chooser/AGENTS tasks and reconcile documentation and
+   test evidence with recent work. Device/query/performance gaps remain their own
+   validation tasks; they do not require a new framework.
+2. Pilot shared Keychain storage in ENIL and Strappy. Measure actual net deletion;
+   evaluate rCloud next without erasing its access-policy differences.
+3. Remove Strappy's remaining notification backend duplication using the existing
+   shared API. Although the service candidate has a larger source scope, this
+   migration has higher-confidence savings and less new infrastructure.
+4. Evaluate narrow Mac launchd helpers. Proceed only if the shared implementation
+   plus app adapters is materially smaller than the repeated code removed.
+5. Defer the background coordinator, native-test framework, general service/client
+   layer and asset cache until their pilots demonstrate enough shared code to
+   delete. Add new capabilities only in response to an app need.
 
 Keep existing consumers working through documented compatibility entry points
 or coordinated migrations. This reconciliation changes documentation only;
