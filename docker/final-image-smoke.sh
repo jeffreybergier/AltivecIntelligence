@@ -4,7 +4,6 @@ set -euo pipefail
 root=${ALTIVEC_ROOT:-/altivec}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-altivec-app doctor --json
 altivec-release doctor --json
 altivec-sdk status
 for template in ios-basic mac-basic cocoa-shared cocoa-daemon daemon cli-library; do

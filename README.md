@@ -90,7 +90,6 @@ both frontends and a portable C model. The generated `compose.yml` is ready to u
 **2. Check the project before installing SDKs**
 
 ```sh
-docker compose run --rm altivec "altivec-app doctor"
 docker compose run --rm altivec "make test-host check-project"
 ```
 

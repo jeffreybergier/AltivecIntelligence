@@ -79,9 +79,8 @@ variant, then tests/builds/analyzes/inspects them with networking disabled.
 It does not rebuild the image or advertise native-device results.
 
 Custom icon conversion invokes an existing ImageMagick `magick` executable;
-white placeholders use Node built-ins and bundled JPEG 2000 images. `altivec-app doctor` reports capability
-availability and SDK status without installing anything. Ordinary builds never
-regenerate resources. Legacy ICNS elements stay within 300,000 bytes each and
+white placeholders use Node built-ins and bundled JPEG 2000 images. Ordinary
+builds never regenerate resources. Legacy ICNS elements stay within 300,000 bytes each and
 1,000,000 bytes total; runtime icon/launch verification remains OS-specific.
 
 ## Placeholder artwork contract
@@ -120,8 +119,9 @@ support and must still fit the legacy element/file size limits.
 The Containerfile runs `test/final-image-smoke.sh` after installing the exact
 local npm packages, with networking disabled. It generates all six families,
 runs their host tests and metadata/artwork checks, parses the final Make modules,
-and checks release versions. `altivec-app doctor`, `altivec-release doctor`, and
-`altivec-sdk status` provide tool/template and SDK discovery without installing SDKs.
+and checks release versions. Use `altivec-app templates` for template discovery,
+`altivec-release doctor` for release diagnostics, and `altivec-sdk status` for
+SDK status without installing SDKs.
 
 The accompanying `website-smoke.sh` uses Ruby ERB and Bundler, serves generated
 HTML with Python, and checks it in Chromium. It does not fetch gems or require

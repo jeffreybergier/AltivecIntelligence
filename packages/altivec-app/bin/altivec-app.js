@@ -2,7 +2,6 @@
 "use strict";
 const fs = require("node:fs"),
   path = require("node:path");
-const { spawnSync } = require("node:child_process");
 const { catalog, generate } = require("../lib/generate.cjs");
 const version = require("../package.json").version;
 const help = `altivec-app ${version} — offline project templates
@@ -11,7 +10,6 @@ const help = `altivec-app ${version} — offline project templates
   altivec-app new --template cocoa-shared --name MyApp \\
     --bundle-id com.example.myapp --destination ./MyApp
   altivec-app new --help
-  altivec-app doctor [--json]
   altivec-app assets --project . [--source icon.png]
 
 new options:
@@ -51,7 +49,6 @@ try {
       "json",
     ],
     templates: ["json"],
-    doctor: ["json"],
     assets: ["project", "source"],
   }[command];
   if (!allowed) throw Error(`Unknown command: ${command}`);
@@ -70,49 +67,6 @@ try {
   let result;
   if (command === "templates") result = catalog;
   if (command === "new") result = generate(o);
-  if (command === "doctor") {
-    const commands = [
-      "node",
-      "python3",
-      "make",
-      "cc",
-      "magick",
-      "ldid",
-      "altivec-sdk",
-    ];
-    result = {
-      version,
-      templates: path.resolve(__dirname, "../templates"),
-      capabilities: Object.fromEntries(
-        commands.map((cmd) => [
-          cmd,
-          spawnSync("sh", ["-c", 'command -v "$1"', "sh", cmd], {
-            encoding: "utf8",
-          }).stdout.trim() || null,
-        ]),
-      ),
-      sdkStatus:
-        "SDK manager unavailable; generation and portable tests remain usable",
-    };
-    if (result.capabilities["altivec-sdk"]) {
-      const status = spawnSync(result.capabilities["altivec-sdk"], ["status"], {
-        encoding: "utf8",
-        timeout: 15000,
-      });
-      result.sdkStatus = (
-        status.stdout ||
-        status.stderr ||
-        String(status.error)
-      ).trim();
-    }
-    result.features = {
-      generation: !!result.capabilities.python3,
-      portableTests: !!result.capabilities.cc,
-      placeholderArtwork: true,
-      customArtwork: !!result.capabilities.magick,
-      iOSSigning: !!result.capabilities.ldid,
-    };
-  }
   if (command === "assets") {
     if (!o.project) throw Error("assets requires --project");
     const project = path.resolve(o.project);

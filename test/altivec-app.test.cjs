@@ -39,7 +39,6 @@ test("help and discovery work outside a checkout without SDK or Git", (t) => {
     ["--help"],
     ["new", "--help"],
     ["--version"],
-    ["doctor", "--json"],
   ])
     assert.equal(run(args, { cwd }).status, 0);
   const r = run(["templates", "--json"], { cwd });

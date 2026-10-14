@@ -104,7 +104,6 @@ release metadata, test commands, and compatible placeholder artwork:
 
 ```bash
 altivec-app templates
-altivec-app doctor
 altivec-app new --template cocoa-shared --name MyApp \
   --bundle-id com.example.myapp --destination ./MyApp
 cd MyApp

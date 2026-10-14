@@ -260,7 +260,6 @@ app-plus-daemon, and CLI/library/app fixtures all package under root `build/`.
   altivec-app new --template cocoa-shared --name MyApp \
     --bundle-id com.example.myapp --destination ./MyApp
   altivec-app new --help
-  altivec-app doctor
   ```
 
 - [x] Publish template descriptions and their supported platform, architecture,
@@ -316,7 +315,6 @@ app-plus-daemon, and CLI/library/app fixtures all package under root `build/`.
   were not available on the supplied test machines.
 - [x] Distinguish zero npm dependencies from zero external tools: asset conversion
   can invoke a documented image tool already provided by the environment.
-  `doctor` should report missing converters, signing tools, and SDKs by feature.
 
 **Done when:** each supported template can be generated offline, built, analyzed,
 packaged, and host-tested without hand-editing paths; its native backend is tested
@@ -424,10 +422,10 @@ shared Make contract suite (17 passing tests).
 
 ## 7. Image and documentation follow-through
 
-- [ ] Add a lightweight `altivec doctor`/tool index, or consistent per-tool doctor
-  commands, for image version, build capabilities, SDK status, and template
-  locations. Use the existing SDK catalog and installer rather than introducing
-  another SDK manager. Website and CLI-only work should not trigger SDK installs.
+- [ ] Document tool discovery through existing command help, `altivec-app
+  templates`, and `altivec-sdk status`. The generator environment-doctor command
+  was removed by request; do not add a replacement container doctor. Website
+  and CLI-only work should not trigger SDK installs.
 - [ ] Keep the current Jekyll/Ruby, Node, Python, and browser tooling usable while
   removing obsolete deployment machinery. Add a small website smoke check so
   Apple-focused refactors do not break the shared development image.
