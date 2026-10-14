@@ -434,9 +434,10 @@ shared Make contract suite (17 passing tests).
 - [x] Install the pinned, checked-in release/generator packages offline alongside
   templates and Make fragments from the same source checkout. The Containerfile
   checks package versions, CLI help, and template discovery.
-- [ ] Extend final-image smoke coverage to verify packaged contents and generated
-  project/module compatibility together; existing recipe and package checks do
-  not establish that every published image passed this complete check.
+- [x] Extend final-image smoke coverage to verify installed package generation,
+  host tests, artwork/metadata, final Make modules and release configuration.
+  The Containerfile runs this offline; published-image execution remains a
+  release validation step.
 - [ ] Rewrite README/AGENTS examples around generated projects and root commands.
   Reconcile documented deployment floors with actual compiler flags and device
   evidence: sibling guides mention iOS 4.3 while the container/device template
@@ -445,6 +446,17 @@ shared Make contract suite (17 passing tests).
   from supported templates so documentation and templates cannot drift apart.
   Replace duplicated CURL-wrapper teaching examples with a minimal direct-libcurl
   or shared-model example matching the current development guidance.
+
+Onboarding/artwork follow-through (2026-10-14): README/AGENTS now start with
+`altivec-app` and root targets, state per-slice compiler floors, and document
+tool discovery. Generated icons/launch images are white; Mac ICNS now matches
+ENIL's legacy RGB/masks plus 256/512/1024px JPEG 2000 profile. SingleScreen and
+CURLphone share the canonical launch-image matrix and plist declarations.
+Final-image smoke now includes offline Ruby/Bundler, Python HTTP and Chromium
+rendering. The check passed with locally installed npm packages and current
+modules in the existing environment; the full image was not rebuilt. Sibling
+agent-guide floor corrections, richer generated teaching examples, and native
+launch-size/icon verification remain open.
 
 ## 8. Extract shared application capabilities into AltivecCocoa
 

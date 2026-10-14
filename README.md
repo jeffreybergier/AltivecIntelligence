@@ -72,18 +72,29 @@ you somehow found a different file with the same name.
 
 ### Set Up Your Project
 
-**1. Create a folder for your app project**
+**1. Generate your app and its Compose setup**
 
-`mkdir MyCoolApp && cd MyCoolApp`
+Run this from the parent directory where you want `MyCoolApp` created. The
+image's generator works without SDKs or Git and refuses to overwrite a folder.
 
-or if you want it to be in a git repo
+```sh
+docker run --rm -v "$PWD:/repo/user" -w /repo/user \
+  ghcr.io/jeffreybergier/altivec-intelligence:latest \
+  "altivec-app new --template cocoa-shared --name MyCoolApp --bundle-id com.example.mycoolapp --destination ./MyCoolApp"
+cd MyCoolApp
+```
 
-`git init MyCoolApp && cd MyCoolApp`
+Use `mac-basic` or `ios-basic` for a single-platform app; `cocoa-shared` includes
+both frontends and a portable C model. The generated `compose.yml` is ready to use.
 
-**2. Use the Docker Compose Template**
+**2. Check the project before installing SDKs**
 
-1. Download the [templates/compose.yml](templates/compose.yml)
-1. Move or copy it into the `MyCoolApp` folder
+```sh
+docker compose run --rm altivec "altivec-app doctor"
+docker compose run --rm altivec "make test-host check-project"
+```
+
+Website work, generation, and portable tests do not require Apple SDKs.
 
 **3. Prepare the SDK's**
 
@@ -132,21 +143,24 @@ docker compose pull
 docker compose run --rm altivec-sdk install
 ```
 
-**5. Copy a Sample App and Compile**
+**5. Build from the project root**
 
-There are 4 sample apps you can choose from, but CURLmac will be the best
-starting point. After it compiles with `make debug` you can launch the .app
-file on your modern Mac or your retro Mac.
-
-```bash
-docker compose run --rm altivec "cp -r /altivec/apps/CURLmac/. ./"
-docker compose run --rm altivec "make debug"
+```sh
+docker compose run --rm altivec "make macOS-debug"
+docker compose run --rm altivec "make iOS-debug"
+docker compose run --rm altivec "make print-config"
 ```
 
-CURLmac is an example application that shows the basics of how you can do 
-modern networking even on a retro Mac. It is already linked to AltivecCore which
-includes libcurl, cJSON, and SQLite for modern networking and database 
-capabilities.
+Choose the platform included in your template. Outputs live under
+`build/<platform>/debug/`. Mac compiler floors are 10.4 for PPC/i386, 10.9 for
+x86_64, and 11.0 for arm64; iOS floors are 5.0 for armv7 and 7.0 for arm64.
+These are build targets, not evidence of testing every OS version.
+
+The placeholders are white. Mac ICNS files include legacy RGB/mask entries and
+256/512/1024px JPEG 2000 images, matching ENIL's format/size profile. iPhone
+starters use portrait launch PNGs and matching plist point sizes, including
+`Default-568h@2x.png` for the taller legacy iPhone screen. See the
+[artwork contract](docs/app-templates.md) before changing these resources.
 
 **6. Use AI**
 
@@ -179,8 +193,8 @@ when we finish this session.
 
 ``` 
 I want to make my own app. My app will be called MyNewApp and I want you to use
-the SingleWindow app in the /altivec/apps folder as a starting point to work
-from. Please store the new app in ./source along with its new Makefile. 
+the altivec-app generator with the cocoa-shared template. Generate into a new
+./MyNewApp directory and run its test-host and check-project root targets.
 After that please compile the app and ensure there are no warnings. I will
 run it to make sure it works. 
 ```

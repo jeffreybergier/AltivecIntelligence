@@ -279,3 +279,60 @@ test("generated release preparation updates the plain version and both plists", 
   });
   assert.equal(result.status, 0, result.stderr);
 });
+
+test("white artwork covers legacy launch sizes and ENIL's ICNS representations", (t) => {
+  const dir = path.join(temp(t), "app");
+  assert.equal(create(dir).status, 0);
+  const assets = require("../packages/altivec-app/lib/assets.cjs");
+  for (const name of Object.keys(assets.launches)) {
+    const bytes = fs.readFileSync(path.join(dir, "source/iOS/Resources", name));
+    const chunks = [];
+    for (let i = 8; i < bytes.length;) {
+      const n = bytes.readUInt32BE(i);
+      if (bytes.toString("ascii", i + 4, i + 8) === "IDAT")
+        chunks.push(bytes.subarray(i + 8, i + 8 + n));
+      i += n + 12;
+    }
+    const raw = require("node:zlib").inflateSync(Buffer.concat(chunks));
+    const stride = assets.launches[name][0] * 4 + 1;
+    assert.ok(raw.every((v, i) => v === (i % stride ? 255 : 0)), name);
+    for (const relative of [
+      "packages/altivec-app/templates/ios-device/source/iOS/Resources",
+      "apps/SingleScreen/Resources", "apps/CURLphone/Resources",
+    ]) assert.deepEqual(fs.readFileSync(path.join(root, relative, name)), bytes);
+  }
+  const icon = fs.readFileSync(path.join(dir, "source/macOS/Resources/AppIcon.icns"));
+  const types = [];
+  for (let i = 8; i < icon.length;) {
+    const type = icon.toString("ascii", i, i + 4), n = icon.readUInt32BE(i + 4);
+    types.push(type);
+    if (["ic08", "ic09", "ic10"].includes(type)) {
+      const payload = icon.subarray(i + 8, i + n);
+      assert.equal(payload.subarray(0, 12).toString("hex"), "0000000c6a5020200d0a870a");
+      const header = payload.indexOf(Buffer.from("ihdr"));
+      const size = { ic08: 256, ic09: 512, ic10: 1024 }[type];
+      assert.equal(payload.readUInt32BE(header + 4), size);
+      assert.equal(payload.readUInt32BE(header + 8), size);
+    }
+    i += n;
+  }
+  assert.deepEqual(types, ["is32", "s8mk", "il32", "l8mk", "ih32", "h8mk",
+    "it32", "t8mk", "ic08", "ic09", "ic10"]);
+  // A plausible but wrong point size must fail, even when all PNGs exist.
+  const plist = path.join(dir, "source/iOS/Info.plist");
+  fs.writeFileSync(plist, fs.readFileSync(plist, "utf8").replace("{375, 667}", "{750, 1334}"));
+  assert.throws(() => require("../packages/altivec-app/lib/check-project.cjs").check(dir), /Launch image/);
+});
+
+test("sample iPhone plists declare the canonical launch profile", () => {
+  const result = spawnSync("python3", ["-c", `
+import pathlib, plistlib
+root=pathlib.Path(${JSON.stringify(root)})
+reference=plistlib.loads((root/'packages/altivec-app/templates/ios-device/source/iOS/Info.plist').read_bytes())
+for app in ['SingleScreen', 'CURLphone']:
+ p=plistlib.loads((root/'apps'/app/'Resources/Info.plist').read_bytes())
+ for key in ['UILaunchImageFile','UILaunchImages','UIDeviceFamily','UISupportedInterfaceOrientations']:
+  assert p[key]==reference[key], (app,key)
+`], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+});

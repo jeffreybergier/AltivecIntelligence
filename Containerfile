@@ -437,5 +437,8 @@ RUN chmod +x /altivec/bin/* \
  && ln -sf AGENTS.md /altivec/GEMINI.md \
  && altivec-sdk audit /altivec
 
+COPY docker/final-image-smoke.sh docker/website-smoke.sh /altivec/test/
+RUN --network=none bash /altivec/test/final-image-smoke.sh
+
 FROM altivec-runtime AS ghcr-action
 WORKDIR /altivec

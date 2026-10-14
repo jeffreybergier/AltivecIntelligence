@@ -79,10 +79,57 @@ variant, then tests/builds/analyzes/inspects them with networking disabled.
 It does not rebuild the image or advertise native-device results.
 
 Custom icon conversion invokes an existing ImageMagick `magick` executable;
-placeholder artwork uses Node built-ins. `altivec-app doctor` reports capability
+white placeholders use Node built-ins and bundled JPEG 2000 images. `altivec-app doctor` reports capability
 availability and SDK status without installing anything. Ordinary builds never
 regenerate resources. Legacy ICNS elements stay within 300,000 bytes each and
 1,000,000 bytes total; runtime icon/launch verification remains OS-specific.
+
+## Placeholder artwork contract
+
+All generated icons and launch screens are opaque white. The native-device
+starter and checked-in SingleScreen/CURLphone fixtures share the same phone-only,
+portrait launch profile:
+
+| Display points | PNG pixels | Filename |
+| --- | --- | --- |
+| 320 × 480 | 320 × 480 / 640 × 960 | `Default.png` / `Default@2x.png` |
+| 320 × 568 | 640 × 1136 | `Default-568h@2x.png` |
+| 375 × 667 | 750 × 1334 | `Default-iOS8-667h@2x.png` |
+| 414 × 736 | 1242 × 2208 | `Default-iOS8-736h@3x.png` |
+| 375 × 812 | 1125 × 2436 | `Default-iOS11-812h@3x.png` |
+| 414 × 896 | 828 × 1792 / 1242 × 2688 | `Default-iOS12-896h@2x.png` / `@3x.png` |
+
+Keep `UILaunchImageFile=Default`, `UIDeviceFamily=[1]`, portrait orientation,
+and the matching `UILaunchImages` declarations. The plist sizes are in points,
+not pixels; the image names omit scale modifiers. See Apple's
+[launch-image size](https://developer.apple.com/documentation/bundleresources/information-property-list/uilaunchimages/uilaunchimagesize)
+and [filename rules](https://developer.apple.com/documentation/bundleresources/information-property-list/uilaunchimages/uilaunchimagename).
+The 568h filename preserves the legacy tall-screen opt-in. These static images
+cover the listed profile; they do not promise native sizing on every newer iPhone
+or iPad. Verify screen bounds and rendering on each target OS/device.
+
+Mac `AppIcon.icns` matches the formats and sizes in ENIL's icon, with original
+white pixels: 16/32/48/128px planar RGB with separate 8-bit masks (`is32/s8mk`,
+`il32/l8mk`, `ih32/h8mk`, `it32/t8mk`), plus 256/512/1024px JPEG 2000
+(`ic08`, `ic09`, `ic10`). High-resolution images are bundled so offline generation
+needs no image converter. Custom artwork requires ImageMagick with JPEG 2000
+support and must still fit the legacy element/file size limits.
+
+## Final-image integration
+
+The Containerfile runs `test/final-image-smoke.sh` after installing the exact
+local npm packages, with networking disabled. It generates all six families,
+runs their host tests and metadata/artwork checks, parses the final Make modules,
+and checks release versions. `altivec-app doctor`, `altivec-release doctor`, and
+`altivec-sdk status` provide tool/template and SDK discovery without installing SDKs.
+
+The accompanying `website-smoke.sh` uses Ruby ERB and Bundler, serves generated
+HTML with Python, and checks it in Chromium. It does not fetch gems or require
+Apple SDKs. Jekyll/plugins remain website-owned Gemfile dependencies; this is
+an image-tooling check, not a build of a particular Jekyll website.
+
+Run `bash /altivec/test/final-image-smoke.sh` inside an image to repeat it.
+The SDK-dependent generated-project matrix remains a separate check.
 
 ## Local validation evidence
 

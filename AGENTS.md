@@ -99,23 +99,27 @@ MyApp_SOURCES = main.m AppDelegate.m
 include /altivec/altivec_common_mac.mk   # or altivec_common_phone.mk
 ```
 
-Templates for new apps live at `/altivec/templates/Makefile.{mac,phone}`. Worked example apps with full source are at `/altivec/apps/` (SingleWindow, SingleScreen, CURLmac, CURLphone).
+Use `altivec-app` to generate new apps with a root Makefile, Compose setup,
+release metadata, test commands, and compatible placeholder artwork:
 
 ```bash
-cd /altivec/apps/SingleWindow # or SingleScreen
-
-# Standard Release Build (-O3)
-make
-
-# Debug Build (-O0 + Symbols)
-make debug
-
-# Clean build artifacts
-make clean
-
-# Run Clang Static Analyzer (Modern targets only)
-make analyze
+altivec-app templates
+altivec-app doctor
+altivec-app new --template cocoa-shared --name MyApp \
+  --bundle-id com.example.myapp --destination ./MyApp
+cd MyApp
+make test-host check-project
+make macOS-debug              # or iOS-debug
+make macOS-analyze            # or iOS-analyze
 ```
+
+The compiler floors are Mac PPC/i386 10.4, x86_64 10.9, arm64 11.0;
+iOS armv7 5.0 and arm64 7.0. Do not repeat old sibling-guide iOS 4.3 claims
+or infer device coverage from these compiler settings.
+Keep the white phone launch PNG matrix and matching plist entries together.
+Mac placeholders use ENIL's legacy RGB/mask plus JPEG 2000 ICNS profile.
+Sample apps in `/altivec/apps` remain build fixtures; prefer generated projects
+for onboarding. See `docs/app-templates.md` for artwork and native-test limits.
 
 ## 🔍 Static Analysis
 You can run the Clang Static Analyzer on modern targets (X64, ARM64, and iPhone) to find potential bugs, memory leaks, or logic errors.

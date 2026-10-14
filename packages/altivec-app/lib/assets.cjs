@@ -39,19 +39,8 @@ function chunk(type, data) {
   const body = Buffer.concat([Buffer.from(type), data]);
   return Buffer.concat([u32(data.length), body, u32(crc(body))]);
 }
-function pixels(w, h, launch = false) {
-  const data = Buffer.alloc(w * h * 4);
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      const mark =
-        !launch && Math.abs(x - w / 2) < w / 5 && Math.abs(y - h / 2) < h / 5;
-      data[i] = mark ? 240 : 34;
-      data[i + 1] = mark ? 242 : 70;
-      data[i + 2] = mark ? 246 : 100;
-      data[i + 3] = 255;
-    }
-  return data;
+function pixels(w, h) {
+  return Buffer.alloc(w * h * 4, 255);
 }
 function png(w, h, rgba) {
   const rows = Buffer.alloc(h * (w * 4 + 1));
@@ -93,7 +82,7 @@ function element(type, data) {
     throw Error("ICNS element exceeds Leopard limit");
   return Buffer.concat([Buffer.from(type), u32(data.length + 8), data]);
 }
-function icns(getPixels) {
+function icns(getPixels, source) {
   const parts = [];
   for (const [n, rgb, mask] of [
     [16, "is32", "s8mk"],
@@ -115,6 +104,20 @@ function icns(getPixels) {
       ),
       element(mask, channels[3]),
     );
+  }
+  // Match ENIL: legacy planar RGB/masks plus JPEG 2000 high-resolution images.
+  for (const [n, type] of [[256, "ic08"], [512, "ic09"], [1024, "ic10"]]) {
+    let data;
+    if (source) {
+      const r = spawnSync("magick", [path.resolve(source), "-resize", `${n}x${n}!`,
+        "-depth", "8", "jp2:-"], { maxBuffer: 8e6 });
+      if (r.error || r.status !== 0)
+        throw Error("Artwork conversion requires ImageMagick with JPEG 2000 support");
+      data = r.stdout;
+    } else {
+      data = fs.readFileSync(path.join(__dirname, "../templates/artwork", `white-${n}.jp2`));
+    }
+    parts.push(element(type, data));
   }
   const body = Buffer.concat(parts);
   if (body.length + 8 > 1000000) throw Error("ICNS exceeds Leopard file limit");
@@ -140,10 +143,10 @@ function generate(root, source) {
     for (const [name, n] of Object.entries(icons))
       fs.writeFileSync(path.join(ios, name), png(n, n, convert(n)));
     for (const [name, [w, h]] of Object.entries(launches))
-      fs.writeFileSync(path.join(ios, name), png(w, h, pixels(w, h, true)));
+      fs.writeFileSync(path.join(ios, name), png(w, h, pixels(w, h)));
   }
   if (fs.existsSync(mac))
-    fs.writeFileSync(path.join(mac, "AppIcon.icns"), icns(convert));
+    fs.writeFileSync(path.join(mac, "AppIcon.icns"), icns(convert, source));
 }
 function validate(root) {
   const ios = path.join(root, "source/iOS/Resources");
@@ -187,7 +190,26 @@ function validate(root) {
       const n = b.readUInt32BE(i + 4);
       if (n < 8 || n > 300000 || i + n > b.length)
         throw Error("Invalid ICNS element");
-      seen.add(b.toString("ascii", i, i + 4));
+      const type = b.toString("ascii", i, i + 4);
+      const size = { ic08: 256, ic09: 512, ic10: 1024 }[type];
+      if (size) {
+        const data = b.subarray(i + 8, i + n);
+        if (data.subarray(0, 12).toString("hex") !== "0000000c6a5020200d0a870a")
+          throw Error(`Invalid JPEG 2000 ICNS element: ${type}`);
+        let dimensions;
+        for (let j = 12; j + 8 <= data.length;) {
+          const length = data.readUInt32BE(j);
+          if (length < 8 || j + length > data.length)
+            throw Error(`Invalid JPEG 2000 box: ${type}`);
+          if (data.toString("ascii", j + 4, j + 8) === "jp2h" && length >= 30 &&
+              data.toString("ascii", j + 12, j + 16) === "ihdr")
+            dimensions = [data.readUInt32BE(j + 16), data.readUInt32BE(j + 20)];
+          j += length;
+        }
+        if (!dimensions || dimensions.some(n => n !== size))
+          throw Error(`Invalid JPEG 2000 dimensions: ${type}`);
+      }
+      seen.add(type);
       i += n;
     }
     for (const k of [
@@ -199,6 +221,9 @@ function validate(root) {
       "h8mk",
       "it32",
       "t8mk",
+      "ic08",
+      "ic09",
+      "ic10",
     ])
       if (!seen.has(k)) throw Error(`Missing ICNS element: ${k}`);
   }
