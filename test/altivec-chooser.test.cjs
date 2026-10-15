@@ -16,6 +16,20 @@ function fixture(t) {
   return { root, source, destination };
 }
 
+test('default source copies the app template rather than maintainer guidance', (t) => {
+  const { destination } = fixture(t);
+  const template = path.resolve(__dirname, '../templates/AGENTS.md');
+  const copy = fs.copyFileSync;
+  t.mock.method(fs, 'copyFileSync', (source, target, flags) => {
+    assert.equal(source, '/altivec/templates/AGENTS.md');
+    return copy(template, target, flags);
+  });
+  ensureAgentGuidance(undefined, destination);
+  assert.equal(fs.readFileSync(destination, 'utf8'), fs.readFileSync(template, 'utf8'));
+  assert.notEqual(fs.readFileSync(destination, 'utf8'),
+    fs.readFileSync(path.resolve(__dirname, '../AGENTS.md'), 'utf8'));
+});
+
 test('copies defaults once and preserves project edits', (t) => {
   const { source, destination } = fixture(t);
   ensureAgentGuidance(source, destination);

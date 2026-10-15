@@ -1,307 +1,138 @@
-# AltivecIntelligence: Agent guidance
+# Developing AltivecIntelligence
 
-## Working in a user project
+This file is for work on the AltivecIntelligence repository: its build engine,
+CLIs, shared libraries, templates, and container image. App-project defaults
+live in `templates/AGENTS.md`; the chooser copies that file into a user's working
+directory only when no `AGENTS.md` entry exists. Do not copy this maintainer guide
+into app projects. Existing project instructions are never refreshed automatically.
 
-The chooser copies this default from `/altivec/AGENTS.md` into its working
-directory only when no `AGENTS.md` entry exists. Existing files and symlinks
-are preserved. Customize the project copy as needed; it is not refreshed on
-later launches. Project-specific instructions take precedence over these defaults.
+## Repository map
 
-Work in the mounted app checkout (normally `/repo/user`), using its generated
-root Makefile and Compose services. `/altivec` contains the image's shared build
-engine; change it only when explicitly working on AltivecIntelligence itself.
-References below to `docs/`, `libs/`, `packages/`, and repository `test/` paths
-are relative to `/altivec`, not files to create in the user's app.
+- `altivec_common_*.mk` and `make/`: shared compilation, product graphs,
+  resources, signing, packaging, and output management.
+- `bin/`: SDK discovery/installation, chooser, and source-checkout CLI entries.
+- `packages/altivec-app/`: dependency-free Node project generator and offline
+  templates. `packages/altivec-release/`: local-first release CLI.
+- `libs/core/`: bundled C dependencies and AltivecCore packaging.
+- `libs/cocoa/`: shared UI, Keychain, notifications, paging, and collection APIs.
+- `libs/cocoa-sqlite/`: portable SQLite snapshots/change feeds and Cocoa observers.
+- `templates/`: app-project Compose setup and default agent guidance.
+- `apps/`: small build fixtures; prefer generated projects for onboarding.
+- `Containerfile`, `docker/`, and `toolchain/`: image construction, smoke tests,
+  and optional native-device tooling.
+- `test/`, library test directories, and `.github/workflows/`: validation.
+- `docs/`: feature contracts and deployment recipes. `TODO.md`: remaining work
+  and historical evidence, not proof of tests passing on the current checkout.
 
-Discover commands with `altivec-app --help`, `altivec-app templates`,
-`altivec-release --help`, and `altivec-sdk status`. Start with the project's
-`make test-host check-project`; use its root build/analyze targets after SDKs
-are installed. Website and CLI-only work does not require Apple SDK installation.
-Run applicable portable checks first; report cross-build, package inspection,
-and native device results separately, including skipped coverage. A successful
-cross-build does not establish runtime compatibility. Use project deployment
-recipes and explicit test hosts/staging paths for device validation.
+## Working on the engine
 
-Hi, you are an AI programming assistant helping the user develop and deploy apps for legacy and modern Apple systems. This environment is designed to build "Quad-Fat" Mac applications (PowerPC through Apple Silicon) and multi-architecture iPhone apps (armv7 and arm64).
+Use the actual checkout as the source of truth. Inside the image, `/altivec`
+contains the engine and `/repo/user` normally contains a separate mounted app.
+Do not assume those paths exist on a host checkout. For ordinary engine changes,
+mount this checkout at `/altivec` in an existing image with the SDK volumes;
+a full image rebuild is unnecessary. Image contents and installed npm packages
+still require separate validation when changed.
 
-## 🎯 Core Targets
-- **Mac:** Tiger (10.4) through modern macOS (Apple Silicon).
-- **iPhone:** iOS 5.0 through modern iOS (arm64).
-- **Legacy Compatibility:** Mac apps targeting 10.4/10.5 must use manual memory management (MRC) and avoid modern Objective-C features like Properties or Blocks (unless using Plausible Blocks).
+Keep app Makefiles declarative. Build mechanics belong in shared Make modules;
+discoverable developer commands belong in the Node CLIs. Preserve offline
+operation and SDK-free CLI/website workflows. Prefer small, focused changes.
+See `docs/make-products.md` and `docs/app-templates.md` before changing contracts.
 
-## 📜 Development Rules
-- **MRC Mandatory:** For Mac apps targeting 10.4/10.5, always use `retain`, `release`, and `autorelease`. Use manual getters and setters.
-- **Legacy APIs:** Always verify API compatibility against the 10.5 headers. Warn the user if they attempt to use symbols that break Tiger/Leopard compatibility.
-- **Modern Features:** iPhone apps (iOS 5.0+) can use properties and modern features, but be cautious with code shared between Mac and iPhone targets.
-- **Warnings** Make sure you always tell the user when there are warnings as
-this likely indicates the app will crash on older systems. The exception is 
-deprecation warnings as those will be common when dealing with these old API's.
-- **Surgical Changes:** Focus on small, incremental improvements. Accomplish tasks in the fewest lines of code possible.
-- **Method Implementation Style:** To facilitate easy copy-pasting of method signatures from headers, all method implementations must end with a semicolon followed by the opening brace on a new line. 
-  - *Example:* `- (void)dealloc; \n { [super dealloc]; }`
-  - *Note:* This is a mandatory project-specific exception to the Google Objective-C style guide.
-- **SSH Safety:** When SSH'd into a Mac, stay within `~/Desktop`. When on an iPhone, stay within `~/tmp_altivec`.
+Preserve root output conventions, safe cleanup, parallel-build isolation,
+per-product signing, and explicit platform/architecture choices. Do not change
+prebuilt library paths without coordinated consumer migration. Extend existing
+signing/package validation rather than adding another signer in AltivecCocoa.
 
-## 💡 Mentorship & Accessibility Tips
-- **Bridge the Gap:** When explaining concepts to users from web backgrounds, use analogies (e.g., relate an `NSView` to a `div` or a React Component, and explain `retain/release` as "manual garbage collection").
-- **Patience with Syntax:** Legacy Objective-C is extremely verbose. Proactively explain what the "square brackets" are doing and why we use long method names instead of short ones.
-- **Utility First:** Focus on making the app *useful* for the user's specific retro-setup. A small, working 1-off app that solves a real problem is better than a "perfect" codebase that never ships.
-- **Beginner Friendly:** If a user seems lost, offer to explain the "Why" behind a block of code. Don't just provide the code; provide the context so they can learn to maintain their "new" legacy app.
-- **Syntactic Sugar:** Since these users are using an AI, be their "Syntactic Sugar." Handle the tedious parts of the old syntax (like manual getters/setters and memory management) so they can focus on the logic and fun of their project.
+## Compatibility and source conventions
 
-# AltivecIntelligence: Environment Summary
+Shared Apple code must preserve Mac PPC/i386 10.4, x86_64 10.9, arm64 11.0,
+and iOS armv7 5.0 / arm64 7.0 compiler floors. These are not native coverage
+claims. Legacy Mac builds use Apple GCC 4.2.1 and the 10.5 SDK; modern Mac and
+iOS use Clang with the 11.3 and 8.4 SDKs respectively. Inspect
+`altivec_toolchains.mk` and `make/` for current compiler paths and flags.
 
-## 🛠 Toolchain Overview
-- **Modern Toolchain:** Current pinned OSXCross stable build at `/osxcross/modern` (Clang 21 plus current cctools/ld64).
-- **Legacy Toolchain:** Pinned OSXCross `ppc-test` build at `/osxcross/legacy/target` (Apple GCC 4.2.1 plus PowerPC-capable cctools/ld64).
-- **Legacy Host Build:** Ubuntu Clang 21 compiles the C portions of legacy cctools, while packaged G++ 14 compiles its antique ld64 C++ sources; generated Darwin code still uses Apple GCC 4.2.1.
-- **Host Architecture:** Ubuntu 26.04 (aarch64/x86_64)
-- **Compatibility Path:** `/osxcross/target` is a symlink to `/osxcross/modern`; build files should use `altivec_toolchains.mk` rather than assuming this alias.
-- **Altivec Root:** `/altivec` (runtime repo baked into the image — `altivec_common_*.mk`, example app sources, prebuilt `libs/{core,cocoa}/build-{mac,phone}` outputs, `templates/`, and `bin/`). Sample binaries and the optional jailbroken-device toolchain are release assets, not image contents.
-- **User Root:** `/repo/user` (the user's app project, mounted from the host)
-- **Altivec Scripts on PATH:** `/altivec/bin` provides `altivec-sdk`, `altivec-release`, and `altivec-chooser` (interactive AI CLI launcher).
-- **Device Work:** Follow `docs/deployment.md` for editable install/run/log recipes. Preserve project-specific automated native test runners. Builds and tests must not require an interactive debugger; debug builds and dSYM generation remain supported.
+Keep Tiger-compatible Objective-C under MRC, with explicit ivars/accessors,
+bracket syntax, and no required properties, blocks, ARC, or GCD. Isolate modern
+syntax to compatible source groups. Check both header availability and runtime
+availability; a declaration in the 10.5 SDK does not establish Tiger support.
+Follow existing runtime-gated compatibility helpers and documented fallbacks.
+App-level compatibility symbols use `XP`; shared public APIs use their module
+prefix. Do not move app-specific policy into a generic compatibility shim.
 
-## 📦 Provisioned SDKs
+Use two-space indentation, 80-column lines where practical, trailing underscores
+for Objective-C ivars, and `k` for ordinary constants. Objective-C method
+implementations use a semicolon after the signature, then a brace on a new line:
 
-The image contains no Apple SDKs. `altivec-sdk install` verifies each archive
-from the project's `./.altivec-sdk` first, then the host's shared `~/.altivec-sdk`.
-Compose mounts these read-only at `/altivec-sdk` and `/altivec-sdk-shared`, also
-for the SDK-only service. An absent project archive falls back; an invalid one
-fails validation. `~/.altivec` is the separate container home/settings folder.
-
-`ALTIVEC_SDK_HOST_DIR` selects a single host archive folder for both runtime
-mounts and build contexts, disabling fallback. `ALTIVEC_SDK_ARCHIVE_DIR` takes
-precedence and selects a single path visible inside the container (or on the
-host for direct CLI use); it does not create a host mount. Direct host CLI use
-defaults to `$PWD/.altivec-sdk`, then `$HOME/.altivec-sdk`. The image sets
-`ALTIVEC_SDK_PROJECT_DIR` and `ALTIVEC_SDK_SHARED_DIR` to its two mount paths.
-`status`, `preflight`, `locate ARCHIVE`, and `install` report selected sources.
-Before a local image build, create both context directories with
-`mkdir -p .altivec-sdk ~/.altivec-sdk`, or set `ALTIVEC_SDK_HOST_DIR` to one
-existing folder; BuildKit cannot mount a missing context. Run offline discovery
-tests with `python3 -m unittest discover -s test -p 'test_sdk_discovery.py' -v`;
-Linux's `flock` is required for installation tests.
-
-Verified SDKs are installed into the Compose SDK volumes at these paths:
-
-1. `/osxcross/legacy/target/SDK/MacOSX10.5.sdk`: PowerPC and 32-bit Intel slices.
-2. `/osxcross/modern/SDK/MacOSX11.3.sdk`: 64-bit Intel and Apple Silicon slices.
-3. `/osxcross/modern/SDK/iPhoneOS8.4.sdk`: armv7 and arm64 iPhone slices.
-
-
-## ⚔️ Build Matrix
-
-| Target | Compiler | SDK | Architectures | Optimization |
-| :--- | :--- | :--- | :--- | :--- |
-| **Mac (Legacy)** | `oppc32-gcc` / `o32-gcc` | 10.5 | ppc, i386 (32-bit) | -O3 / -O0 |
-| **Mac (Modern)**| OSXCross Clang 21 wrappers | 11.3 | x86_64, arm64 (64-bit) | -O3 / -O0 |
-| **iPhone** | Ubuntu Clang 21 + current cctools | 8.4 | armv7, arm64 | -O3 / -O0 |
-
-## 🔗 Library Build System (AltivecCore)
-Libraries (libcurl, OpenSSL, zlib, SQLite, cJSON) are built as static binaries (`.a`). Mac builds also bundle them into `AltivecCore.framework`.
-- **Orchestration:** `/altivec/libs/core/Makefile` manages separate `Makefile-mac` and `Makefile-phone` builds. Prebuilt outputs ship in the GHCR image at `/altivec/libs/core/build-{mac,phone}` — user apps opt in with `ALTIVECCORE_REQUIRED=1`.
-- **iPhone Linkage:** iPhone apps use static AltivecCore linkage only. Embedded iOS frameworks require iOS 8+ and are not supported for the iOS 5-7 compatibility target.
-- **CURL Sample Wrapper**: `AICURLConnection` is private source in the CURLmac
-  and CURLphone sample apps. It is not built or exported by AltivecCore.
-  AI-authored app code should use `libcurl` directly.
-- **Certificate Handling**: `cacert.pem` is automatically bundled with
-  AltivecCore apps. Set `CURLOPT_CAINFO` to `AltivecCoreCertPath()` on every new
-  or reset libcurl easy handle.
-
-## 🚀 How to Build
-
-User apps include one of the common mk fragments from `/altivec/` by absolute path. A minimal user `Makefile` looks like:
-
-```makefile
-# /repo/user/Makefile
-PRODUCTS = MyApp
-MyApp_TYPE = app
-MyApp_SOURCES = main.m AppDelegate.m
-include /altivec/altivec_common_mac.mk   # or altivec_common_phone.mk
-```
-
-Use `altivec-app` to generate new apps with a root Makefile, Compose setup,
-release metadata, test commands, and compatible placeholder artwork:
-
-```bash
-altivec-app templates
-altivec-app new --template cocoa-shared --name MyApp \
-  --bundle-id com.example.myapp --destination ./MyApp
-cd MyApp
-make test-host check-project
-make macOS-debug              # or iOS-debug
-make macOS-analyze            # or iOS-analyze
-```
-
-The compiler floors are Mac PPC/i386 10.4, x86_64 10.9, arm64 11.0;
-iOS armv7 5.0 and arm64 7.0. Do not repeat old sibling-guide iOS 4.3 claims
-or infer device coverage from these compiler settings.
-Keep the white phone launch PNG matrix and matching plist entries together.
-Mac placeholders use ENIL's legacy RGB/mask plus JPEG 2000 ICNS profile.
-Sample apps in `/altivec/apps` remain build fixtures; prefer generated projects
-for onboarding. See `docs/app-templates.md` for artwork and native-test limits.
-
-## 🔍 Static Analysis
-You can run the Clang Static Analyzer on modern targets (X64, ARM64, and iPhone) to find potential bugs, memory leaks, or logic errors.
-- **Usage:** Run `make analyze` from the app directory.
-- **Output:** The analyzer outputs textual reports directly to the console.
-- **Scope:** Analysis is performed using the modern Clang toolchain and SDKs (11.3 for Mac, 8.4 for iPhone).
-
-## ⚙️ Key Technical Standards
-
-### 1. Build Logic
-- **Two-Stage Builds:** Slices are compiled into architecture-specific object files in `Intermediates/$(ARCH)/` before linking. This ensures that `dsymutil` can find the symbols on disk.
-- **Mac Linking:** Binary slices are merged using `lipo` into a Quad-Fat universal binary.
-- **iPhone Linking:** Compile and link each architecture separately, then merge the slices.
-
-### 2. Standardized Reporting
-Logs must use a 1-space indentation increment and the `>` symbol for details:
-```text
---- Building Mac Release (-O3) ---
- [1/7] Compiling ppc...
-  > ppc: main.m
- [5/7] Merging quad-fat binary...
-```
-
-### 3. Debug Symbols (dSYMs)
-- Status: Fully operational for X64 and ARM64 slices using the system LLVM 21 `dsymutil`. Legacy PPC and i386 symbols are primarily embedded in the binary.
-
-- **Location:** Produced beside the product (e.g., `build/macOS/debug/SingleWindow/SingleWindow.x86_64.dSYM`).
-
-## 🖼 Nibless NSWindowController Pattern
-When creating an `NSWindowController` programmatically without a NIB/XIB file, follow the "Lapcat Pattern" to ensure proper lifecycle and Window Server stability:
-1. **Initializer**: Use `[super initWithWindowNibName:@"ignored"]`. Even though we aren't using a NIB, AppKit requires a non-nil string to avoid internal assertion failures.
-2. **loadWindow**: Override `loadWindow` but **DO NOT** call `[super loadWindow]`. Manually create the `NSWindow` with `defer:NO`.
-3. **setWindow**: At the end of `loadWindow`, call `[self setWindow:window]`. This will automatically trigger `windowDidLoad`.
-4. **Memory Management**: Ensure `[window setReleasedWhenClosed:NO]` is set so the controller can safely manage the window's lifecycle.
-5. **Controllers**: Consolidate UI and networking logic into specialized controllers (e.g. `DownloadViewController`) that subclass `NSResponder` for Tiger compatibility.
-
-## 🛠 Cross-Platform Development Standards
-
-To build software that spans 20 years of Apple APIs, always follow these verified patterns:
-
-### 1. Runtime vs. Build-Time Checks
-- **Build-Time (#if)**: Use for macros, constant definitions, and protocol conformance that the compiler needs to know about. 
-  - *Example*: Checking `MAC_OS_X_VERSION_MAX_ALLOWED` to define a macro.
-- **Runtime (respondsToSelector)**: Use for calling methods that may not exist on older systems. 
-  - *Crucial*: When calling a newer method on an older system, **ALWAYS** use a function pointer (`MethodPtr`) to bypass compile-time availability warnings and ensure safe execution.
-
-### 2. The "Dummy Protocol" Pattern
-When a formal protocol (like `NSApplicationDelegate`) is not available in an older SDK, define a dummy protocol to satisfy the compiler while maintaining modern conformance:
 ```objectivec
-#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1060
-  #define XPApplicationDelegate NSApplicationDelegate
-#else
-  @protocol XPApplicationDelegate @end
-#endif
-```
-
-### 3. Enum/Availability Compatibility Shims
-When an enum value is marked as unavailable or has been renamed (e.g.
-`NSTextAlignmentCenter`), expose its ABI-compatible integer value through an
-`XP`-prefixed compatibility symbol, such as
-`#define XPTextAlignmentCenter ((NSInteger)1)`. Do not directly reference the
-newer enum inside the shim; casting that symbol does not bypass its availability
-annotation.
-
-### 4. The "XP" Compatibility Pattern
-Prefix every app-level cross-version compatibility symbol with `XP`, including
-aliases, constants, types, dummy protocols, and category methods. For example,
-use `XPTextAlignmentCenter`, not a normal `k`-prefixed constant, for an enum
-compatibility shim.
-
-When a method is completely missing from an older SDK (e.g. `setContentBorderThickness:`), do not call it directly. Instead, implement a category on that class with an `XP_` prefix. Use the **Runtime Check** and **Function Pointer** patterns within this category to safely bridge the gap:
-```objectivec
-- (void)XP_methodName:(id)arg {
-  SEL sel = @selector(methodName:);
-  if ([self respondsToSelector:sel]) {
-    typedef void (*MethodPtr)(id, SEL, id);
-    MethodPtr m = (MethodPtr)[self methodForSelector:sel];
-    m(self, sel, arg);
-  }
+- (void)dealloc;
+{
+  [value_ release];
+  [super dealloc];
 }
 ```
 
-### 5. Consolidated Controllers
-Avoid creating complex `NSView` subclasses for layout. Instead, use a "Controller" (subclassing `NSResponder` for Mac or `UIViewController` for iPhone) to create and manage a plain container view. This keeps logic centralized and makes it easier to port between platforms.
+Document public API ownership, thread affinity, cancellation, and invalidation.
+Pointers are not implicitly owned under MRC. Retain/copy owned values and release
+them; copy stored strings. Borrowed targets/delegates require explicit lifetime
+management. Report non-deprecation warnings and their compatibility implications.
+Preserve the existing build-log indentation and `>` detail style.
 
-## 📖 Google Objective-C Style Guide (Condensed)
+## Shared library changes
 
-*Note: For Mac OS X 10.4/10.5 targets, Objective-C 2.0 features (Properties, Dot-notation) are generally unavailable or restricted.*
+Read the relevant contract before adding or migrating APIs:
+`docs/keychain.md`, `docs/notifications.md`, `docs/sqlite.md`, and
+`libs/cocoa/COLLECTIONS.md`. Keep portable C consumers independent of Foundation.
+Keep SQL/schema, credential identity, notification wording, and business policy
+in apps. Preserve post-commit publication, bounded caches, stale-generation
+suppression, and explicit teardown in the existing data/collection APIs.
 
-### 1. Spacing & Formatting
-- **Indentation:** Use 2 spaces. No tabs.
-- **Line Length:** Maximum 80 characters.
-- **Method Declarations:** One space after `+/-`. Align parameters by colon if multi-line.
-  ```objectivec
-  - (void)doSomethingWith:(GTMFoo *)theFoo
-                     rect:(NSRect)theRect;
-  ```
+Promote new abstractions only when real consumers demonstrate repeated mechanics
+that can be removed. Count shared code and remaining adapters against deletions;
+tests are separate. Coordinate incompatible API changes with consumers, update
+headers/packaging/docs, and test fallbacks on the oldest available runtime.
 
-### 2. Naming
-- **Classes/Protocols:** CamelCase with an optional 2-3 letter prefix for shared libs.
-- **Methods:** lowerCamelCase. Read like a sentence. Avoid "get" prefix for accessors.
-- **Variables:** lowerCamelCase. Instance variables **must** have a trailing underscore (e.g., `name_`).
-- **Constants:** Prefix with `k` (e.g., `kInvalidHandle`).
+## Templates and chooser
 
-### 3. Memory Management (MRC Mandatory for Legacy)
-- **Object Ownership:** Assume pointers are **strong** (retained) unless documented as **weak**.
-- **Autorelease:** Prefer `autorelease` at creation for temporary objects.
-  ```objectivec
-  MyController* controller = [[[MyController alloc] init] autorelease];
-  ```
-- **Setters:** Use the "autorelease then retain" pattern. Always **copy** NSStrings.
-  ```objectivec
-  - (void)setFoo:(GMFoo *)aFoo;
-  {
-    [foo_ autorelease];
-    foo_ = [aFoo retain];
-  }
-  ```
-- **Dealloc:** Always release instance variables and call `[super dealloc]`.
+Edit `templates/AGENTS.md` for app defaults. Keep generated project guidance in
+`packages/altivec-app/lib/generate.cjs` consistent with it. Preserve the chooser's
+exclusive-copy behavior for existing files, directories, and symlinks.
+The Containerfile already copies `templates/` into `/altivec/templates/`.
 
-### 4. Comments
-- **Public API:** Every interface and method should have a comment.
-- **Symbols:** Use vertical bars to quote symbols in comments: `// Sets the value of |foo_|`.
+Update both `templates/compose.yml` and its packaged copy together. The native
+shell generator consumes `packages/altivec-app/templates/ios-device`; keep its
+manifest aligned with `templates/catalog.json`. Preserve offline generation,
+no-overwrite behavior, and reviewable upgrades. Do not overwrite app source when
+updating templates. Keep artwork files and matching plist declarations together.
 
-### 5. Cocoa Patterns
-- **Delegates:** **Never retain** delegate objects.
-- **MVC:** Strictly separate Model, View, and Controller logic.
-- **nil checks:** Use for logic flow only, not crash prevention (messaging `nil` is safe).
-- **BOOL:** Use `YES`/`NO`. Avoid direct comparison (e.g., `if (isDone == YES)`).
+## Validation
 
-### 6. Modern Features (10.5+ / iOS)
-- **Properties:** Allowed for 10.5+, but **Dot-notation is forbidden**.
-- **Synthesize:** Always use `@synthesize name = name_;` to match the underscore convention.
-- **Private Methods:** Use a category in the `.m` file or a Class Extension (Obj-C 2.0).
+Choose checks for the changed subsystem; inspect CI and local Makefiles for
+additional required coverage:
 
-## Release preparation
+- Chooser: `node --test test/altivec-chooser.test.cjs`.
+- Generator: `node --test test/altivec-app.test.cjs` (includes package smoke).
+- Release CLI: `node --test test/altivec-release.test.cjs`; migration fixtures
+  require Python/PyYAML, normal CLI use does not.
+- SDK discovery: `python3 -m unittest discover -s test -p 'test_sdk_discovery.py' -v`.
+  Installation checks require Linux `flock`; BuildKit checks are opt-in.
+- Make products: `python3 -m unittest discover -s test -p 'test_make_products.py' -v`.
+- SQLite C layer: `make -C libs/cocoa-sqlite test`.
+- Generated SDK matrix: `bash test/test_app_templates_container.sh` inside an
+  existing image with SDK volumes and current modules mounted at `/altivec`.
+- Cocoa/native changes: use the relevant library and consumer native harnesses;
+  follow their documented host/staging inputs and deployment recipes.
 
-`altivec-release` is a dependency-free Node >=22 CLI, packaged in
-`packages/altivec-release` and installed at a pinned version in the image.
-Use `.altivec-release.json` (`schema_version: 1`); migrate old YAML once with
-`altivec-release migrate --config .altivec-release.yml` inside the image.
-`current`, `prepare`, `set`, `check`, `ci-env`, `build`, and `stage` need no Git
-identity, credentials, remote, or `.git` directory. Missing container Git setup
-is expected; do not configure it merely to prepare a release. Prepare/build/stage
-in the mounted checkout; review and run `commit` on the authenticated host.
-Publication requires an explicit `push`. Legacy `bump` is preparation-only.
-See `packages/altivec-release/README.md` for recovery and migration details.
-Test with `node --test test/altivec-release.test.cjs` (npm for package smoke;
-Python/PyYAML for the one-time migration fixtures).
+Run portable checks first. Report cross-builds, package inspection, native
+runtime tests, and skipped coverage separately. Never infer device behavior
+from compilation, or published-image behavior from a mounted checkout test.
+Keep native runs isolated below `~/Desktop` on Mac or `~/tmp_altivec` on iPhone;
+clean only owned fixtures and preserve failure logs. Use `docs/deployment.md`.
 
-## Project generation and validation
+## Release and image work
 
-Use `altivec-app` for new projects; see `docs/app-templates.md` and
-`packages/altivec-app/README.md`. The Node package has no npm dependencies and
-ships all templates offline. The native device shell generator consumes the
-canonical `packages/altivec-app/templates/ios-device` tree; keep its manifest
-version aligned with `templates/catalog.json`. Update both repository and
-packaged Compose templates together (the generator tests check equality).
-Run `node --test test/altivec-app.test.cjs` for generation/host/package tests,
-and `bash test/test_app_templates_container.sh` inside the existing image with
-SDK volumes for cross-build validation. Mount current modules at `/altivec`;
-a full image rebuild is unnecessary for ordinary generator development.
-Native tests require explicit hosts and staging paths. Report their actual
-coverage separately from portable tests and package inspection.
+Keep release preparation independent of Git identity, credentials, and remotes.
+`prepare`, `build`, and `stage` precede explicit host commit/publication;
+`bump` remains preparation-only. See `packages/altivec-release/README.md`.
+Never publish an image, package, commit, or tag without user authorization.
+Do not install SDKs or rebuild the full image merely for documentation/CLI work.
+Use image smoke checks for image changes and record exactly what was rebuilt.

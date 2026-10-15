@@ -180,7 +180,8 @@ environment for building retro Mac and iPhone Apps. My app code is in
 /repo/user. The Altivec engine and examples are in /altivec. The modern
 cross-compiler toolchain is in /osxcross/modern and the Apple GCC/PowerPC
 toolchain is in /osxcross/legacy/target. Please start by reading the README.md
-and AGENTS.md files in /altivec. Please always create makefiles for my app using
+in /altivec and my project AGENTS.md. App defaults are in
+/altivec/templates/AGENTS.md. Please always create makefiles for my app using
 the altivec_common_[mac|phone].mk files in /altivec so I can ensure my makefiles
 are small and make apps compatible with many retro Apple devices. Make sure you
 treat my repo (/repo/user) as the base location for your work on my app as
@@ -296,7 +297,11 @@ package is currently built.
 - [`compose.yml`](./compose.yml): The **engine-development** compose — clone-and-build the image locally and mount your live checkout at `/repo/altivec`. Only needed if you are customizing the engine itself.
 - [`bin`](./bin/): Runtime scripts on `PATH` inside the image, including `altivec-sdk` for verified SDK archive management.
 - [`docs/deployment.md`](./docs/deployment.md): Manual install, run, log collection, and cleanup recipes.
-- `AGENTS.md`: AI mandates and technical constraints (also surfaced as CLAUDE.md / GEMINI.md via symlink).
+- `AGENTS.md`: guidance for maintaining AltivecIntelligence itself (also surfaced
+  as CLAUDE.md / GEMINI.md via symlink in the image).
+- `templates/AGENTS.md`: app-development defaults copied by the chooser only when
+  the working directory has no AGENTS.md entry. Existing copies are preserved;
+  customize them for the app.
 
 ## Declarative application builds
 

@@ -5,8 +5,8 @@
 # three verified SDK archives in .altivec-sdk/ or the host ~/.altivec-sdk/.
 #
 # Project rules and conventions for AI agents are documented at
-# /altivec/AGENTS.md inside the image (symlinked as CLAUDE.md / GEMINI.md
-# for agent-native discovery). User apps live at /repo/user/.
+# /altivec/templates/AGENTS.md inside the image. The chooser copies it into
+# the app only when AGENTS.md is absent. User apps live at /repo/user/.
 #
 # Usage:
 # 1. Drop this file into your project root:

@@ -360,7 +360,7 @@ function updateAgent(npmPath, packageName) {
 }
 
 function ensureAgentGuidance(
-  source = "/altivec/AGENTS.md",
+  source = "/altivec/templates/AGENTS.md",
   destination = path.join(process.cwd(), "AGENTS.md"),
 ) {
   try {

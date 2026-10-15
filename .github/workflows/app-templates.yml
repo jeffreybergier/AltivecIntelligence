@@ -1,9 +1,9 @@
 name: App templates
 on:
   push:
-    paths: ['packages/altivec-app/**', 'bin/altivec-app', 'bin/altivec-chooser', 'test/altivec-chooser.test.cjs', 'make/**', 'test/altivec-app.test.cjs', 'test/test_app_templates_container.sh', 'templates/compose.yml', '.github/workflows/app-templates.yml']
+    paths: ['packages/altivec-app/**', 'bin/altivec-app', 'bin/altivec-chooser', 'test/altivec-chooser.test.cjs', 'make/**', 'test/altivec-app.test.cjs', 'test/test_app_templates_container.sh', 'templates/compose.yml', 'templates/AGENTS.md', '.github/workflows/app-templates.yml']
   pull_request:
-    paths: ['packages/altivec-app/**', 'bin/altivec-app', 'bin/altivec-chooser', 'test/altivec-chooser.test.cjs', 'make/**', 'test/altivec-app.test.cjs', 'test/test_app_templates_container.sh', 'templates/compose.yml', '.github/workflows/app-templates.yml']
+    paths: ['packages/altivec-app/**', 'bin/altivec-app', 'bin/altivec-chooser', 'test/altivec-chooser.test.cjs', 'make/**', 'test/altivec-app.test.cjs', 'test/test_app_templates_container.sh', 'templates/compose.yml', 'templates/AGENTS.md', '.github/workflows/app-templates.yml']
   workflow_dispatch:
     inputs:
       sdk_matrix:

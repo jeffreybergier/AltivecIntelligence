@@ -369,7 +369,7 @@ function buildFiles(o) {
   );
   put(
     "AGENTS.md",
-    `# ${name}\n\nUse root Make targets and declarative products; build mechanics belong in Altivec.\nKeep C logic in source/shared, Objective-C facades narrow, Mac UI MRC and iOS UI ARC.\nPrefix compatibility helpers XP. Use bracket syntax and explicit retain/release in MRC.\nRun make test-host and make check-project first, then selected platform builds,\nanalyze and validate-package. Device tests are explicit and use caller-supplied\nNATIVE_HOST, NATIVE_STAGE and NATIVE_PLATFORM; never infer device validation from a cross-build.\nDo not change application code automatically when updating a template.\n`,
+    `# ${name}\n\nRead /altivec/templates/AGENTS.md for app-development defaults inside the image;\nthese project-specific instructions take precedence.\nUse root Make targets and declarative products; build mechanics belong in Altivec.\nKeep C logic in source/shared, Objective-C facades narrow, Mac UI MRC and iOS UI ARC.\nPrefix compatibility helpers XP. Use bracket syntax and explicit retain/release in MRC.\nRun make test-host and make check-project first, then selected platform builds,\nanalyze and validate-package. Device tests are explicit and use caller-supplied\nNATIVE_HOST, NATIVE_STAGE and NATIVE_PLATFORM; never infer device validation from a cross-build.\nDo not change application code automatically when updating a template.\n`,
   );
   put(
     "README.md",
