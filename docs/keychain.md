@@ -163,7 +163,10 @@ This compiles/links all six slices with warnings treated as errors and signs
 the iOS native test executable. Set `KEYCHAIN_TEST_OUTPUT_DIR` to retain the
 PPC/armv7/arm64 executables for explicit native deployment. The iOS fixture uses
 a dedicated test access group and unique service/domain names, and removes
-only its own entries. It needs a jailbreak-compatible signing environment.
+only its own entries. It also seeds generic and internet items through SecItem,
+then verifies shared reads/updates, legacy account discovery, accessibility
+preservation, explicit policy refresh, and native not-found after deletion.
+It needs a jailbreak-compatible signing environment.
 
 Optional sibling-checkout integration tests:
 
@@ -193,8 +196,13 @@ Validated locally on 2026-10-15:
   the shared implementation reported no findings.
 - Shared Make regression tests passed (17 run; Debian packaging skipped on the
   host because `dpkg-deb` is unavailable).
-- `koolphone5` SSH timed out. Its signed native armv7 executable is prepared,
-  but iPhone runtime coverage is explicitly skipped with user authorization.
+- `koolphone5` (iOS 8.4.1, build 12H321, armv7) passed the native isolated
+  CRUD test and the expanded native-created-item/accessibility-policy test.
+  This supersedes the earlier SSH timeout and authorized skip. The expanded
+  fixture was rebuilt through all six compile/link checks with `-Werror`, then
+  signed on-device using `ldid -SKeychainTestEntitlements.plist` and run under
+  `~/tmp_altivec/keychain-20261015`. It used synthetic values and unique
+  identities in `org.altivec.keychain-test`, and removed its own fixtures.
 - Native rCloud existing-item ACL editing timed out on the modern host and
   was denied in the noninteractive Tiger fixture. The bounded recorder test
   proves forwarding/failure behavior, not real ACL-edit authorization.

@@ -94,7 +94,8 @@ SpringBoard may accept a local alert without displaying it in BulletinBoard.
 The shared API does not fix or detect that installation limitation, and
 Submitted must never be presented as proof of display. Final `koolphone5`
 permission/display/cleanup checks are tracked in `TODO.md`, separately from
-the passing recording-backend tests and the deferred phone Keychain checks.
+the passing recording-backend tests and the separately documented Keychain
+runtime checks.
 
 From Strappy, build the offline production-delegate regressions with
 `python3 source/daemon/tests/notifications_test.py macOS` (or `iOS`) inside the
@@ -160,4 +161,5 @@ signing with `ldid -S` before execution. No production app, accounts or daemon
 were started by these tests. Actual production banners, notification-tray
 removal, and native permission combinations remain unverified; the iOS tests
 exercise recording-backend policy/lifecycle behavior, not visual OS display.
-The separate Keychain phone TODO remains open.
+The separate native Keychain phone tests subsequently passed; see
+[keychain validation](keychain.md).

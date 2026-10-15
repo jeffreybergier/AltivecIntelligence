@@ -625,14 +625,20 @@ cache invalidation and provider locking mostly remain in the apps.
   access group/after-first-unlock policy differ from Strappy's defaults; expose
   reviewed options rather than flattening those differences. Preserve Strappy's
   background no-dialog behavior and duplicate-add/update recovery.
-- [ ] Verify native read/save/update/delete and existing credential compatibility
-  on the supported Mac/iOS targets using isolated test identities; measure net
-  source deletion and adapter costs before widening the API.
+- [x] Verify native read/save/update/delete and native-created credential
+  compatibility using isolated identities on the host Mac, Tiger/PPC and
+  `koolphone5` (iOS 8.4.1 armv7). Net deletion and adapter costs are recorded.
+- [ ] Complete remaining Keychain native coverage: interactive Mac ACL edits,
+  real consumer login, locked-iPhone behavior, provisioned access-group sharing,
+  and other supported OS/architecture combinations. Isolated fixture results
+  do not establish these scenarios.
 
 Keychain follow-through (2026-10-15): all three consumers clean-build for Mac
 and iOS in debug/release; their offline suites and isolated host/Tiger facade
-tests pass. The native library passes on `x4-vm`. The signed `koolphone5` test is
-ready, but SSH timed out and the user authorized skipping phone runtime tests.
+tests pass. The native library passes on `x4-vm`. The native `koolphone5`
+fixture now passes on iOS 8.4.1 armv7, including CRUD, native-created generic
+and internet items, legacy discovery, accessibility preservation and explicit
+policy refresh. Fixtures use unique identities and clean up their own items.
 rCloud existing-item ACL authorization remains an interactive native gap; its
 unattended tests record that one call and verify propagation and denied-update
 behavior. Net physical implementation/header reduction is 277 lines after the
@@ -655,8 +661,9 @@ ENIL (Mac/iOS) and Retro-DLP (iOS) use immediate background-only alerts.
   foreground suppression and visible alert/badge cleanup on `koolphone5`.
   Record the unsandboxed/system-app display limitation separately from successful
   submission; the passing recording tests cannot prove banner/tray display.
-- [ ] Finish the previously deferred isolated Keychain runtime checks on
-  `koolphone5`; the notification test run does not cover Keychain.
+- [x] Finish the previously deferred isolated Keychain runtime checks on
+  `koolphone5`: native CRUD and legacy-item/accessibility-policy compatibility
+  passed separately from notifications on 2026-10-15 (iOS 8.4.1 armv7).
 
 Strappy follow-through (2026-10-15): all six slices clean-build in debug/release
 without compiler warnings. The production-delegate recording regression passes
@@ -869,9 +876,10 @@ Keep operational work separate from optional library expansion:
 1. Finish remaining validation evidence. Sibling-guide floor corrections and
    the chooser/default AGENTS handoff are complete. Device/query/performance gaps
    remain their own validation tasks; they do not require a new framework.
-2. Complete remaining Keychain native evidence: phone runtime and interactive
-   ACL authorization. ENIL, Strappy and rCloud now use the shared implementation;
-   measured net deletion and adapter costs are recorded in `docs/keychain.md`.
+2. Complete remaining Keychain native evidence, including interactive ACL
+   authorization and locked-phone/provisioned-group behavior. Isolated phone
+   runtime validation now passes. ENIL, Strappy and rCloud use the shared
+   implementation; coverage and deletion are recorded in `docs/keychain.md`.
 3. Finish Strappy's `koolphone5` notification validation above. Its private
    backends have been removed in favor of the existing shared API.
 4. Evaluate narrow Mac launchd helpers. Proceed only if the shared implementation
