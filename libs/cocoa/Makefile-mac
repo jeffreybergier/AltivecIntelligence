@@ -11,14 +11,14 @@ PUBLIC_LIB_DIR=$(BUILD_ROOT)/lib
 PUBLIC_INCLUDE_DIR=$(BUILD_ROOT)/include
 PUBLIC_RESOURCE_DIR=$(BUILD_ROOT)/Resources
 
-COCOA_SOURCES=AICollectionOutlineAdapter.m AICollectionTableViewController.m AICollectionController.m AICollectionSnapshot.m AICollectionTableAdapter.m \
+COCOA_SOURCES=AIKeychainStore.m AICollectionOutlineAdapter.m AICollectionTableViewController.m AICollectionController.m AICollectionSnapshot.m AICollectionTableAdapter.m \
               AILocalNotificationCenter.m AILocalNotificationBackend.m \
               AICoalescedCallback.m AIPagedRows.m \
               AIViewController.m \
               AICookieCutterWindowController.m \
               AIWebViewController.m \
               AIFontAwesome.m
-COCOA_HEADERS=AICollectionOutlineAdapter.h AICollectionTableViewController.h AICollectionController.h AICollectionSnapshot.h AICollectionTableAdapter.h \
+COCOA_HEADERS=AIKeychainStore.h AICollectionOutlineAdapter.h AICollectionTableViewController.h AICollectionController.h AICollectionSnapshot.h AICollectionTableAdapter.h \
               AILocalNotificationCenter.h \
               AICoalescedCallback.h AIPagedRows.h \
               AltivecCocoa.h \
@@ -53,7 +53,7 @@ DYLIB_LINK_FLAGS=-dynamiclib \
                  -compatibility_version $(FRAMEWORK_COMPAT_VER) \
                  -current_version $(FRAMEWORK_CURRENT_VER) \
                  -Wl,-headerpad_max_install_names
-COCOA_FRAMEWORKS=-framework AppKit -framework WebKit \
+COCOA_FRAMEWORKS=-framework Security -framework AppKit -framework WebKit \
                  -framework CoreServices -framework ApplicationServices \
                  -lobjc
 
@@ -179,6 +179,7 @@ verify-static: $(PUBLIC_LIB)
 $(INTERMEDIATE)/exports-legacy.txt: Makefile-mac
 	mkdir -p $(INTERMEDIATE)
 	printf '%s\n' \
+	  '.objc_class_name_AIKeychainStore' \
 	  '.objc_class_name_AICollectionOutlineAdapter' \
 	  '.objc_class_name_AICollectionController' \
 	  '.objc_class_name_AICollectionSnapshot' \
@@ -196,6 +197,8 @@ $(INTERMEDIATE)/exports-legacy.txt: Makefile-mac
 $(INTERMEDIATE)/exports-modern.txt: Makefile-mac
 	mkdir -p $(INTERMEDIATE)
 	printf '%s\n' \
+	  '_OBJC_CLASS_$$_AIKeychainStore' \
+	  '_OBJC_METACLASS_$$_AIKeychainStore' \
 	  '_OBJC_CLASS_$$_AICollectionOutlineAdapter' \
 	  '_OBJC_METACLASS_$$_AICollectionOutlineAdapter' \
 	  '_OBJC_CLASS_$$_AICollectionController' \

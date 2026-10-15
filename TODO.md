@@ -601,14 +601,22 @@ promotes it. ENIL's 98-line `ENILKeychain.m` and Strappy's 727-line
 Their environment overrides, account formats, OAuth serialization, migrations,
 cache invalidation and provider locking mostly remain in the apps.
 
-- [ ] Extract the repeated internet/generic password storage mechanics behind
+- [x] Compare SAMKeychain/UICKeyChainStore public APIs and implement a narrow
+  UIC-style `AIKeychainStore` for generic and scoped internet passwords, with
+  Tiger MRC and iOS backends, native error codes and update-before-add recovery.
+  See [API decision, contract and validation](docs/keychain.md). A named legacy
+  discovery bridge preserves account-only lookup for migrated apps.
+- [x] Extract the repeated internet/generic password storage mechanics behind
   a narrow optional API, retaining Tiger `SecKeychain*` and iOS `SecItem*`
   backends. Preserve existing stored-item lookup identity and return native
   status/error distinctions; do not silently migrate or rename secrets.
-- [ ] Pilot ENIL and Strappy migrations that remove their private low-level
-  backends while keeping credential schema, login flows and migration policy in
-  app facades. Provide an injectable in-memory store for offline app tests.
-- [ ] Evaluate rCloud as the third consumer, retaining its C-facing API and
+- [x] Migrate ENIL and Strappy to remove private low-level backends while keeping
+  credential schema, login flows and migration policy in their app facades.
+  Isolated native consumer tests pass on the host Mac and Tiger/PPC.
+- [ ] Add a reusable in-memory store for offline app tests if needed. The shared
+  `AIKeychainStorage` injection protocol and deterministic native-call recorders
+  are implemented; no reusable in-memory backend is shipped yet.
+- [x] Migrate rCloud as the third consumer, retaining its C-facing API and
   explicit GUI/daemon access policy. Its Mac trusted-application ACL and iOS
   access group/after-first-unlock policy differ from Strappy's defaults; expose
   reviewed options rather than flattening those differences. Preserve Strappy's
@@ -616,6 +624,17 @@ cache invalidation and provider locking mostly remain in the apps.
 - [ ] Verify native read/save/update/delete and existing credential compatibility
   on the supported Mac/iOS targets using isolated test identities; measure net
   source deletion and adapter costs before widening the API.
+
+Keychain follow-through (2026-10-15): all three consumers clean-build for Mac
+and iOS in debug/release; their offline suites and isolated host/Tiger facade
+tests pass. The native library passes on `x4-vm`. The signed `koolphone5` test is
+ready, but SSH timed out and the user authorized skipping phone runtime tests.
+rCloud existing-item ACL authorization remains an interactive native gap; its
+unattended tests record that one call and verify propagation and denied-update
+behavior. Net physical implementation/header reduction is 277 lines after the
+new shared code and remaining app adapters (excluding tests/docs/Make wiring).
+Retro-DLP has no first-party Keychain backend to replace; its cookie handling
+remains unchanged. No existing user credentials were migrated by the tests.
 
 ### Local notifications and notification activation
 
@@ -829,8 +848,9 @@ Keep operational work separate from optional library expansion:
 1. Finish remaining sibling-guide corrections and validation evidence. The
    chooser/default AGENTS handoff is complete. Device/query/performance gaps
    remain their own validation tasks; they do not require a new framework.
-2. Pilot shared Keychain storage in ENIL and Strappy. Measure actual net deletion;
-   evaluate rCloud next without erasing its access-policy differences.
+2. Complete remaining Keychain native evidence: phone runtime and interactive
+   ACL authorization. ENIL, Strappy and rCloud now use the shared implementation;
+   measured net deletion and adapter costs are recorded in `docs/keychain.md`.
 3. Remove Strappy's remaining notification backend duplication using the existing
    shared API. Although the service candidate has a larger source scope, this
    migration has higher-confidence savings and less new infrastructure.

@@ -9,6 +9,7 @@
 #import "AIWebViewController.h"
 #import "AIFontAwesome.h"
 
+#import "AIKeychainStore.h"
 #import "AILocalNotificationCenter.h"
 #import "AICollectionController.h"
 #import "AICollectionSnapshot.h"

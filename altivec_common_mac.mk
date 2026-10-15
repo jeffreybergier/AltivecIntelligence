@@ -129,7 +129,7 @@ ifeq ($(ALTIVECCOCOA_REQUIRED),1)
       ALTIVECCOCOA_RESOURCE_DIR = $(ALTIVECCOCOA_DIR)/Resources
       MAC_FLAGS += -I$(ALTIVECCOCOA_DIR)/include
       MAC_LIBS  += $(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a \
-                   -framework WebKit \
+                   -framework Security -framework WebKit \
                    -framework CoreServices \
                    -framework ApplicationServices
     endif

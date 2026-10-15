@@ -162,7 +162,7 @@ endif
 ifeq ($(ALTIVECCOCOA_REQUIRED),1)
   ifneq ($(strip $(ALTIVECCOCOA_DIR)),)
     IOS_FRAMEWORKS += $(ALTIVECCOCOA_DIR)/lib/libAltivecCocoa.a \
-                      -framework CoreText
+                      -framework Security -framework CoreText
   endif
 endif
 

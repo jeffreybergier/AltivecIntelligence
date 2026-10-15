@@ -1,0 +1,14 @@
+name: Keychain
+on:
+  push:
+    paths: ['libs/cocoa/AIKeychainStore.*', 'libs/cocoa/tests/*keychain*', '.github/workflows/keychain.yml']
+  pull_request:
+    paths: ['libs/cocoa/AIKeychainStore.*', 'libs/cocoa/tests/*keychain*', '.github/workflows/keychain.yml']
+permissions:
+  contents: read
+jobs:
+  native-and-recorder:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash libs/cocoa/tests/test_keychain.sh
