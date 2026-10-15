@@ -1,9 +1,18 @@
-# AltivecIntelligence improvement plan
+# Implementation history and review evidence
+
+Archived from the root improvement plan on 2026-10-15. Open tasks have moved
+to [the active roadmap](TODO.md); completed records and historical proposal
+context remain here. Descriptions such as "current", "remaining", or "next"
+below refer to the original review date, not present priorities. Evidence is
+limited to the runs recorded; this cleanup reran no builds or device tests.
+Repository paths in backticks remain relative to the repository root.
+
+## Original improvement plan
 
 Initial repository review: 2026-10-10. Reconciled on 2026-10-14 against local
 source and commits through 2026-10-13 in this repository and the four sibling
-apps. Checked items record implemented behavior; unchecked items identify
-remaining work or evidence gaps. Validation notes describe earlier runs, not
+apps. Checked items record implemented behavior; open work and evidence gaps
+are now tracked in the active roadmap. Validation notes describe earlier runs, not
 tests rerun during this documentation review.
 
 The evidence table below preserves the original review baseline; its descriptions
@@ -311,8 +320,6 @@ app-plus-daemon, and CLI/library/app fixtures all package under root `build/`.
 - [x] Carry forward Retro-DLP's documented Leopard limits (300,000 bytes per ICNS
   element and 1,000,000 bytes total) as a tested compatibility profile. Record
   native icon/launch evidence separately from structural validation.
-- [ ] Extend native icon/launch evidence to iOS 5 and Leopard; those OS versions
-  were not available on the supplied test machines.
 - [x] Distinguish zero npm dependencies from zero external tools: asset conversion
   can invoke a documented image tool already provided by the environment.
 
@@ -451,11 +458,6 @@ shared Make contract suite (17 passing tests).
   with per-slice compiler floors distinguished from native device evidence.
 - [x] Reconcile sibling guides' stale iOS 4.3 claims with the iOS 5.0 armv7
   / iOS 7.0 arm64 build floors (Strappy and ENIL guidance, including ENIL's TODO).
-- [ ] Keep tiny sample apps as build fixtures; make richer examples generated
-  from supported templates so documentation and templates cannot drift apart.
-  Replace duplicated CURL-wrapper teaching examples with a minimal direct-libcurl
-  or shared-model example matching the current development guidance.
-
 Onboarding/artwork follow-through (2026-10-14): README/AGENTS now start with
 `altivec-app` and root targets, state per-slice compiler floors, and document
 tool discovery. Generated icons/launch images are white; Mac ICNS now matches
@@ -523,12 +525,14 @@ follow-through are recorded in their dedicated sections below.
 | 5 | Small native-test helpers | Repeated waits/assertions/results in Strappy's `async_ui_device_probe.m` and `session_options_device_probe.m`, Retro-DLP's Mac/UIKit UI tests, ENIL's `settings_ui_test.m`, and rCloud's `AppGUITestRunner.m`/`RCIOSUITests.m`. | Reuse bounded waits, screenshot/report helpers only after measuring a pilot. Most large test files are distinct scenarios; rCloud's substantial Accessibility traversal is not duplicated by the controller-based tests. A few-line screenshot function alone does not justify a large test framework. Keep any shared support outside release products. |
 
 Source evidence for the leading candidates:
-[ENIL platform helpers](../ENIL/source/shared/XPFoundation.m),
-[Strappy Keychain backend](../Strappy-Cocoa/source/daemon/XPKeychain.m),
-[rCloud Mac credentials](../Retro-Cloud-Sync/source/shared/RCICloudCredentials.c),
-[rCloud iOS credentials](../Retro-Cloud-Sync/source/iOS-daemon/RCIOSCredentials.c),
-[Strappy service](../Strappy-Cocoa/source/macOS/StrappyServiceController.m),
-[rCloud service](../Retro-Cloud-Sync/source/macOS-app/RCServiceController.m).
+[ENIL platform helpers](../../ENIL/source/shared/XPFoundation.m),
+[Strappy Keychain backend](../../Strappy-Cocoa/source/daemon/XPKeychain.m),
+rCloud Mac credentials (`../Retro-Cloud-Sync/source/shared/RCICloudCredentials.c`,
+removed since the audit),
+rCloud iOS credentials (`../Retro-Cloud-Sync/source/iOS-daemon/RCIOSCredentials.c`,
+removed since the audit),
+[Strappy service](../../Strappy-Cocoa/source/macOS/StrappyServiceController.m),
+[rCloud service](../../Retro-Cloud-Sync/source/macOS-app/RCServiceController.m).
 
 Do not promote these remaining proposals on duplication grounds yet:
 
@@ -549,15 +553,9 @@ Do not promote these remaining proposals on duplication grounds yet:
 - **Query audits, performance measurements, device coverage, templates and
   chooser/docs work:** useful independent tasks, not reasons to add abstractions.
 
-- [ ] For each proposed extraction, record app implementation lines removed,
-  shared implementation lines added, and remaining adapter/configuration lines
-  using comparable formatting; report tests separately. Require substantial
-  repeated mechanics removed across at least two real consumers. Moving unique
-  app code into a library, or adding an unused general framework, does not pass.
-- [ ] Start with a Keychain pilot in ENIL and Strappy, then evaluate rCloud's
-  access-policy requirements. Compare the resulting net deletion before
-  committing to the remaining proposed modules. Implement no abstraction solely
-  because it appears on this roadmap.
+- [x] Keychain pilot and three-consumer migration completed; see the
+  2026-10-15 Keychain follow-through below. This supersedes the earlier
+  unchecked pilot task.
 
 ### Recent consumer evidence
 
@@ -583,20 +581,15 @@ checkout context, not proof of published artifacts or device validation.
   C-only consumers can omit COCOA. Generic row/table interfaces remain in
   AltivecCocoa without an AltivecCore dependency; no weak linkage is required.
 - [x] Document implemented backend/floor/fallback matrices in
-  [notifications](docs/notifications.md) and [SQLite](docs/sqlite.md). Shared
+  [notifications](notifications.md) and [SQLite](sqlite.md). Shared
   APIs retain Tiger MRC and iOS 5 armv7 / iOS 7 arm64 floors, with runtime-gated
   platform behavior and no blocks/ARC requirement.
 - [x] Reconcile stale iOS 4.3 claims in sibling guides with their current iOS 5
   armv7 / iOS 7 arm64 build floors.
-- [ ] Extend capability documentation when new backends or signing profiles land;
-  do not infer native coverage from cross-builds.
 - [x] Document borrowed targets, copied payloads, explicit invalidation, main-thread
   delivery, cancellation, and stale-generation suppression for the implemented
   observers/workers. See the module headers and
-  [collection lifetime contract](libs/cocoa/COLLECTIONS.md).
-- [ ] Apply the same ownership/shutdown contract to future background and service
-  adapters, including nonblocking teardown and expiration races.
-
+  [collection lifetime contract](../libs/cocoa/COLLECTIONS.md).
 ### Shared Keychain storage — first extraction candidate
 
 Keychain was previously listed only as a follow-on; the repetition audit above
@@ -608,7 +601,7 @@ cache invalidation and provider locking mostly remain in the apps.
 - [x] Compare SAMKeychain/UICKeyChainStore public APIs and implement a narrow
   UIC-style `AIKeychainStore` for generic and scoped internet passwords, with
   Tiger MRC and iOS backends, native error codes and update-before-add recovery.
-  See [API decision, contract and validation](docs/keychain.md). A named legacy
+  See [API decision, contract and validation](keychain.md). A named legacy
   discovery bridge preserves account-only lookup for migrated apps.
 - [x] Extract the repeated internet/generic password storage mechanics behind
   a narrow optional API, retaining Tiger `SecKeychain*` and iOS `SecItem*`
@@ -617,9 +610,6 @@ cache invalidation and provider locking mostly remain in the apps.
 - [x] Migrate ENIL and Strappy to remove private low-level backends while keeping
   credential schema, login flows and migration policy in their app facades.
   Isolated native consumer tests pass on the host Mac and Tiger/PPC.
-- [ ] Add a reusable in-memory store for offline app tests if needed. The shared
-  `AIKeychainStorage` injection protocol and deterministic native-call recorders
-  are implemented; no reusable in-memory backend is shipped yet.
 - [x] Migrate rCloud as the third consumer, retaining its C-facing API and
   explicit GUI/daemon access policy. Its Mac trusted-application ACL and iOS
   access group/after-first-unlock policy differ from Strappy's defaults; expose
@@ -628,11 +618,6 @@ cache invalidation and provider locking mostly remain in the apps.
 - [x] Verify native read/save/update/delete and native-created credential
   compatibility using isolated identities on the host Mac, Tiger/PPC and
   `koolphone5` (iOS 8.4.1 armv7). Net deletion and adapter costs are recorded.
-- [ ] Complete remaining Keychain native coverage: interactive Mac ACL edits,
-  real consumer login, locked-iPhone behavior, provisioned access-group sharing,
-  and other supported OS/architecture combinations. Isolated fixture results
-  do not establish these scenarios.
-
 Keychain follow-through (2026-10-15): all three consumers clean-build for Mac
 and iOS in debug/release; their offline suites and isolated host/Tiger facade
 tests pass. The native library passes on `x4-vm`. The native `koolphone5`
@@ -648,7 +633,7 @@ remains unchanged. No existing user credentials were migrated by the tests.
 
 ### Local notifications and notification activation
 
-Implemented in `48f2ac9`; see [the notification contract](docs/notifications.md).
+Implemented in `48f2ac9`; see [the notification contract](notifications.md).
 ENIL (Mac/iOS) and Retro-DLP (iOS) use immediate background-only alerts.
 
 - [x] Migrate Strappy's private Mac/iOS `XPUserNotificationCenter` to the existing
@@ -657,10 +642,6 @@ ENIL (Mac/iOS) and Retro-DLP (iOS) use immediate background-only alerts.
   Unknown permission mapping and shared foreground cleanup.
 - [x] Run Strappy's isolated notification delegate test and shared notification
   harness on `koolphone5`: both passed on iOS 8.4.1 armv7 (2026-10-15).
-- [ ] Check production permission settings, background success/failure banners,
-  foreground suppression and visible alert/badge cleanup on `koolphone5`.
-  Record the unsandboxed/system-app display limitation separately from successful
-  submission; the passing recording tests cannot prove banner/tray display.
 - [x] Finish the previously deferred isolated Keychain runtime checks on
   `koolphone5`: native CRUD and legacy-item/accessibility-policy compatibility
   passed separately from notifications on 2026-10-15 (iOS 8.4.1 armv7).
@@ -672,7 +653,7 @@ shared notification harness also passes on `x4-vm`. The isolated iOS test IPA
 passed on `koolphone5` (iOS 8.4.1 armv7), as did the shared notification
 harness. Net production source/header deletion is 264 lines, with
 no new shared implementation; tests/docs are counted separately. See
-[notification validation and behavior changes](docs/notifications.md).
+[notification validation and behavior changes](notifications.md).
 
 - [x] Provide `AILocalNotificationCenter` authorization/capability reporting,
   explicit permission requests, immediate alerts, badges, activation routing,
@@ -686,19 +667,9 @@ no new shared implementation; tests/docs are counted separately. See
 - [x] Add an injectable recording backend and deterministic native permission,
   lifecycle, cleanup-order, badge, cold-launch activation, error, and invalidation
   regressions, plus Retro-DLP production-delegate coverage.
-- [ ] Verify actual notification-tray clearing and permission combinations across
-  supported iOS versions. ENIL has a user-observed clearing result, but recording
-  tests and that observation do not establish the full OS/permission matrix.
-- [ ] Add scheduling, stable request IDs, replacement/per-notification removal,
-  and configurable presentation policies, with cancellation and duplicate/racing
-  completion regressions for those new APIs. Keep wording/privacy/routing in apps.
-- [ ] Evaluate a modern UserNotifications backend against the provisioned SDKs;
-  add an explicit app/delegate presentation fallback where native alerts are
-  unsupported. The current backend reports Unsupported without fake success.
-
 ### Committed SQLite changes from C to Objective-C
 
-Implemented in `7ea3ae1`; see [the migration contract](docs/sqlite.md).
+Implemented in `7ea3ae1`; see [the migration contract](sqlite.md).
 Strappy uses the shared revision journal and observer; Retro-DLP uses shared
 read snapshots and observation. Domain transactions and IPC remain app-owned.
 
@@ -722,10 +693,6 @@ read snapshots and observation. Domain transactions and IPC remain app-owned.
   text identities, statement reuse, and WAL release. Native Foundation coverage
   checks observer invalidation, stale generations, and bounded debounce;
   ENIL consumes `AICoalescedCallback` for committed UI events.
-- [ ] Complete app-level native evidence for two independent windows across daemon
-  restart/reconnect and account teardown with callbacks in flight. Portable
-  cursor/reset tests do not by themselves establish those full UI/IPC scenarios.
-
 ### Efficient SQLite-backed NSTableView and UITableView data sources
 
 - [x] Extract the C `ai_query_snapshot` reader and schema-independent `AIPagedRows`.
@@ -756,112 +723,29 @@ read snapshots and observation. Domain transactions and IPC remain app-owned.
   cache bounds, cancellation, snapshot isolation, and WAL release. Measure shared
   snapshot construction/diff costs on the host Mac and Tiger VM; fix identity-hash
   collisions and add unchanged/large-diff fast paths. See
-  [benchmark scope and results](libs/cocoa/tests/BENCHMARKS.md).
+  [benchmark scope and results](../libs/cocoa/tests/BENCHMARKS.md).
 - [x] Move collection comparison onto the serialized worker after main-thread
   receipt, then publish the model/apply table changes on the main thread.
   Prepared diffs require the exact previous snapshot; stale work is discarded.
   Migrate list callers in ENIL, Strappy, and Retro-DLP. Immediate form mutations
   reload safely without diff work. Retain bounded large-list fallback.
-- [ ] Measure end-to-end initial display, scrolling, random jumps, sorting/filtering,
-  and concurrent writes on legacy devices. Record query plans/counts, memory/cache
-  bounds, UI stalls, and retained WAL; establish budgets before changing limits
-  or the consumers' deliberate synchronous cell-text policy. Existing microbenchmarks
-  exclude SQL and native table rendering.
-- [ ] Audit consumer query coverage for NULLs, duplicate sort values, descending
-  order, deletes, and stable tie-breakers; retain app-specific index/query-plan
-  assertions. The generic cache/reader tests do not prove every domain query.
-- [ ] Close recorded native gaps: rerun rCloud's isolated UIKit suite after the
-  runner timeout and establish coverage for its new text-log/settings behavior;
-  distinguish unavailable optional GNUstep coverage from native Apple results.
-
 ### Background work, progress, and service lifecycle
-
-- [ ] After a deletion-positive finite-task pilot, consider
-  `AIBackgroundWorkCoordinator` with explicit work tokens, operation
-  counts, cancellation, checkpoint/resume delegates, and exactly-once finish.
-  Start with Retro-DLP's finite iOS allowance and ENIL's assertion cleanup.
-  Handle expiration, rejected allowances, foreground return, and completion
-  racing expiration without leaking a task or starting new work after expiry.
-- [ ] Keep finite UIKit execution, platform-specific background modes, Mac
-  sleep/wake, and launchd services as separate backends/capabilities. Persistent
-  jobs need app-owned durable checkpoints and restart recovery. Do not turn
-  ENIL's legacy VoIP behavior into a general-purpose background guarantee or
-  silently add background modes/private entitlements to consumer apps.
-- [ ] Extract shared progress/error delivery into a small operation adapter:
-  bounded main-thread updates, stable operation IDs, terminal results, and
-  cancellation that prevents late UI updates. Leave retry/idempotency decisions
-  with the app; interrupted mutations may have an unknown outcome.
-- [ ] First evaluate the repeated Mac launchd helpers identified above. Pilot
-  broader `AIServiceClient` status/control adapters only after demonstrating
-  matching removable transport/lifecycle code in Strappy and rCloud:
-  readiness, timeout, reconnect, stop acknowledgement, and bounded log tails.
-  Keep service installation and privilege decisions in the existing package
-  tooling. Test with isolated fake services and restart/failure injection.
 
 Reference: [Apple's finite background execution guidance](https://developer.apple.com/documentation/uikit/extending-your-app-s-background-execution-time).
 
 ### Entitlements, signatures, and capability diagnostics
 
-- [ ] Extend `make/sign.mk`, bundle signing, and `validate-package` rather than
-  adding a second signer inside AltivecCocoa. Define declarative per-product
-  capability profiles that resolve to reviewed entitlements, Info.plist keys,
-  and signing inputs for the app, each helper, and test bundles independently.
-  Preserve explicit overrides and sandbox/rootful/rootless distinctions.
-- [ ] Validate the built artifact's embedded entitlements and signature against
-  the declared profile, including nested executables and slices. Distinguish
-  jailbreak/ad-hoc signatures from provisioned identity requirements; report
-  unsupported signing combinations instead of implying installation acceptance.
-  Keep signing keys and provisioning material outside generated source.
-- [ ] Expose small runtime capability/error diagnostics in AltivecCocoa so apps
-  can distinguish unavailable APIs, denied permissions, and service failures.
-  Test stable application identity/privacy-grant behavior across rebuilds on
-  native systems; structural signature checks alone cannot establish it.
-
 ### Offline native UI test support
-
-- [ ] Create an optional `AltivecCocoaTestSupport` target, excluded from release
-  products. Extract predicate-based run-loop waits with deadlines, assertions,
-  fixture setup/cleanup, screenshots, and structured results from Retro-DLP and
-  rCloud. Apps should supply scenarios and small fake model/service adapters.
-- [ ] Provide AppKit and UIKit example suites using real production controllers
-  with seeded SQLite stores, local assets, fake clocks, notification recorders,
-  and injected workers/transports. Fail unexpected network requests; use
-  loopback fixtures only when testing transport. Require no live accounts,
-  credentials, service APIs, media downloads, or fixture fetches during tests.
-- [ ] Run controller/action tests inside a native test app on old OS versions;
-  retain Accessibility/event-driven UI coverage where available and optional
-  modern XCTest adapters. Label controller tests separately from actual input,
-  OS notification, suspension, and installation tests. Offline does not mean
-  a UIKit/AppKit runtime can execute on Linux.
-- [ ] Give each run isolated databases, defaults, bundle IDs/Keychain items,
-  notification IDs, and service endpoints. Clean up only owned fixtures and
-  retain failure evidence. Reuse explicit host/staging inputs and timeouts from
-  section 6; avoid hard-coded personal devices or a new deployment framework.
-- [ ] Share scenarios for empty/error/loading lists, burst refreshes, selection
-  preservation, notification activation, expiration/completion races, service
-  reconnection, and window/controller teardown. Report tested OS/architecture
-  and skipped native coverage separately from portable or cross-build results.
 
 ### Follow-on candidates and delivery gates
 
 Keychain work is promoted to the dedicated section above.
 
-- [ ] Evaluate bounded asset loading/caching using ENIL's `enil_asset_cache` and
-  Retro-DLP's thumbnail consumers: cancellation on row reuse, deduplicated
-  requests, byte limits, atomic cache writes, and main-thread publication.
-  Extract only after a second consumer validates the same contract.
 - [x] Deliver notifications with recording tests, the committed-change feed, and
   paged rows/table adapters as separate slices with consumer migrations.
-- [ ] Continue with background/service adapters and capability profiles, adding
-  offline regression support with each slice.
 - [x] Migrate notifications to ENIL/Retro-DLP, SQLite infrastructure to
   Strappy/Retro-DLP, and collection adapters to all four apps. Public headers,
   library packaging, and module contracts accompany the implemented slices.
-- [ ] For future modules, validate a pilot and second independent consumer,
-  audit source licenses, and record removed wrappers/remaining app configuration.
-  Add optional shared-module examples to `cocoa-shared`/`cocoa-daemon`; the basic
-  generated templates do not yet teach all of the new capabilities.
-
 **Done when:** at least two consumers use each promoted module without copied
 threading/compatibility machinery; relevant portable, cross-build, and offline
 native regressions pass; capability fallbacks are documented and exercised;
@@ -869,26 +753,31 @@ and individual apps visibly delete infrastructure code while retaining their
 own business behavior. Completed migrations above satisfy parts of this gate;
 remaining module proposals and native evidence are tracked separately.
 
-## Suggested delivery order for remaining work
 
-Keep operational work separate from optional library expansion:
+## Legacy README checklist
 
-1. Finish remaining validation evidence. Sibling-guide floor corrections and
-   the chooser/default AGENTS handoff are complete. Device/query/performance gaps
-   remain their own validation tasks; they do not require a new framework.
-2. Complete remaining Keychain native evidence, including interactive ACL
-   authorization and locked-phone/provisioned-group behavior. Isolated phone
-   runtime validation now passes. ENIL, Strappy and rCloud use the shared
-   implementation; coverage and deletion are recorded in `docs/keychain.md`.
-3. Finish Strappy's `koolphone5` notification validation above. Its private
-   backends have been removed in favor of the existing shared API.
-4. Evaluate narrow Mac launchd helpers. Proceed only if the shared implementation
-   plus app adapters is materially smaller than the repeated code removed.
-5. Defer the background coordinator, native-test framework, general service/client
-   layer and asset cache until their pilots demonstrate enough shared code to
-   delete. Add new capabilities only in response to an app need.
+Preserved from the README during the split. These old checkboxes have not been
+revalidated and are not the active backlog; some refer to retired tooling.
 
-Keep existing consumers working through documented compatibility entry points
-or coordinated migrations. Native validation is limited to the explicitly
-recorded runs above; device installation, image rebuilding, and publication
-are separate work and are not implied by a source or documentation review.
+1. [ ] Enable on-device debugging for iOS
+1. [X] Add macOS libraries as dynamic frameworks (e.g. `AltivecCore.framework`)
+1. [ ] Add `libgit` as a dependency for file syncing
+1. [ ] Setup Github Actions
+   1. [ ] Build release apps and save in artifact storage
+   1. [ ] Execute tests on Mac runners
+1. [X] Build `libcurl` for modern networking on old platforms
+1. [X] Improve Deploy Script
+1.    [X] Enable AI to debug apps directly on the host Mac
+1. [X] Remove Custom-Built 10.5/10.6 Hybrid SDK 
+   1. [X] Change x64/arm64 builds to use current OSXCross, Clang 21, and macOS 11.3 SDK
+   1. [X] Change PPC and x86 Build to use Apple GCC 4.2.1 and Mac OS X 10.5 SDK
+ 
+
+
+## Agent-guidance split — 2026-10-15
+
+Root `AGENTS.md` now covers engine maintenance; `templates/AGENTS.md` supplies
+app-development defaults. The chooser copies `/altivec/templates/AGENTS.md`
+only when no project entry exists. Generated projects reference that template.
+The 27 chooser/generator tests passed for the split; later introductory prose
+was checked for whitespace. No image rebuild or publication was performed.

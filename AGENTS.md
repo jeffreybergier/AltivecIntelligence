@@ -21,8 +21,9 @@ into app projects. Existing project instructions are never refreshed automatical
 - `Containerfile`, `docker/`, and `toolchain/`: image construction, smoke tests,
   and optional native-device tooling.
 - `test/`, library test directories, and `.github/workflows/`: validation.
-- `docs/`: feature contracts and deployment recipes. `TODO.md`: remaining work
-  and historical evidence, not proof of tests passing on the current checkout.
+- `docs/`: feature contracts and deployment recipes. [Active roadmap](docs/TODO.md)
+  tracks remaining work; [history](docs/history.md) records earlier evidence,
+  not proof of tests passing on the current checkout.
 
 ## Working on the engine
 

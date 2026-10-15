@@ -494,20 +494,11 @@ edits. To make engine changes take effect you must either:
 - **Overlay your checkout** by adding `- .:/altivec` to the service's `volumes`
   so your live files shadow the baked toolchain.
 
-## 🚧 To-Do List
-1. [ ] Enable on-device debugging for iOS
-1. [X] Add macOS libraries as dynamic frameworks (e.g. `AltivecCore.framework`)
-1. [ ] Add `libgit` as a dependency for file syncing
-1. [ ] Setup Github Actions
-   1. [ ] Build release apps and save in artifact storage
-   1. [ ] Execute tests on Mac runners
-1. [X] Build `libcurl` for modern networking on old platforms
-1. [X] Improve Deploy Script
-1.    [X] Enable AI to debug apps directly on the host Mac
-1. [X] Remove Custom-Built 10.5/10.6 Hybrid SDK 
-   1. [X] Change x64/arm64 builds to use current OSXCross, Clang 21, and macOS 11.3 SDK
-   1. [X] Change PPC and x86 Build to use Apple GCC 4.2.1 and Mac OS X 10.5 SDK
- 
+## Roadmap
+
+See [the active roadmap](docs/TODO.md) for remaining work and priorities.
+[Implementation history](docs/history.md) preserves completed work, earlier
+reviews, and validation evidence.
 
 ## 😍 Contributing
 This was a small project for me so I could work on my own hobby apps for my 

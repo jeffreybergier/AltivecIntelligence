@@ -93,7 +93,7 @@ Strappy's unsandboxed iOS system-app installation has a recorded limitation:
 SpringBoard may accept a local alert without displaying it in BulletinBoard.
 The shared API does not fix or detect that installation limitation, and
 Submitted must never be presented as proof of display. Final `koolphone5`
-permission/display/cleanup checks are tracked in `TODO.md`, separately from
+permission/display/cleanup checks are tracked in [the active roadmap](TODO.md), separately from
 the passing recording-backend tests and the separately documented Keychain
 runtime checks.
 
