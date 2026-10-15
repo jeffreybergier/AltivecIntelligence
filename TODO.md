@@ -422,31 +422,24 @@ shared Make contract suite (17 passing tests).
 
 ## 7. Image and documentation follow-through
 
-- [ ] Launch Codex from `bin/altivec-chooser` with `--no-daemon`, so it does
-  not use the shared background server even if one is already running. The
-  current local config sets `features.daemon_auto_start = false`; disabling
-  automatic startup alone is not the same as forcing a daemon-free launch.
-- [ ] Launch Codex with `--no-alt-screen` for inline terminal output and preserved
-  scrollback, rather than full-screen alternate-screen mode. The current local
-  config uses `tui.alternate_screen = "never"`. Both launch flags were confirmed
-  in the installed `codex --help`; verify support in the image's Codex version
-  when implementing these chooser defaults.
-- [ ] Review and update the root `AGENTS.md` for use as the default guidance
-  copied into a user's app working directory, including current generated-project
-  workflows, paths, compatibility rules, and validation expectations.
-- [ ] Before launching the selected agent, have `bin/altivec-chooser` copy the
-  image's `/altivec/AGENTS.md` into `process.cwd()/AGENTS.md` only when no entry
-  already exists there. Preserve existing files and symlinks, never overwrite
-  project guidance, and handle missing source/unwritable destinations clearly.
-  Cover absent/existing destinations and no-overwrite behavior in chooser tests.
-
-- [ ] Document tool discovery through existing command help, `altivec-app
-  templates`, and `altivec-sdk status`. The generator environment-doctor command
-  was removed by request; do not add a replacement container doctor. Website
-  and CLI-only work should not trigger SDK installs.
-- [ ] Keep the current Jekyll/Ruby, Node, Python, and browser tooling usable while
-  removing obsolete deployment machinery. Add a small website smoke check so
-  Apple-focused refactors do not break the shared development image.
+- [x] Launch Codex from `bin/altivec-chooser` with `--no-daemon` and
+  `--no-alt-screen`, preserving inline scrollback and bypassing the shared server.
+  Verified both flags with the local image's Codex 0.162.1; npm-tool smoke now
+  checks the combined launch arguments with `--help` on future image builds.
+- [x] Review the root `AGENTS.md` as default user-project guidance: distinguish
+  the mounted app from the image engine, explain generated root commands,
+  SDK-free work, and separate portable/cross-build/native validation evidence.
+- [x] Before agent launch, copy `/altivec/AGENTS.md` into the working directory
+  only when no entry exists. Preserve files, directories and all symlinks;
+  exclusive copying also prevents overwriting a concurrently created entry.
+  Missing source/unwritable destination errors stop launch with paths and advice.
+  Chooser tests cover these cases and Codex launch arguments/exit status.
+- [x] Document tool discovery through command help, `altivec-app templates`, and
+  `altivec-sdk status`. Website and CLI-only work do not trigger SDK installs;
+  no replacement container doctor is needed.
+- [x] Add offline Ruby/Bundler, Python HTTP and Chromium website smoke coverage
+  while retaining the shared image's development tooling. This checks the base
+  tools; website-specific Jekyll gems remain the project's responsibility.
 - [x] Install the pinned, checked-in release/generator packages offline alongside
   templates and Make fragments from the same source checkout. The Containerfile
   checks package versions, CLI help, and template discovery.
@@ -454,10 +447,9 @@ shared Make contract suite (17 passing tests).
   host tests, artwork/metadata, final Make modules and release configuration.
   The Containerfile runs this offline; published-image execution remains a
   release validation step.
-- [ ] Rewrite README/AGENTS examples around generated projects and root commands.
-  Reconcile documented deployment floors with actual compiler flags and device
-  evidence: sibling guides mention iOS 4.3 while the container/device template
-  guidance describes iOS 5.0. Do not advertise a broader tested matrix by inference.
+- [x] Rewrite README/AGENTS examples around generated projects and root commands,
+  with per-slice compiler floors distinguished from native device evidence.
+- [ ] Reconcile sibling guides' stale iOS 4.3 claims with the iOS 5.0 build floor.
 - [ ] Keep tiny sample apps as build fixtures; make richer examples generated
   from supported templates so documentation and templates cannot drift apart.
   Replace duplicated CURL-wrapper teaching examples with a minimal direct-libcurl
@@ -473,6 +465,13 @@ rendering. The check passed with locally installed npm packages and current
 modules in the existing environment; the full image was not rebuilt. Sibling
 agent-guide floor corrections, richer generated teaching examples, and native
 launch-size/icon verification remain open.
+
+Chooser follow-through (2026-10-15): eight chooser regressions and eighteen
+app-generator tests passed offline in the existing local image with the current
+checkout mounted. Combined Codex launch flags passed `--help` on 0.162.1, and
+the offline website smoke passed again. CI includes the chooser suite. No full
+image rebuild, publication, interactive account session, or native device tests
+were performed for this change.
 
 ## 8. Extract shared application capabilities into AltivecCocoa
 
@@ -827,9 +826,9 @@ remaining module proposals and native evidence are tracked separately.
 
 Keep operational work separate from optional library expansion:
 
-1. Complete the requested chooser/AGENTS tasks and reconcile documentation and
-   test evidence with recent work. Device/query/performance gaps remain their own
-   validation tasks; they do not require a new framework.
+1. Finish remaining sibling-guide corrections and validation evidence. The
+   chooser/default AGENTS handoff is complete. Device/query/performance gaps
+   remain their own validation tasks; they do not require a new framework.
 2. Pilot shared Keychain storage in ENIL and Strappy. Measure actual net deletion;
    evaluate rCloud next without erasing its access-policy differences.
 3. Remove Strappy's remaining notification backend duplication using the existing

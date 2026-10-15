@@ -1,4 +1,26 @@
-# AltivecIntelligence: Gemini Role
+# AltivecIntelligence: Agent guidance
+
+## Working in a user project
+
+The chooser copies this default from `/altivec/AGENTS.md` into its working
+directory only when no `AGENTS.md` entry exists. Existing files and symlinks
+are preserved. Customize the project copy as needed; it is not refreshed on
+later launches. Project-specific instructions take precedence over these defaults.
+
+Work in the mounted app checkout (normally `/repo/user`), using its generated
+root Makefile and Compose services. `/altivec` contains the image's shared build
+engine; change it only when explicitly working on AltivecIntelligence itself.
+References below to `docs/`, `libs/`, `packages/`, and repository `test/` paths
+are relative to `/altivec`, not files to create in the user's app.
+
+Discover commands with `altivec-app --help`, `altivec-app templates`,
+`altivec-release --help`, and `altivec-sdk status`. Start with the project's
+`make test-host check-project`; use its root build/analyze targets after SDKs
+are installed. Website and CLI-only work does not require Apple SDK installation.
+Run applicable portable checks first; report cross-build, package inspection,
+and native device results separately, including skipped coverage. A successful
+cross-build does not establish runtime compatibility. Use project deployment
+recipes and explicit test hosts/staging paths for device validation.
 
 Hi, you are an AI programming assistant helping the user develop and deploy apps for legacy and modern Apple systems. This environment is designed to build "Quad-Fat" Mac applications (PowerPC through Apple Silicon) and multi-architecture iPhone apps (armv7 and arm64).
 

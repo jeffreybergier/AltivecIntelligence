@@ -103,6 +103,8 @@ const piRoot = globalPackageRoot('@earendil-works/pi-coding-agent', globalRoot);
 const webcrackRoot = globalPackageRoot('webcrack', globalRoot);
 const wranglerRoot = globalPackageRoot('wrangler', globalRoot);
 
+await check('Codex chooser flags', () =>
+  commandOutput('codex', ['--yolo', '--no-daemon', '--no-alt-screen', '--help']));
 await check('Claude CLI', () => commandOutput('claude', ['--version']));
 await check('OpenCode CLI', () => commandOutput('opencode', ['--version']));
 await check('Kimi CLI', () => commandOutput('kimi', ['--version']));

@@ -21,7 +21,7 @@ const agents = [
     label: "Codex",
     packageName: "@openai/codex",
     command: "codex",
-    args: ["--yolo"],
+    args: ["--yolo", "--no-daemon", "--no-alt-screen"],
   },
   {
     label: "Antigravity",
@@ -359,6 +359,25 @@ function updateAgent(npmPath, packageName) {
   return result.status ?? 1;
 }
 
+function ensureAgentGuidance(
+  source = "/altivec/AGENTS.md",
+  destination = path.join(process.cwd(), "AGENTS.md"),
+) {
+  try {
+    // lstat also preserves directories and dangling symlinks.
+    if (fs.lstatSync(destination, { throwIfNoEntry: false })) return;
+    fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
+    log("guidance", `Copied ${source} to ${destination}`);
+  } catch (error) {
+    // Another process may have created the destination after lstat.
+    if (error.code === "EEXIST") return;
+    throw new Error(
+      `Cannot copy default guidance from ${source} to ${destination}: ` +
+      `${error.code || error.message}. Check the image source and directory permissions.`,
+    );
+  }
+}
+
 function launchAgent(agent, executable) {
   log("main", ["launch_standard", agent.command, ...agent.args].join(" "));
 
@@ -421,15 +440,20 @@ async function main() {
     return 1;
   }
 
+  ensureAgentGuidance();
   return launchAgent(agent, executable);
 }
 
-main()
-  .then((status) => {
-    process.exitCode = status;
-  })
-  .catch((error) => {
-    restoreTerminal();
-    process.stderr.write(`${error.stack || error.message}\n`);
-    process.exitCode = 1;
-  });
+if (require.main === module) {
+  main()
+    .then((status) => {
+      process.exitCode = status;
+    })
+    .catch((error) => {
+      restoreTerminal();
+      process.stderr.write(`${error.stack || error.message}\n`);
+      process.exitCode = 1;
+    });
+}
+
+module.exports = { ensureAgentGuidance };
