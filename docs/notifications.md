@@ -77,6 +77,34 @@ its existing completion wording and domain event, while shared code handles
 background suppression, badge permission, presentation, and foreground cleanup.
 Retro-DLP's Mac app had no notification feature to migrate.
 
+Strappy also uses the shared center on Mac and iOS, initialized at launch. It
+retains session titles, the localized `Prompt completed.` / `Prompt failed.`
+text, and background-only completion alerts before releasing its last iOS
+background allowance. No session payload or new navigation behavior is added.
+On iOS it still submits only when authorization is Authorized; Mac permits
+Unknown because legacy AppKit cannot query permission. The shared iOS backend
+reports empty settings as Unknown (the old wrapper reported Denied), so launch
+explicitly requests authorization in that case. The OS controls whether a prompt
+can appear. Authorization requests now include badge permission, and shared
+foreground cleanup clears alerts and the badge; Strappy has no independent
+notification scheduler to preserve.
+
+Strappy's unsandboxed iOS system-app installation has a recorded limitation:
+SpringBoard may accept a local alert without displaying it in BulletinBoard.
+The shared API does not fix or detect that installation limitation, and
+Submitted must never be presented as proof of display. Final `koolphone5`
+permission/display/cleanup checks are tracked in `TODO.md`, separately from
+isolated recording-backend tests and the deferred phone Keychain checks.
+
+From Strappy, build the offline production-delegate regressions with
+`python3 source/daemon/tests/notifications_test.py macOS` (or `iOS`) inside the
+container. The Mac executable runs directly without production app startup;
+the iOS build uses an isolated sandboxed test identity and records PASS in
+`Documents/notifications-result.txt`. Neither starts accounts or the daemon.
+These tests cover completion wording, foreground/background behavior, permission
+mapping, and foreground cleanup, but cannot validate production installation
+or OS banner display.
+
 Build the deterministic recording-backend harness:
 
 ```sh
@@ -110,3 +138,15 @@ sources build without warnings. These runs do not establish visual OS banner
 presentation or notification-tray removal, which need separate device checks.
 The existing image was overlaid with current sources for testing; no toolchain
 image or release was published.
+
+Strappy follow-through (2026-10-15): clean debug/release builds passed for all
+four Mac slices and both iOS slices without compiler warnings. The isolated
+production-delegate test cross-built for the same six slices and passed on the
+host Mac and `x4-vm` (Tiger/PPC). Tiger additionally returned Unsupported from
+the native backend. The shared notification regression harness passed on
+`x4-vm`; Strappy's app-boundary check passed. The migration removes 286 lines of
+private backend/declaration/helper code; app integration adds 22 net lines,
+for a net reduction of 264 production source/header lines. No shared library
+implementation was added; test and documentation lines are excluded. Phone
+runtime, production installation/display, and permission combinations were not
+tested, per the user's deferral. No image or release was published.

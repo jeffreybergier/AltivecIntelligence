@@ -449,7 +449,8 @@ shared Make contract suite (17 passing tests).
   release validation step.
 - [x] Rewrite README/AGENTS examples around generated projects and root commands,
   with per-slice compiler floors distinguished from native device evidence.
-- [ ] Reconcile sibling guides' stale iOS 4.3 claims with the iOS 5.0 build floor.
+- [x] Reconcile sibling guides' stale iOS 4.3 claims with the iOS 5.0 armv7
+  / iOS 7.0 arm64 build floors (Strappy and ENIL guidance, including ENIL's TODO).
 - [ ] Keep tiny sample apps as build fixtures; make richer examples generated
   from supported templates so documentation and templates cannot drift apart.
   Replace duplicated CURL-wrapper teaching examples with a minimal direct-libcurl
@@ -510,6 +511,8 @@ comments, in the inspected implementation regions; they are **not** promised
 net deletions. Formatting differs substantially across the apps. No extraction
 prototype or native tests were run for this source audit. Positions 2–3 are
 provisional: notification migration has the clearer, lower-cost deletion case.
+The table preserves that audit baseline; Keychain and Strappy notification
+follow-through are recorded in their dedicated sections below.
 
 | Rank | Candidate | Current evidence | Extraction decision |
 | --- | --- | --- | --- |
@@ -583,9 +586,10 @@ checkout context, not proof of published artifacts or device validation.
   [notifications](docs/notifications.md) and [SQLite](docs/sqlite.md). Shared
   APIs retain Tiger MRC and iOS 5 armv7 / iOS 7 arm64 floors, with runtime-gated
   platform behavior and no blocks/ARC requirement.
-- [ ] Reconcile stale iOS 4.3 claims in sibling guides with their current iOS 5
-  build floor. Extend capability documentation when new backends or signing
-  profiles land; do not infer native coverage from cross-builds.
+- [x] Reconcile stale iOS 4.3 claims in sibling guides with their current iOS 5
+  armv7 / iOS 7 arm64 build floors.
+- [ ] Extend capability documentation when new backends or signing profiles land;
+  do not infer native coverage from cross-builds.
 - [x] Document borrowed targets, copied payloads, explicit invalidation, main-thread
   delivery, cancellation, and stale-generation suppression for the implemented
   observers/workers. See the module headers and
@@ -641,10 +645,25 @@ remains unchanged. No existing user credentials were migrated by the tests.
 Implemented in `48f2ac9`; see [the notification contract](docs/notifications.md).
 ENIL (Mac/iOS) and Retro-DLP (iOS) use immediate background-only alerts.
 
-- [ ] Migrate Strappy's private Mac/iOS `XPUserNotificationCenter` to the existing
-  shared notification API and delete the duplicated backends. Keep permission
-  mapping, foreground behavior and completion text explicit; test its current
-  unsandboxed/system-app limitation separately from successful submission.
+- [x] Migrate Strappy's private Mac/iOS `XPUserNotificationCenter` to the existing
+  shared notification API and delete the duplicated backends. Preserve completion
+  text, background-only delivery, and iOS authorized-only submission; document
+  Unknown permission mapping and shared foreground cleanup.
+- [ ] Final `koolphone5` validation: run Strappy's isolated notification delegate
+  test, then check permission settings, background success/failure alerts,
+  foreground suppression and alert/badge cleanup in the installed production
+  app. Record the unsandboxed/system-app display limitation separately from
+  successful submission; a recording test or accepted request cannot prove
+  banner/tray display. Phone testing is deferred while the user is away. Also
+  finish the previously deferred isolated Keychain runtime checks on this phone.
+
+Strappy follow-through (2026-10-15): all six slices clean-build in debug/release
+without compiler warnings. The production-delegate recording regression passes
+on the host Mac and `x4-vm`, including Tiger's native Unsupported result; the
+shared notification harness also passes on `x4-vm`. The isolated iOS test IPA
+is built but not run. Net production source/header deletion is 264 lines, with
+no new shared implementation; tests/docs are counted separately. See
+[notification validation and behavior changes](docs/notifications.md).
 
 - [x] Provide `AILocalNotificationCenter` authorization/capability reporting,
   explicit permission requests, immediate alerts, badges, activation routing,
@@ -845,15 +864,14 @@ remaining module proposals and native evidence are tracked separately.
 
 Keep operational work separate from optional library expansion:
 
-1. Finish remaining sibling-guide corrections and validation evidence. The
-   chooser/default AGENTS handoff is complete. Device/query/performance gaps
+1. Finish remaining validation evidence. Sibling-guide floor corrections and
+   the chooser/default AGENTS handoff are complete. Device/query/performance gaps
    remain their own validation tasks; they do not require a new framework.
 2. Complete remaining Keychain native evidence: phone runtime and interactive
    ACL authorization. ENIL, Strappy and rCloud now use the shared implementation;
    measured net deletion and adapter costs are recorded in `docs/keychain.md`.
-3. Remove Strappy's remaining notification backend duplication using the existing
-   shared API. Although the service candidate has a larger source scope, this
-   migration has higher-confidence savings and less new infrastructure.
+3. Finish Strappy's `koolphone5` notification validation above. Its private
+   backends have been removed in favor of the existing shared API.
 4. Evaluate narrow Mac launchd helpers. Proceed only if the shared implementation
    plus app adapters is materially smaller than the repeated code removed.
 5. Defer the background coordinator, native-test framework, general service/client
@@ -861,6 +879,6 @@ Keep operational work separate from optional library expansion:
    delete. Add new capabilities only in response to an app need.
 
 Keep existing consumers working through documented compatibility entry points
-or coordinated migrations. This reconciliation changes documentation only;
-validation, device installation, image rebuilding, and publication are separate
-work and are not implied by the commit review.
+or coordinated migrations. Native validation is limited to the explicitly
+recorded runs above; device installation, image rebuilding, and publication
+are separate work and are not implied by a source or documentation review.
