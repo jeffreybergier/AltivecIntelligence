@@ -97,8 +97,11 @@ check_png() {
   local description=""
 
   description="$(file -b "$path")"
+  # Canonical white placeholders use RGBA with fully opaque alpha. Both
+  # RGB and RGBA are valid PNG encodings for these template resources.
   [[ "$description" == *"PNG image data, ${width} x ${height}"* &&
-    "$description" == *" RGB,"* && "$description" != *" RGBA,"* ]] ||
+    ( "$description" == *" RGB,"* ||
+      "$description" == *" RGBA,"* ) ]] ||
     die "unexpected PNG asset: ${path}: ${description}"
 }
 
