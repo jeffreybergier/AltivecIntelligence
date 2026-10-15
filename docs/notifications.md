@@ -94,7 +94,7 @@ SpringBoard may accept a local alert without displaying it in BulletinBoard.
 The shared API does not fix or detect that installation limitation, and
 Submitted must never be presented as proof of display. Final `koolphone5`
 permission/display/cleanup checks are tracked in `TODO.md`, separately from
-isolated recording-backend tests and the deferred phone Keychain checks.
+the passing recording-backend tests and the deferred phone Keychain checks.
 
 From Strappy, build the offline production-delegate regressions with
 `python3 source/daemon/tests/notifications_test.py macOS` (or `iOS`) inside the
@@ -150,3 +150,14 @@ for a net reduction of 264 production source/header lines. No shared library
 implementation was added; test and documentation lines are excluded. Phone
 runtime, production installation/display, and permission combinations were not
 tested, per the user's deferral. No image or release was published.
+
+Phone follow-through (2026-10-15): Strappy's isolated production-delegate IPA
+and the shared notification harness both passed on `koolphone5`, iOS 8.4.1
+(12H321), armv7. The test IPA now registers `strappy-notifications-test://` for
+launch through this phone's URL-only `uiopen`; the result was retrieved from
+its isolated sandbox. The standalone shared harness required on-device ad-hoc
+signing with `ldid -S` before execution. No production app, accounts or daemon
+were started by these tests. Actual production banners, notification-tray
+removal, and native permission combinations remain unverified; the iOS tests
+exercise recording-backend policy/lifecycle behavior, not visual OS display.
+The separate Keychain phone TODO remains open.

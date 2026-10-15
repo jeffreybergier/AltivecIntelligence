@@ -649,19 +649,21 @@ ENIL (Mac/iOS) and Retro-DLP (iOS) use immediate background-only alerts.
   shared notification API and delete the duplicated backends. Preserve completion
   text, background-only delivery, and iOS authorized-only submission; document
   Unknown permission mapping and shared foreground cleanup.
-- [ ] Final `koolphone5` validation: run Strappy's isolated notification delegate
-  test, then check permission settings, background success/failure alerts,
-  foreground suppression and alert/badge cleanup in the installed production
-  app. Record the unsandboxed/system-app display limitation separately from
-  successful submission; a recording test or accepted request cannot prove
-  banner/tray display. Phone testing is deferred while the user is away. Also
-  finish the previously deferred isolated Keychain runtime checks on this phone.
+- [x] Run Strappy's isolated notification delegate test and shared notification
+  harness on `koolphone5`: both passed on iOS 8.4.1 armv7 (2026-10-15).
+- [ ] Check production permission settings, background success/failure banners,
+  foreground suppression and visible alert/badge cleanup on `koolphone5`.
+  Record the unsandboxed/system-app display limitation separately from successful
+  submission; the passing recording tests cannot prove banner/tray display.
+- [ ] Finish the previously deferred isolated Keychain runtime checks on
+  `koolphone5`; the notification test run does not cover Keychain.
 
 Strappy follow-through (2026-10-15): all six slices clean-build in debug/release
 without compiler warnings. The production-delegate recording regression passes
 on the host Mac and `x4-vm`, including Tiger's native Unsupported result; the
 shared notification harness also passes on `x4-vm`. The isolated iOS test IPA
-is built but not run. Net production source/header deletion is 264 lines, with
+passed on `koolphone5` (iOS 8.4.1 armv7), as did the shared notification
+harness. Net production source/header deletion is 264 lines, with
 no new shared implementation; tests/docs are counted separately. See
 [notification validation and behavior changes](docs/notifications.md).
 
