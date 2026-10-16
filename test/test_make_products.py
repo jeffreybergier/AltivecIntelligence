@@ -64,6 +64,25 @@ class MakeProducts(unittest.TestCase):
             self.assertNotEqual(p.returncode, 0, p.stdout)
         return p.stdout
 
+    def test_shared_mac_signing_identity_defaults_and_overrides(self):
+        root = self.fixture('daemon')
+        home = self.root / 'home'
+        signing = home / 'signing'
+        signing.mkdir(parents=True)
+        root = root / 'source'
+        with (root / 'Makefile').open('a') as makefile:
+            makefile.write('\nshow-signing:\n\t@echo IDENTITY=$(Fixture_SIGN_PEM),$(helper_SIGN_PEM)\n')
+        args = ['show-signing', f'HOME={home}']
+        self.assertIn('IDENTITY=,', self.make(root, *args))
+        pem = signing / 'development.pem'
+        pem.write_text('test identity path only')
+        self.assertIn(f'IDENTITY={pem},{pem}', self.make(root, *args))
+        self.assertIn('IDENTITY=,', self.make(root, *args, 'PLATFORM=phone'))
+        self.assertIn('IDENTITY=custom.pem,custom.pem',
+                      self.make(root, *args, 'ALTIVEC_SIGNING_PEM=custom.pem'))
+        self.assertIn('IDENTITY=,custom.pem', self.make(
+            root, *args, 'ALTIVEC_SIGNING_PEM=custom.pem', 'Fixture_SIGN_PEM='))
+
     def test_three_product_shapes_parallel_configs_and_child_paths(self):
         for name in ('simple', 'daemon', 'products'):
             root = self.fixture(name)

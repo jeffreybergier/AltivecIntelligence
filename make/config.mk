@@ -42,6 +42,11 @@ AR_i386 ?= $(AR_LEGACY)
 AR_x86_64 ?= $(AR_MODERN)
 AR_arm64 ?= $(AR_MODERN)
 AR_armv7 ?= $(AR_MODERN)
+# The host ~/.altivec directory is the container home (/root).
+ALTIVEC_SIGNING_PEM ?= $(wildcard $(HOME)/signing/development.pem)
+ifeq ($(ALTIVEC_PLATFORM),macOS)
+$(foreach p,$(PRODUCTS),$(eval $(p)_SIGN_PEM ?= $$(ALTIVEC_SIGNING_PEM)))
+endif
 LDID ?= ldid
 export OSXCROSS_NO_DSYMUTIL=1
 export ZERO_AR_DATE=1

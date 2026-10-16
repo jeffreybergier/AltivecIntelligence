@@ -6,7 +6,7 @@ args=(--binary-identifier "$identifier" --info-plist-file "$plist" --timestamp-u
 if [ -n "$pem" ] && [ -f "$pem" ]; then
   args+=(--pem-file "$pem")
 else
-  echo "Signing $identifier ($arch) ad-hoc; configure RCLOUD_SIGNING_PEM for a stable identity" >&2
+  echo "Signing $identifier ($arch) ad-hoc; configure ALTIVEC_SIGNING_PEM for a stable identity" >&2
 fi
 if [ "$arch" = x86_64 ]; then args+=(--digest sha1 --digest sha256); fi
 rcodesign -C /dev/null sign "${args[@]}" "$binary" > "$binary.signing.log" 2>&1 || {

@@ -173,6 +173,27 @@ Resources are tracked recursively, including additions/removals. Rebuilding a
 bundle reconstructs it so deleted resources cannot survive in an archive.
 iOS signing uses ldid. Mac signing uses rcodesign on modern slices and leaves
 Tiger slices untouched (including when entitlements are supplied).
+Mac products inherit `ALTIVEC_SIGNING_PEM`, which defaults to
+`$(HOME)/signing/development.pem` when that file exists. Store the shared identity
+at `~/.altivec/signing/development.pem` on the Mac host: the existing
+`~/.altivec:/root` mount exposes it as `/root/signing/development.pem`.
+No extra Compose mount is needed. Each `<product>_SIGN_PEM` overrides this default;
+setting it explicitly empty requests ad-hoc signing. This default does not enable
+signing on otherwise unsigned products or affect iOS signing.
+
+Export the existing `Altivec Intelligence Local Code Signing` Keychain identity
+on the Mac host with Xcode Command Line Tools installed:
+
+```sh
+swift bin/altivec-export-signing.swift --local
+```
+
+The helper saves a mode-0600 PEM in the mode-0700 shared signing directory,
+refuses to overwrite an existing identity, and removes temporary export files.
+`--repo OWNER/REPO` instead uploads the validated PEM as `ALTIVEC_SIGNING_PEM`
+using authenticated `gh`. CI can set the Make/environment `ALTIVEC_SIGNING_PEM`
+to its temporary identity path. Never commit the private key.
+
 Each executable owns its signing policy; app entitlements are never inherited
 by a helper. `SANDBOX=container|unsandboxed` validates the declared entitlement
 policy independently of package format or install prefix.
