@@ -362,9 +362,6 @@ COPY LICENSE                 /altivec/
 COPY libs/                    /altivec/libs/
 COPY apps/                    /altivec/apps/
 
-ENV ALTIVEC_SDK_PROJECT_DIR=/altivec-sdk \
-    ALTIVEC_SDK_SHARED_DIR=/altivec-sdk-shared
-
 RUN mkdir -p /altivec-sdk /altivec-sdk-shared /build-sdk-dependent \
  && altivec-sdk --help >/dev/null
 
@@ -385,6 +382,8 @@ RUN --mount=type=bind,from=altivec_sdk,source=.,target=/altivec-sdk,readonly \
     --mount=type=cache,id=altivec-libcurl-tarballs,target=/altivec/libs/libcurl/tarballs,sharing=locked \
     --mount=type=cache,id=altivec-sqlite-tarballs,target=/altivec/libs/sqlite/tarballs,sharing=locked \
     --mount=type=cache,id=altivec-fontawesome-files,target=/altivec/libs/cocoa/tarballs,sharing=locked \
+    ALTIVEC_SDK_SHARED_DIR=/altivec-sdk-shared \
+    ALTIVEC_SDK_PROJECT_DIR=/altivec-sdk \
     /build-sdk-dependent/build-sdk-dependent.sh
 
 # The cache mounts above hide the source-tree dependency caches while the mega

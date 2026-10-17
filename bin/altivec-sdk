@@ -10,16 +10,15 @@ else
   default_catalog=/altivec/share/altivec-sdk/catalog.json
 fi
 readonly default_catalog catalog_path="${ALTIVEC_SDK_CATALOG:-$default_catalog}"
-# Compose/image builds map host sources to these configurable container paths.
-# Direct host invocations resolve relative to the current project directory.
-archive_dirs=()
-if [[ -n "${ALTIVEC_SDK_ARCHIVE_DIR:-}" ]]; then
-  archive_dirs+=("$ALTIVEC_SDK_ARCHIVE_DIR")
-elif [[ -n "${ALTIVEC_SDK_HOST_DIR:-}" ]]; then
-  archive_dirs+=("$ALTIVEC_SDK_HOST_DIR")
-else
-  archive_dirs+=("${ALTIVEC_SDK_PROJECT_DIR:-$PWD/.altivec-sdk}")
-  archive_dirs+=("${ALTIVEC_SDK_SHARED_DIR:-$HOME/.altivec-sdk}")
+# Runtime discovery reuses the container's home and working-directory mounts.
+# Image builds can redirect the first two locations for their temporary inputs.
+archive_dirs=(
+  "${ALTIVEC_SDK_SHARED_DIR:-$HOME/.altivec-sdk}"
+  "${ALTIVEC_SDK_PROJECT_DIR:-$PWD/.altivec-sdk}"
+)
+custom_archive_dir="${ALTIVEC_SDK_ARCHIVE_DIR:-${ALTIVEC_SDK_HOST_DIR:-}}"
+if [[ -n "$custom_archive_dir" ]]; then
+  archive_dirs+=("$custom_archive_dir")
 fi
 readonly archive_dirs
 readonly legacy_sdk_dir="${ALTIVEC_SDK_LEGACY_DIR:-/osxcross/legacy/target/SDK}"
@@ -40,9 +39,9 @@ usage() {
     '  altivec-sdk install' \
     '  altivec-sdk uninstall' \
     '' \
-    'Search each archive in project ./.altivec-sdk, then host ~/.altivec-sdk.' \
-    'Compose mounts these at /altivec-sdk and /altivec-sdk-shared, read-only.' \
-    'An existing invalid project archive is an error, not a fallback.' \
+    'Search each archive in ~/.altivec-sdk, then ./.altivec-sdk, then a custom path.' \
+    'Compose reuses ~/.altivec:/root and the project working-directory mount.' \
+    'An existing invalid archive is an error; only missing files fall back.' \
     '' \
     'Place these exact files in either folder:' \
     '  MacOSX10.5.sdk.tar.xz' \
@@ -50,9 +49,9 @@ usage() {
     '  iPhoneOS8.4.sdk.tar.gz' \
     '' \
     'This tool never downloads SDKs. It verifies and installs local archives.' \
-    'ALTIVEC_SDK_ARCHIVE_DIR selects one folder visible to this process.' \
-    'ALTIVEC_SDK_HOST_DIR selects one host folder (Compose mounts it).' \
-    'Explicit overrides disable fallback; ARCHIVE_DIR takes precedence.' \
+    'ALTIVEC_SDK_ARCHIVE_DIR adds a final fallback folder visible to this process.' \
+    'ALTIVEC_SDK_HOST_DIR is a legacy alias when ARCHIVE_DIR is unset.' \
+    'A custom path must already be accessible; setting it creates no mount.' \
     'locate verifies one catalog archive and prints its selected path.' \
     '' \
     'Compliance commands used by release automation:' \

@@ -5,6 +5,9 @@ root=${ALTIVEC_ROOT:-/altivec}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 altivec-release doctor --json
+# Build-only archive paths must not override runtime home/workspace lookup.
+test -z "${ALTIVEC_SDK_PROJECT_DIR:-}"
+test -z "${ALTIVEC_SDK_SHARED_DIR:-}"
 altivec-sdk status
 for template in ios-basic mac-basic cocoa-shared cocoa-daemon daemon cli-library; do
   project="$work/$template"

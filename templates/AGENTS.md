@@ -45,17 +45,19 @@ upgrades; generate into a separate directory and review the diff.
 
 ## SDKs and compatibility
 
-The image contains no Apple SDKs. `altivec-sdk install` verifies project archives
-from `./.altivec-sdk`, then falls back per missing archive to the host's
-`~/.altivec-sdk`. Compose exposes them read-only at `/altivec-sdk` and
-`/altivec-sdk-shared`. Invalid project archives fail validation rather than
-falling back. The host's `~/.altivec` is a separate settings/home directory.
+The image contains no Apple SDKs. `altivec-sdk install` searches each archive
+in `$HOME/.altivec-sdk` first, then `$PWD/.altivec-sdk`, then the optional
+`ALTIVEC_SDK_ARCHIVE_DIR` fallback. Only missing files fall back; invalid files
+or symlinks fail validation. The custom path must already be process-visible;
+setting an environment variable creates no mount. `ALTIVEC_SDK_HOST_DIR` is a
+legacy fallback alias when `ALTIVEC_SDK_ARCHIVE_DIR` is unset.
 
-`ALTIVEC_SDK_HOST_DIR` selects one host archive directory and disables fallback.
-`ALTIVEC_SDK_ARCHIVE_DIR` selects one process-visible path with higher priority;
-it does not create a host mount. Use `altivec-sdk status` and `preflight` to
-inspect sources before installation. Direct host CLI lookup defaults to the
-working directory's `.altivec-sdk`, then `$HOME/.altivec-sdk`.
+Compose reuses `~/.altivec:/root` and the project workspace mount. Put shared
+host archives in `~/.altivec/.altivec-sdk` (visible as `/root/.altivec-sdk`), or
+project archives in `./.altivec-sdk`. The SDK utility service uses the same
+home and working directory. Extracted SDKs persist in named volumes. Direct
+host CLI use searches the host's own home, current directory, then custom path.
+Use `altivec-sdk status` and `preflight` to inspect sources before installation.
 
 | Target | SDK | Architectures and compiler floors |
 | --- | --- | --- |

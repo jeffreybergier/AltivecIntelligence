@@ -98,42 +98,47 @@ Website work, generation, and portable tests do not require Apple SDKs.
 **3. Prepare the SDK's**
 
 ```bash
-mkdir -p .altivec-sdk ~/.altivec-sdk
+mkdir -p ~/.altivec/.altivec-sdk .altivec-sdk
 touch .gitignore && echo '.altivec-sdk/' >> .gitignore
 cp ~/Downloads/iPhoneOS8.4.sdk.tar.gz .altivec-sdk/
 cp ~/Downloads/MacOSX10.5.sdk.tar.xz .altivec-sdk/
 cp ~/Downloads/MacOSX11.3.sdk.tar.xz .altivec-sdk/
 ```
 
-Each archive is selected independently: `./.altivec-sdk/` in the Compose project
-first, then `~/.altivec-sdk/` on the host. To share archives across projects,
-place them in `~/.altivec-sdk/` instead. A project can contain only some archives;
-missing ones fall back to the shared folder. An existing invalid project archive
-(including a symlink) fails validation instead of falling back. `status`,
-`preflight`, `locate ARCHIVE`, and `install` report the selected paths.
+Each archive is selected independently, in this order inside the container:
 
-Compose mounts both sources read-only at `/altivec-sdk` and
-`/altivec-sdk-shared`, including in the SDK-only service. Missing runtime bind
-source directories are created by Compose. `~/.altivec/` remains the container's
-home/settings directory; it is separate from the shared SDK archive folder.
+1. `$HOME/.altivec-sdk` (normally `/root/.altivec-sdk`).
+2. `$PWD/.altivec-sdk` in the mounted project workspace.
+3. `ALTIVEC_SDK_ARCHIVE_DIR`, if explicitly set to an accessible custom path.
 
-Overrides are exclusive (no fallback):
+Compose reuses `~/.altivec:/root` and the project workspace mount. Shared
+archives therefore belong in **`~/.altivec/.altivec-sdk` on the host**, and
+project archives belong in `./.altivec-sdk`. No separate SDK archive mounts
+are needed. The SDK-only service uses the same home, workspace and working
+directory as the app services. The extracted SDK named volumes are unchanged.
+Only missing archives fall back; an existing invalid file, directory, or
+symlink is an error, even if a valid lower-priority copy exists.
 
-- `ALTIVEC_SDK_HOST_DIR=/path/to/archives docker compose ...` mounts that host
-  folder at both archive mount points. This also selects both image-build
-  contexts. Direct host use of `bin/altivec-sdk` honors this variable too.
-- `ALTIVEC_SDK_ARCHIVE_DIR` takes precedence and selects one path **visible to
-  the SDK process**. For an explicit Compose override, pass it with `run -e`; use
-  `/altivec-sdk` or `/altivec-sdk-shared`, or a separately mounted path. It does
-  not mount arbitrary host paths. For example,
-  `docker compose run --rm -e ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk-shared altivec-sdk preflight`
-  checks only shared archives.
+A custom fallback is optional and must already be visible inside the container:
 
-For a direct host check, run `bin/altivec-sdk preflight` from the project root
-(requires Bash, jq, tar/xz, and SHA-256 tooling). Direct host defaults are the
-current directory's `.altivec-sdk` and `$HOME/.altivec-sdk`. The container image
-sets `ALTIVEC_SDK_PROJECT_DIR=/altivec-sdk` and
-`ALTIVEC_SDK_SHARED_DIR=/altivec-sdk-shared` to use the mounted sources.
+```sh
+docker compose run --rm -e ALTIVEC_SDK_ARCHIVE_DIR=/repo/user/sdk-backup altivec-sdk preflight
+```
+
+Setting that variable does not mount a host path. `ALTIVEC_SDK_HOST_DIR` remains
+a legacy alias for the custom fallback when `ALTIVEC_SDK_ARCHIVE_DIR` is unset;
+Compose no longer uses it to select bind mounts.
+
+Direct host use of `bin/altivec-sdk preflight` searches the host's own
+`$HOME/.altivec-sdk`, then `$PWD/.altivec-sdk`, then the optional custom path.
+It requires Bash, jq, tar/xz, and SHA-256 tooling.
+
+These Compose files require an image with home-first SDK discovery. Update the
+image before using them. Archives previously stored in the host's sibling
+`~/.altivec-sdk` must be moved into `~/.altivec/.altivec-sdk` (or the project).
+Installed SDKs remain in the existing named volumes and need no migration.
+For Podman providers that require explicit profile activation, use
+`podman compose --profile tools run --rm altivec-sdk install`.
 
 **4. Pull the Docker Image and Install the SDK's**
 
@@ -314,13 +319,12 @@ Root and child builds share `build/<platform>/<debug|release>/` outputs.
 Consumer Compose files default to `ghcr.io/jeffreybergier/altivec-intelligence:latest`.
 Set `ALTIVEC_IMAGE=altivec-intelligence:local` to use a local build instead.
 This repository keeps that separate local image for toolchain development.
-Build it locally with `mkdir -p .altivec-sdk ~/.altivec-sdk` followed by
+Build it locally with `mkdir -p ~/.altivec/.altivec-sdk .altivec-sdk` followed by
 `docker compose build altivec`. BuildKit requires both context directories to
 exist, even if one is empty; runtime Compose mounts create missing folders,
-but `docker compose build` does not. Alternatively, use
-`ALTIVEC_SDK_HOST_DIR=/path/to/sdk-archives docker compose build altivec` with
-one existing folder. The build uses the same per-archive resolver and validation
-as runtime installation. Direct `docker buildx build` callers must supply both
+but `docker compose build` does not. The build uses the same home-first
+per-archive resolver and validation, with read-only build contexts scoped to
+the SDK-dependent build step. Direct `docker buildx build` callers must supply both
 `--build-context altivec_sdk=/path/to/project-archives` and
 `--build-context altivec_sdk_shared=/path/to/shared-archives` (they may point to
 the same folder).

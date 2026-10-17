@@ -74,27 +74,30 @@ class SDKDiscovery(unittest.TestCase):
                                      str(self.shared / name))
                 self.assertEqual(self.run_sdk('status').count('available'), 3)
 
-    def test_project_precedence_and_split_archives(self):
+    def test_home_precedence_and_split_archives(self):
         self.local.mkdir()
         shutil.copy2(self.shared / self.names[0], self.local)
-        (self.shared / self.names[0]).write_text('invalid lower-priority archive')
+        (self.local / self.names[0]).write_text('invalid lower-priority archive')
+        shutil.move(str(self.shared / self.names[1]), self.local)
         for command in ('preflight', 'status'):
             output = self.run_sdk(command)
-            self.assertIn(str(self.local / self.names[0]), output)
-            for name in self.names[1:]:
-                self.assertIn(str(self.shared / name), output)
+            self.assertIn(str(self.shared / self.names[0]), output)
+            self.assertIn(str(self.local / self.names[1]), output)
+            self.assertIn(str(self.shared / self.names[2]), output)
 
-    def test_invalid_project_entries_do_not_fall_back(self):
+    def test_invalid_home_entries_do_not_fall_back(self):
         self.local.mkdir()
-        target = self.local / self.names[0]
+        shutil.copy2(self.shared / self.names[0], self.local)
+        (self.shared / self.names[0]).unlink()
+        target = self.shared / self.names[0]
         for kind in ('corrupt', 'directory', 'symlink', 'broken-symlink'):
             with self.subTest(kind=kind):
                 if kind == 'corrupt':
-                    target.write_bytes(b'x' * (self.shared / self.names[0]).stat().st_size)
+                    target.write_bytes(b'x' * (self.local / self.names[0]).stat().st_size)
                 elif kind == 'directory':
                     target.mkdir()
                 else:
-                    target.symlink_to(self.shared / self.names[0] if kind == 'symlink'
+                    target.symlink_to(self.local / self.names[0] if kind == 'symlink'
                                       else self.root / 'absent')
                 self.assertIn(str(target), self.run_sdk('preflight', good=False))
                 self.assertIn(str(target), self.run_sdk('locate', self.names[0], good=False))
@@ -108,19 +111,32 @@ class SDKDiscovery(unittest.TestCase):
                 else:
                     target.unlink()
 
-    def test_explicit_overrides_are_exclusive(self):
-        override = self.root / 'override'
-        override.mkdir()
+    def test_custom_path_is_last_fallback(self):
+        custom = self.root / 'custom'
+        custom.mkdir()
+        self.local.mkdir()
         for variable in ('ALTIVEC_SDK_ARCHIVE_DIR', 'ALTIVEC_SDK_HOST_DIR'):
-            self.assertIn(str(override), self.run_sdk('preflight', good=False,
-                                                    **{variable: str(override)}))
-            self.assertEqual(self.run_sdk('status', **{variable: str(override)}).count('available'), 0)
-        self.run_sdk('preflight', ALTIVEC_SDK_ARCHIVE_DIR=str(self.shared),
-                     ALTIVEC_SDK_HOST_DIR=str(override))
-        self.run_sdk('preflight', ALTIVEC_SDK_HOST_DIR=str(self.shared))
-        self.run_sdk('preflight', ALTIVEC_SDK_ARCHIVE_DIR='', ALTIVEC_SDK_HOST_DIR='')
+            # Setting an empty custom folder does not hide home archives.
+            self.run_sdk('preflight', **{variable: str(custom)})
+        shutil.move(str(self.shared / self.names[1]), self.local)
+        shutil.move(str(self.shared / self.names[2]), custom)
+        output = self.run_sdk('preflight', ALTIVEC_SDK_ARCHIVE_DIR=str(custom))
+        for directory, name in zip((self.shared, self.local, custom), self.names):
+            self.assertIn(str(directory / name), output)
+        shutil.copy2(custom / self.names[2], self.local)
+        (custom / self.names[2]).write_text('invalid lower-priority archive')
+        self.run_sdk('preflight', ALTIVEC_SDK_ARCHIVE_DIR=str(custom))
+        # An invalid project copy must not silently use the custom fallback.
+        shutil.copy2(self.local / self.names[2], custom / self.names[2])
+        (self.local / self.names[2]).write_text('invalid project archive')
+        self.run_sdk('preflight', good=False, ALTIVEC_SDK_ARCHIVE_DIR=str(custom))
+        (self.local / self.names[2]).unlink()
+        self.run_sdk('preflight', ALTIVEC_SDK_HOST_DIR=str(custom))
+        self.run_sdk('preflight', good=False,
+                     ALTIVEC_SDK_ARCHIVE_DIR=str(self.root / 'missing'),
+                     ALTIVEC_SDK_HOST_DIR=str(custom))
 
-    def test_configurable_container_mounts(self):
+    def test_build_only_source_locations(self):
         self.local.mkdir()
         shutil.move(str(self.shared / self.names[0]), self.local)
         output = self.run_sdk('preflight', ALTIVEC_SDK_PROJECT_DIR=str(self.local),
@@ -140,7 +156,7 @@ class SDKDiscovery(unittest.TestCase):
     def test_checksum_valid_but_unsafe_archive_is_invalid(self):
         self.local.mkdir()
         entry = self.catalog['build_sdks'][0]
-        path = self.local / entry['archive']
+        path = self.shared / entry['archive']
         with tarfile.open(path, 'w:xz') as archive:
             member = tarfile.TarInfo('../escape')
             member.size = 1
@@ -219,33 +235,33 @@ class ComposeDiscovery(unittest.TestCase):
     def test_runtime_and_build_source_mappings(self):
         with tempfile.TemporaryDirectory(prefix='sdk compose ') as temporary:
             home = Path(temporary) / 'home'
-            override = Path(temporary) / 'override'
             env = {k: v for k, v in os.environ.items()
                    if not k.startswith(('ALTIVEC_', 'COMPOSE_'))}
             env['DOCKER_CONFIG'] = os.environ.get('DOCKER_CONFIG', str(Path.home() / '.docker'))
             env['HOME'] = str(home)
             for filename in ('compose.yml', 'templates/compose.yml'):
-                for explicit in (False, True):
-                    with self.subTest(filename=filename, override=explicit):
-                        run_env = {**env, 'ALTIVEC_SDK_HOST_DIR': str(override)} if explicit else env
-                        result = subprocess.run(
-                            ['docker', 'compose', '--env-file', '/dev/null', '-f',
-                             str(ROOT / filename), 'config', '--format', 'json'],
-                            env=run_env, text=True, capture_output=True)
-                        self.assertEqual(result.returncode, 0, result.stderr)
-                        model = json.loads(result.stdout)
-                        project = (ROOT / filename).parent / '.altivec-sdk'
-                        sources = [str(override), str(override)] if explicit else [str(project), str(home / '.altivec-sdk')]
-                        for service in model['services'].values():
-                            mounts = {m['target']: m for m in service['volumes']}
-                            for target, source in zip(('/altivec-sdk', '/altivec-sdk-shared'), sources):
-                                self.assertEqual(mounts[target]['source'], source)
-                                self.assertTrue(mounts[target]['read_only'])
-                                self.assertTrue(mounts[target]['bind']['create_host_path'])
-                            self.assertNotIn('ALTIVEC_SDK_ARCHIVE_DIR', service.get('environment', {}))
-                            if 'build' in service:
-                                contexts = service['build']['additional_contexts']
-                                self.assertEqual([contexts['altivec_sdk'], contexts['altivec_sdk_shared']], sources)
+                with self.subTest(filename=filename):
+                    result = subprocess.run(
+                        ['docker', 'compose', '--env-file', '/dev/null',
+                         '--profile', 'tools', '-f', str(ROOT / filename),
+                         'config', '--format', 'json'],
+                        env=env, text=True, capture_output=True)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    model = json.loads(result.stdout)
+                    for service in model['services'].values():
+                        mounts = {m['target']: m for m in service['volumes']}
+                        self.assertNotIn('/altivec-sdk', mounts)
+                        self.assertNotIn('/altivec-sdk-shared', mounts)
+                        self.assertEqual(mounts['/root']['source'], str(home / '.altivec'))
+                        self.assertEqual(mounts[service['working_dir']]['source'],
+                                         str((ROOT / filename).parent))
+                        self.assertFalse(any(key.startswith('ALTIVEC_SDK_')
+                                             for key in service.get('environment', {})))
+                        if 'build' in service:
+                            contexts = service['build']['additional_contexts']
+                            self.assertEqual(contexts['altivec_sdk'], str(ROOT / '.altivec-sdk'))
+                            self.assertEqual(contexts['altivec_sdk_shared'],
+                                             str(home / '.altivec/.altivec-sdk'))
 
 
 if __name__ == '__main__':
