@@ -242,7 +242,7 @@ class ComposeDiscovery(unittest.TestCase):
                                 self.assertEqual(mounts[target]['source'], source)
                                 self.assertTrue(mounts[target]['read_only'])
                                 self.assertTrue(mounts[target]['bind']['create_host_path'])
-                            self.assertEqual(service['environment']['ALTIVEC_SDK_ARCHIVE_DIR'], '')
+                            self.assertNotIn('ALTIVEC_SDK_ARCHIVE_DIR', service.get('environment', {}))
                             if 'build' in service:
                                 contexts = service['build']['additional_contexts']
                                 self.assertEqual([contexts['altivec_sdk'], contexts['altivec_sdk_shared']], sources)

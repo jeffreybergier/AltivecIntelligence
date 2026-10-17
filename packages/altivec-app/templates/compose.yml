@@ -23,7 +23,6 @@
 #    Each archive uses the project copy first, then the shared host copy.
 #    Invalid project copies fail validation; only absent files fall back.
 #    ALTIVEC_SDK_HOST_DIR selects one host folder, disabling fallback.
-#    ALTIVEC_SDK_ARCHIVE_DIR selects one container-visible path exclusively.
 #    ~/.altivec is separate: it holds container home/settings, not SDK archives.
 #      MacOSX10.5.sdk.tar.xz
 #      MacOSX11.3.sdk.tar.xz
@@ -55,8 +54,6 @@ services:
   altivec:
     image: ${ALTIVEC_IMAGE:-ghcr.io/jeffreybergier/altivec-intelligence:latest}
     working_dir: /repo/user
-    environment:
-      ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
     volumes:
       # Mount the current project as the user workspace
       - .:/repo/user
@@ -75,8 +72,6 @@ services:
     profiles:
       - tools
     image: ${ALTIVEC_IMAGE:-ghcr.io/jeffreybergier/altivec-intelligence:latest}
-    environment:
-      ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
     volumes:
       # Same archive search order as the app services (read-only)
       - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
@@ -94,7 +89,6 @@ services:
       - IS_SANDBOX=1
       - TERM=xterm-256color
       - COLORTERM=${COLORTERM:-}
-      - ALTIVEC_SDK_ARCHIVE_DIR=${ALTIVEC_SDK_ARCHIVE_DIR:-}
     working_dir: /repo/user
     volumes:
       # Mount the current project as the user workspace

@@ -123,10 +123,10 @@ Overrides are exclusive (no fallback):
   folder at both archive mount points. This also selects both image-build
   contexts. Direct host use of `bin/altivec-sdk` honors this variable too.
 - `ALTIVEC_SDK_ARCHIVE_DIR` takes precedence and selects one path **visible to
-  the SDK process**. With Compose it is passed into the container/build; use
+  the SDK process**. For an explicit Compose override, pass it with `run -e`; use
   `/altivec-sdk` or `/altivec-sdk-shared`, or a separately mounted path. It does
   not mount arbitrary host paths. For example,
-  `ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk-shared docker compose run --rm altivec-sdk preflight`
+  `docker compose run --rm -e ALTIVEC_SDK_ARCHIVE_DIR=/altivec-sdk-shared altivec-sdk preflight`
   checks only shared archives.
 
 For a direct host check, run `bin/altivec-sdk preflight` from the project root

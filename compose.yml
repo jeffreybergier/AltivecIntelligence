@@ -7,7 +7,6 @@
 #   iPhoneOS8.4.sdk.tar.gz
 # Verify from this project root: bin/altivec-sdk preflight
 # ALTIVEC_SDK_HOST_DIR selects one existing host folder for both sources.
-# ALTIVEC_SDK_ARCHIVE_DIR selects one container-visible path, without fallback.
 # Runtime mounts create missing host folders; BuildKit contexts must exist.
 services:
   altivec:
@@ -18,12 +17,8 @@ services:
       additional_contexts:
         altivec_sdk: ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}
         altivec_sdk_shared: ${ALTIVEC_SDK_HOST_DIR:-${HOME}/.altivec-sdk}
-      args:
-        ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
     image: ${ALTIVEC_IMAGE:-altivec-intelligence:local}
     working_dir: /repo/altivec
-    environment:
-      ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
     volumes:
       - cache:/cache
       - ~/.altivec:/root
@@ -43,8 +38,6 @@ services:
       additional_contexts:
         altivec_sdk: ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}
         altivec_sdk_shared: ${ALTIVEC_SDK_HOST_DIR:-${HOME}/.altivec-sdk}
-      args:
-        ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
     image: ${ALTIVEC_IMAGE:-altivec-intelligence:local}
     stdin_open: true
     tty: true
@@ -52,7 +45,6 @@ services:
       - IS_SANDBOX=1
       - TERM=xterm-256color
       - COLORTERM=${COLORTERM:-}
-      - ALTIVEC_SDK_ARCHIVE_DIR=${ALTIVEC_SDK_ARCHIVE_DIR:-}
     working_dir: /repo/altivec
     volumes:
       - cache:/cache
