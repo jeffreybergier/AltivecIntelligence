@@ -24,8 +24,6 @@ services:
     working_dir: /repo/altivec
     environment:
       ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
-      ALTIVEC_SDK_PROJECT_DIR: /altivec-sdk
-      ALTIVEC_SDK_SHARED_DIR: /altivec-sdk-shared
     volumes:
       - cache:/cache
       - ~/.altivec:/root
@@ -55,8 +53,6 @@ services:
       - TERM=xterm-256color
       - COLORTERM=${COLORTERM:-}
       - ALTIVEC_SDK_ARCHIVE_DIR=${ALTIVEC_SDK_ARCHIVE_DIR:-}
-      - ALTIVEC_SDK_PROJECT_DIR=/altivec-sdk
-      - ALTIVEC_SDK_SHARED_DIR=/altivec-sdk-shared
     working_dir: /repo/altivec
     volumes:
       - cache:/cache

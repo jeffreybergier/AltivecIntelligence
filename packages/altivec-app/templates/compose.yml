@@ -57,8 +57,6 @@ services:
     working_dir: /repo/user
     environment:
       ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
-      ALTIVEC_SDK_PROJECT_DIR: /altivec-sdk
-      ALTIVEC_SDK_SHARED_DIR: /altivec-sdk-shared
     volumes:
       # Mount the current project as the user workspace
       - .:/repo/user
@@ -79,8 +77,6 @@ services:
     image: ${ALTIVEC_IMAGE:-ghcr.io/jeffreybergier/altivec-intelligence:latest}
     environment:
       ALTIVEC_SDK_ARCHIVE_DIR: ${ALTIVEC_SDK_ARCHIVE_DIR:-}
-      ALTIVEC_SDK_PROJECT_DIR: /altivec-sdk
-      ALTIVEC_SDK_SHARED_DIR: /altivec-sdk-shared
     volumes:
       # Same archive search order as the app services (read-only)
       - ${ALTIVEC_SDK_HOST_DIR:-./.altivec-sdk}:/altivec-sdk:ro
@@ -99,8 +95,6 @@ services:
       - TERM=xterm-256color
       - COLORTERM=${COLORTERM:-}
       - ALTIVEC_SDK_ARCHIVE_DIR=${ALTIVEC_SDK_ARCHIVE_DIR:-}
-      - ALTIVEC_SDK_PROJECT_DIR=/altivec-sdk
-      - ALTIVEC_SDK_SHARED_DIR=/altivec-sdk-shared
     working_dir: /repo/user
     volumes:
       # Mount the current project as the user workspace
