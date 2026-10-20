@@ -20,7 +20,7 @@ typedef enum {
 } AIKeychainProtocol;
 
 typedef enum {
-  /* Legacy Mac zero value; operations reject this on iOS. */
+  /* Legacy Mac zero / iOS empty value, distinct from explicit Default. */
   AIKeychainAuthenticationUnspecified = 0,
   AIKeychainAuthenticationDefault,
   AIKeychainAuthenticationHTTPBasic,

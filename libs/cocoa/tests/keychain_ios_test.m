@@ -176,8 +176,10 @@ int main(void)
       [NSURL URLWithString:@"https://example.invalid/path"]
       protocolType:AIKeychainProtocolHTTPS
       authenticationType:AIKeychainAuthenticationUnspecified securityDomain:nil];
-  assert(![unsupported setString:@"secret" forKey:@"same" error:&error]);
-  assert([error code] == errSecParam);
+  assert([unsupported setString:@"secret" forKey:@"legacy" error:&error]);
+  assert([[lastAddition objectForKey:(id)kSecAttrAuthenticationType] isEqual:@""]);
+  assert([[unsupported stringForKey:@"legacy" error:&error] isEqual:@"secret"]);
+  assert([unsupported removeItemForKey:@"legacy" error:&error]);
   assert([internet containsKey:@"same" error:&error]);
   {
     AIKeychainStore *discovered = [AIKeychainStore

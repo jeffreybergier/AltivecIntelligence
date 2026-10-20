@@ -56,8 +56,10 @@ A separately named legacy discovery method supports existing account-only app
 schemas; normal store operations always use the exact scope. The URL's
 user/password/query/fragment are ignored. A nil security domain means
 an exact empty domain. Use `Default` authentication for new cross-platform
-items. `Unspecified` preserves the old Mac zero attribute; iOS rejects it with
-invalid-argument instead of substituting another identity.
+items. `Unspecified` preserves the old Mac zero attribute and the empty authentication
+value persisted by legacy iOS writes that omitted the attribute. It matches that
+empty value explicitly, keeping it distinct from `Default`. Legacy discovery
+preserves missing/empty authentication rather than rejecting or rewriting it.
 
 ## Platform and ownership contract
 
@@ -213,3 +215,21 @@ in `AIWebViewController.m:51` for modern Mac slices; Keychain checks pass
 locked-iPhone behavior, provisioned access-group sharing, and interactive ACL
 updates remain separate validation work. No existing user credentials or
 installed apps were changed by these tests.
+
+### Legacy iOS authentication regression (2026-10-20)
+
+An old `SecItemAdd` call omitting `kSecAttrAuthenticationType` persists an empty
+string on koolphone5 (iOS 8.4.1), not `kSecAttrAuthenticationTypeDefault`.
+Discovery previously rejected this with -50; an exact Default query could not
+read it. ENIL's replacement policy also failed when discovery rejected the old
+entry. `Unspecified` now maps to an explicit empty iOS authentication value.
+Unknown nonempty authentication types still fail without rewriting credentials.
+
+The expanded native device test failed before the fix and passed afterward.
+It covers omitted authentication, updates, deletion, a separate Default item,
+and persistence via `keychain-armv7 seed <unique-fixture-account>` followed by
+`keychain-armv7 verify <same-account>` in a second process. Use an account with
+prefix `org.altivec.keychain-test.persistence.`; the verify/failure paths clean
+that fixture. Tests use only synthetic credentials in the test access group.
+All six architecture compile/link checks passed with `-Werror`; the SecItem
+recorder also passed on koolphone5. Native Mac and iOS 6 tests were not rerun.

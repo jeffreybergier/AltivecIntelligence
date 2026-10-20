@@ -1,6 +1,7 @@
 // Native iOS Keychain checks with unique services and isolated test identities.
 #import "../AIKeychainStore.h"
 #include <stdio.h>
+#include <string.h>
 #define CHECK(x) do { if (!(x)) { fprintf(stderr, "FAIL %d status=%ld\n", \
   __LINE__, (long)[error code]); failures++; goto cleanup; } } while (0)
 /* Seed through SecItem, then consume through the shared API. Every identity
@@ -60,9 +61,71 @@ cleanup:
   return failures;
 }
 
-int main(void)
+/* Two invocations verify that an updated legacy item survives process exit.
+ * The caller supplies a unique fixture name; only that test identity is used. */
+static int CheckPersistentLegacy(NSString *key, BOOL seed)
+{
+  NSError *error = nil;
+  int failures = 0;
+  AIKeychainStore *store = nil;
+  AIKeychainStore *other = [[[AIKeychainStore alloc] initWithServer:
+      [NSURL URLWithString:@"https://keychain-test.invalid"]
+      protocolType:AIKeychainProtocolHTTPS
+      authenticationType:AIKeychainAuthenticationDefault
+      securityDomain:nil] autorelease];
+  NSMutableDictionary *identity = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+      (id)kSecClassInternetPassword, (id)kSecClass,
+      @"org.altivec.keychain-test", (id)kSecAttrAccessGroup,
+      @"keychain-test.invalid", (id)kSecAttrServer,
+      (id)kSecAttrProtocolHTTPS, (id)kSecAttrProtocol,
+      key, (id)kSecAttrAccount, nil];
+  if (![key hasPrefix:@"org.altivec.keychain-test.persistence."]) return 1;
+  [other setAccessGroup:@"org.altivec.keychain-test"];
+  if (seed) {
+    NSMutableDictionary *addition = [[identity mutableCopy] autorelease];
+    [addition setObject:[@"old" dataUsingEncoding:NSUTF8StringEncoding]
+                forKey:(id)kSecValueData];
+    CHECK(SecItemAdd((CFDictionaryRef)addition, NULL) == errSecSuccess);
+  }
+  if (seed) {
+    store = [AIKeychainStore internetPasswordStoreForKey:key error:&error];
+  } else {
+    store = [[[AIKeychainStore alloc] initWithServer:
+        [NSURL URLWithString:@"https://keychain-test.invalid"]
+        protocolType:AIKeychainProtocolHTTPS
+        authenticationType:AIKeychainAuthenticationUnspecified
+        securityDomain:nil] autorelease];
+    [store setAccessGroup:@"org.altivec.keychain-test"];
+  }
+  CHECK(store != nil);
+  CHECK([[store stringForKey:key error:&error]
+      isEqual:seed ? @"old" : @"updated"]);
+  if (seed) {
+    CHECK([store setString:@"updated" forKey:key error:&error]);
+    /* Same account/server but explicit Default must remain a separate item. */
+    CHECK([other setString:@"default neighbor" forKey:key error:&error]);
+    CHECK([[store stringForKey:key error:&error] isEqual:@"updated"]);
+    printf("PASS: legacy update saved for second process\n");
+    return 0;
+  }
+  CHECK([[other stringForKey:key error:&error] isEqual:@"default neighbor"]);
+  CHECK([store removeItemForKey:key error:&error]);
+  CHECK([[other stringForKey:key error:&error] isEqual:@"default neighbor"]);
+  printf("PASS: legacy persistence and distinct Default identity\n");
+cleanup:
+  SecItemDelete((CFDictionaryRef)identity);
+  return failures;
+}
+
+int main(int argc, char **argv)
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  if (argc == 3) {
+    int result = CheckPersistentLegacy([NSString stringWithUTF8String:argv[2]],
+        strcmp(argv[1], "seed") == 0);
+    [pool drain];
+    return result;
+  }
   NSError *error = nil;
   int failures = 0;
   NSString *service = [@"org.altivec.keychain-test." stringByAppendingString:
@@ -109,6 +172,11 @@ int main(void)
         legacyKey, (id)kSecAttrAccount, nil];
     failures += CheckLegacyItem(genericIdentity, store, legacyKey, NO);
     failures += CheckLegacyItem(internetIdentity, internet, legacyKey, YES);
+    /* Older ENIL/Strappy writes omitted authentication. iOS persists an empty
+     * string, which must remain distinct from the explicit Default identity. */
+    NSMutableDictionary *omitted = [[internetIdentity mutableCopy] autorelease];
+    [omitted removeObjectForKey:(id)kSecAttrAuthenticationType];
+    failures += CheckLegacyItem(omitted, internet, legacyKey, YES);
   }
 cleanup:
   [store removeItemForKey:@"fixture" error:NULL];

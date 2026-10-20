@@ -27,6 +27,8 @@ static id AIKCProtocol(int value)
 static id AIKCAuthentication(int value)
 {
   switch (value) {
+    case AIKeychainAuthenticationUnspecified:
+      return @"";
     case AIKeychainAuthenticationDefault:
       return (id)kSecAttrAuthenticationTypeDefault;
     case AIKeychainAuthenticationHTTPBasic:
@@ -257,7 +259,9 @@ static void AIKCBuildAttributes(NSDictionary *identity, NSString *key,
     id protocol = [row objectForKey:(id)kSecAttrProtocol];
     id auth = [row objectForKey:(id)kSecAttrAuthenticationType];
     int authentication = AIKeychainAuthenticationDefault;
-    if ([auth isEqual:(id)kSecAttrAuthenticationTypeHTTPBasic])
+    if (!auth || [auth isEqual:@""])
+      authentication = AIKeychainAuthenticationUnspecified;
+    else if ([auth isEqual:(id)kSecAttrAuthenticationTypeHTTPBasic])
       authentication = AIKeychainAuthenticationHTTPBasic;
     else if ([auth isEqual:(id)kSecAttrAuthenticationTypeHTTPDigest])
       authentication = AIKeychainAuthenticationHTTPDigest;
@@ -372,9 +376,6 @@ static void AIKCBuildAttributes(NSDictionary *identity, NSString *key,
       accessibility_ <= AIKeychainAccessibilityAfterFirstUnlockThisDeviceOnly;
 #if TARGET_OS_IPHONE
   valid = valid && (!accessGroup_ || AIKCString(accessGroup_));
-  if (![identity_ objectForKey:@"service"] &&
-      [[identity_ objectForKey:@"authentication"] intValue] ==
-      AIKeychainAuthenticationUnspecified) valid = NO;
 #else
   valid = valid && !accessGroup_ &&
       accessibility_ == AIKeychainAccessibilitySystemDefault;
@@ -403,8 +404,8 @@ static void AIKCBuildAttributes(NSDictionary *identity, NSString *key,
     [query setObject:[identity_ objectForKey:@"port"] forKey:(id)kSecAttrPort];
     [query setObject:AIKCProtocol([[identity_ objectForKey:@"protocol"] intValue])
               forKey:(id)kSecAttrProtocol];
-    /* SecItem defaults omitted authentication to Default, unlike Mac's zero.
-     * Unspecified is rejected by validation below for iOS internet stores. */
+    /* Legacy SecItemAdd calls with no authentication persist an empty value.
+     * Match it explicitly: omitting it here would also match Default items. */
     if (authentication) [query setObject:authentication
                                   forKey:(id)kSecAttrAuthenticationType];
   }
