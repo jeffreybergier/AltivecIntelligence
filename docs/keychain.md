@@ -233,3 +233,27 @@ prefix `org.altivec.keychain-test.persistence.`; the verify/failure paths clean
 that fixture. Tests use only synthetic credentials in the test access group.
 All six architecture compile/link checks passed with `-Werror`; the SecItem
 recorder also passed on koolphone5. Native Mac and iOS 6 tests were not rerun.
+
+### iOS 6 absent-attribute follow-up (2026-10-20)
+
+Gomadango (iOS 6) returns no authentication attribute for old omitted-auth writes.
+An explicit empty authentication query does not match it. Legacy discovery now
+requests the persistent reference and pins only these absent-auth stores to the
+found account/item. Reads, updates and deletes address that exact reference,
+without a wildcard that could modify a neighboring Default item. iOS 6 rejects
+an access-group attribute combined with a persistent-reference query; the store
+validates its configured group against the discovered group before submitting
+the reference. Native entitlement checks still apply.
+
+This narrow discovery case permits only the discovered account/group. If the
+referenced item disappears, writes return not-found instead of recreating a
+normalized identity. Ordinary stores and empty-string authentication on iOS 8
+retain their existing scope/upsert behavior. No live credentials are migrated
+or rewritten by discovery. ENIL's existing replacement policy can remove the
+exact discovered old entry when the user explicitly saves new credentials.
+
+Validation: six architecture compile/link checks passed with `-Werror`. Native
+isolated CRUD/policy and two-process persistence tests passed on both gomadango
+(iOS 6) and koolphone5 (iOS 8.4.1). They also check that a pinned missing-auth
+store rejects other accounts/groups and cannot recreate a deleted legacy item.
+The SecItem recorder passed on koolphone5. Mac runtime tests were not rerun.

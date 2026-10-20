@@ -13,6 +13,7 @@ static int CheckLegacyItem(NSDictionary *identity, AIKeychainStore *store,
   int failures = 0;
   CFTypeRef result = NULL;
   OSStatus status;
+  BOOL missingAuthentication = NO;
   NSMutableDictionary *creation = [NSMutableDictionary dictionaryWithDictionary:
       identity];
   NSMutableDictionary *query = [NSMutableDictionary dictionaryWithDictionary:
@@ -37,6 +38,8 @@ static int CheckLegacyItem(NSDictionary *identity, AIKeychainStore *store,
   CHECK(SecItemCopyMatching((CFDictionaryRef)query, &result) == errSecSuccess);
   CHECK([[(NSDictionary *)result objectForKey:(id)kSecValueData]
       isEqual:newData]);
+  missingAuthentication = discover &&
+      ![(NSDictionary *)result objectForKey:(id)kSecAttrAuthenticationType];
   CHECK([[(NSDictionary *)result objectForKey:(id)kSecAttrAccessible]
       isEqual:(id)kSecAttrAccessibleWhenUnlockedThisDeviceOnly]);
   CFRelease(result); result = NULL;
@@ -49,7 +52,19 @@ static int CheckLegacyItem(NSDictionary *identity, AIKeychainStore *store,
   CHECK([[(NSDictionary *)result objectForKey:(id)kSecAttrAccessible]
       isEqual:(id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]);
   CFRelease(result); result = NULL;
+  if (missingAuthentication) {
+    CHECK(![store setString:@"wrong account" forKey:@"other" error:&error]);
+    CHECK([error code] == errSecParam);
+    [store setAccessGroup:@"other.group"];
+    CHECK([store dataForKey:key error:&error] == nil);
+    CHECK([error code] == errSecParam);
+    [store setAccessGroup:@"org.altivec.keychain-test"];
+  }
   CHECK([store removeItemForKey:key error:&error]);
+  if (missingAuthentication) {
+    CHECK(![store setString:@"do not recreate" forKey:key error:&error]);
+    CHECK([error code] == errSecItemNotFound);
+  }
   CHECK(SecItemCopyMatching((CFDictionaryRef)query, &result) == errSecItemNotFound);
 cleanup:
   if (result) CFRelease(result);
@@ -87,28 +102,18 @@ static int CheckPersistentLegacy(NSString *key, BOOL seed)
                 forKey:(id)kSecValueData];
     CHECK(SecItemAdd((CFDictionaryRef)addition, NULL) == errSecSuccess);
   }
-  if (seed) {
-    store = [AIKeychainStore internetPasswordStoreForKey:key error:&error];
-  } else {
-    store = [[[AIKeychainStore alloc] initWithServer:
-        [NSURL URLWithString:@"https://keychain-test.invalid"]
-        protocolType:AIKeychainProtocolHTTPS
-        authenticationType:AIKeychainAuthenticationUnspecified
-        securityDomain:nil] autorelease];
-    [store setAccessGroup:@"org.altivec.keychain-test"];
-  }
+  store = [AIKeychainStore internetPasswordStoreForKey:key error:&error];
   CHECK(store != nil);
   CHECK([[store stringForKey:key error:&error]
       isEqual:seed ? @"old" : @"updated"]);
   if (seed) {
     CHECK([store setString:@"updated" forKey:key error:&error]);
-    /* Same account/server but explicit Default must remain a separate item. */
-    CHECK([other setString:@"default neighbor" forKey:key error:&error]);
-    CHECK([[store stringForKey:key error:&error] isEqual:@"updated"]);
     printf("PASS: legacy update saved for second process\n");
     return 0;
   }
-  CHECK([[other stringForKey:key error:&error] isEqual:@"default neighbor"]);
+  /* Create the neighbor after discovery so account-only selection is unique. */
+  CHECK([other setString:@"default neighbor" forKey:key error:&error]);
+  CHECK([[store stringForKey:key error:&error] isEqual:@"updated"]);
   CHECK([store removeItemForKey:key error:&error]);
   CHECK([[other stringForKey:key error:&error] isEqual:@"default neighbor"]);
   printf("PASS: legacy persistence and distinct Default identity\n");

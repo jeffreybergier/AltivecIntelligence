@@ -93,7 +93,10 @@ typedef enum {
 - (BOOL)containsKey:(NSString *)key error:(NSError **)error;
 /* Legacy migration bridge: discovers the first internet item by account only.
  * No writes. Returned store preserves the native identity and access group or
- * keychain. Not-found is an error. Use only for existing account-only schemas. */
+ * keychain. Old iOS items with absent authentication are pinned to the found
+ * account/reference: changing key/group is invalid, and a deleted item is not
+ * recreated by writes through that store. Not-found is an error. Use only for
+ * existing account-only schemas. */
 + (AIKeychainStore *)internetPasswordStoreForKey:(NSString *)key
                                          error:(NSError **)error;
 /* Internet scope rendered as scheme://server[:port]/path; nil for generic. */

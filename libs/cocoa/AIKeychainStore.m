@@ -248,7 +248,8 @@ static void AIKCBuildAttributes(NSDictionary *identity, NSString *key,
   NSDictionary *query = [NSDictionary dictionaryWithObjectsAndKeys:
       (id)kSecClassInternetPassword, (id)kSecClass, key, (id)kSecAttrAccount,
       (id)kSecMatchLimitOne, (id)kSecMatchLimit,
-      (id)kCFBooleanTrue, (id)kSecReturnAttributes, nil];
+      (id)kCFBooleanTrue, (id)kSecReturnAttributes,
+      (id)kCFBooleanTrue, (id)kSecReturnPersistentRef, nil];
   CFTypeRef result = NULL;
   status = SecItemCopyMatching((CFDictionaryRef)query, &result);
   if (status == AIKeychainSuccess &&
@@ -258,6 +259,21 @@ static void AIKCBuildAttributes(NSDictionary *identity, NSString *key,
     NSDictionary *row = (NSDictionary *)result;
     id protocol = [row objectForKey:(id)kSecAttrProtocol];
     id auth = [row objectForKey:(id)kSecAttrAuthenticationType];
+    /* iOS 6 can return no authentication attribute at all. An explicit empty
+     * query does not match that record; omitting it would match other records.
+     * Pin this legacy discovery to its persistent reference instead. */
+    if (!auth) {
+      id reference = [row objectForKey:(id)kSecValuePersistentRef];
+      if (![reference isKindOfClass:[NSData class]] || ![reference length])
+        status = AIKeychainErrorDecode;
+      else {
+        [identity setObject:reference forKey:@"legacyReference"];
+        [identity setObject:key forKey:@"legacyAccount"];
+        [identity setObject:([row objectForKey:(id)kSecAttrAccessGroup] ?
+            [row objectForKey:(id)kSecAttrAccessGroup] : @"")
+                    forKey:@"legacyAccessGroup"];
+      }
+    }
     int authentication = AIKeychainAuthenticationDefault;
     if (!auth || [auth isEqual:@""])
       authentication = AIKeychainAuthenticationUnspecified;
@@ -376,6 +392,11 @@ static void AIKCBuildAttributes(NSDictionary *identity, NSString *key,
       accessibility_ <= AIKeychainAccessibilityAfterFirstUnlockThisDeviceOnly;
 #if TARGET_OS_IPHONE
   valid = valid && (!accessGroup_ || AIKCString(accessGroup_));
+  if ([identity_ objectForKey:@"legacyReference"] && key)
+    valid = valid && [key isEqual:[identity_ objectForKey:@"legacyAccount"]];
+  if ([identity_ objectForKey:@"legacyReference"] && accessGroup_)
+    valid = valid && [accessGroup_ isEqual:
+        [identity_ objectForKey:@"legacyAccessGroup"]];
 #else
   valid = valid && !accessGroup_ &&
       accessibility_ == AIKeychainAccessibilitySystemDefault;
@@ -388,6 +409,12 @@ static void AIKCBuildAttributes(NSDictionary *identity, NSString *key,
 {
   NSMutableDictionary *query = [NSMutableDictionary dictionary];
   NSString *service = [identity_ objectForKey:@"service"];
+  if ([identity_ objectForKey:@"legacyReference"]) {
+    [query setObject:(id)kSecClassInternetPassword forKey:(id)kSecClass];
+    [query setObject:[identity_ objectForKey:@"legacyReference"]
+             forKey:(id)kSecValuePersistentRef];
+    return query;
+  }
   [query setObject:(id)(service ? kSecClassGenericPassword :
       kSecClassInternetPassword) forKey:(id)kSecClass];
   if (key) [query setObject:key forKey:(id)kSecAttrAccount];
@@ -509,6 +536,11 @@ static void AIKCBuildAttributes(NSDictionary *identity, NSString *key,
   if (updatesAccessPolicy_ && accessibility)
     [update setObject:accessibility forKey:(id)kSecAttrAccessible];
   status = SecItemUpdate((CFDictionaryRef)query, (CFDictionaryRef)update);
+  /* A pinned legacy discovery may update only that item. If it disappeared,
+   * do not recreate it with a normalized (different) authentication identity. */
+  if (status == errSecItemNotFound &&
+      [identity_ objectForKey:@"legacyReference"])
+    return AIKCResult(status, error);
   if (status == errSecItemNotFound) {
     NSMutableDictionary *addition = [[query mutableCopy] autorelease];
     if (label_) [addition setObject:label_ forKey:(id)kSecAttrLabel];

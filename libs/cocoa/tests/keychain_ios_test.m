@@ -19,6 +19,7 @@ static NSDictionary *Identity(NSDictionary *query)
   NSMutableDictionary *identity = [[query mutableCopy] autorelease];
   [identity removeObjectForKey:(id)kSecReturnData];
   [identity removeObjectForKey:(id)kSecReturnAttributes];
+  [identity removeObjectForKey:(id)kSecReturnPersistentRef];
   [identity removeObjectForKey:(id)kSecMatchLimit];
   [identity removeObjectForKey:(id)kSecValueData];
   [identity removeObjectForKey:(id)kSecAttrAccessible];
