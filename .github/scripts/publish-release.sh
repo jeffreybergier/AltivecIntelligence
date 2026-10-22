@@ -122,6 +122,20 @@ release_id="$(jq -r '.id // empty' <<< "$release_json")"
 readonly release_id
 [[ "$release_id" =~ ^[0-9]+$ ]] || die 'GitHub returned an invalid release ID'
 
+refresh_release() {
+  local response=''
+
+  # The release list can lag behind creation or updates. Once the ID is
+  # known, read that release directly instead of rediscovering it by tag.
+  response="$(gh api "repos/${repository}/releases/${release_id}")"
+  jq -e --argjson id "$release_id" '
+    type == "object" and .id == $id and
+    (.assets | type == "array") and (.draft | type == "boolean")
+  ' <<< "$response" >/dev/null ||
+    die "GitHub returned an invalid release response for ${release_id}"
+  printf '%s\n' "$response"
+}
+
 download_and_compare() {
   local name="$1"
   local local_path="$2"
@@ -178,7 +192,7 @@ stage_assets() {
     )"
     if [[ "$matches" == 0 ]]; then
       gh release upload "$release_tag" "$path" --repo "$repository"
-      release="$(get_release)"
+      release="$(refresh_release)"
     elif [[ "$matches" == 1 ]]; then
       asset_json="$(
         jq -c --arg name "$name" '.assets[] | select(.name == $name)' \
@@ -238,7 +252,7 @@ fi
 verify_exact_assets "$release_json"
 if [[ "$(jq -r '.draft' <<< "$release_json")" == true ]]; then
   gh release edit "$release_tag" --repo "$repository" --draft=false
-  release_json="$(get_release)"
+  release_json="$(refresh_release)"
 fi
 [[ "$(jq -r '.draft' <<< "$release_json")" == false ]] ||
   die "release is still a draft: ${release_tag}"

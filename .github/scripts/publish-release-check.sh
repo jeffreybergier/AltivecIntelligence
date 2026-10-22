@@ -54,7 +54,10 @@ readonly tag='v1.2.3'
 readonly sha='0123456789abcdef0123456789abcdef01234567'
 readonly publisher="${script_dir}/publish-release.sh"
 
-"$publisher" stage "$tag" "$sha" "$check_root/dist" >/dev/null
+# The list endpoint may not expose a newly created draft immediately. Once
+# created, the publisher must refresh it by ID rather than rediscovering it.
+MOCK_GH_STALE_RELEASE_LIST=1 \
+  "$publisher" stage "$tag" "$sha" "$check_root/dist" >/dev/null
 [[ "$(jq -r '.draft' "$check_root/state/release.json")" == true ]] ||
   die 'stage did not leave a draft release'
 [[ "$(awk 'END { print }' "$GITHUB_OUTPUT")" == 'is_draft=true' ]] ||
